@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Oregon Trail — AI Edition</title>
+  <meta name="description" content="AI-native Oregon Trail. Every playthrough is unique — powered by Claude as the dungeon master. Free, browser-playable, no login required.">
+  <meta property="og:title" content="The Oregon Trail — AI Edition">
+  <meta property="og:description" content="Every run is a different story. An AI dungeon master generates unique events, dialogue, and endings grounded in real 1848 history.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The Oregon Trail — AI Edition">
+  <meta name="twitter:description" content="AI-native Oregon Trail. No two runs are the same.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="terminal">
+    <div id="top-bar"></div>
+    <div id="game-area">
+      <aside id="roster"></aside>
+      <main id="narrative"></main>
+    </div>
+    <div id="action-bar"></div>
+  </div>
+  <div id="newspaper-overlay" class="hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="game.js"></script>
+  <script src="ui.js"></script>
+  <script src="newspaper.js"></script>
+  <script>
+    const engine = new GameEngine();
+    const ui = new GameUI(engine);
+    engine.init();
+  </script>
+</body>
+</html>

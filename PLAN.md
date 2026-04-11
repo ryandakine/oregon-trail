@@ -430,3 +430,72 @@ Hard deadline discipline. You know the failure mode is scope creep.
 ---
 
 **Bottom line:** strong concept, real gap in market, built on stack you already know, clear 2-weekend scope, clear path to OSI traffic. Risk is scope discipline, not the idea. Don't let this eat the Congress SEO work on weekday evenings.
+
+---
+
+<!-- /autoplan restore point: /home/ryan/.gstack/projects/oregon-trail/master-autoplan-restore-20260410-233319.md -->
+
+<!-- AUTONOMOUS DECISION LOG -->
+## Decision Audit Trail
+
+| # | Phase | Decision | Classification | Principle | Rationale | Rejected |
+|---|-------|----------|---------------|-----------|-----------|----------|
+| 1 | CEO | Ship Medium tier only, defer 3-tier system to V1.1 | Taste | P3 (pragmatic) | Faster to ship, horror tier unvalidated. But plan names it as marketing hook. | 3-tier system for MVP |
+| 2 | CEO | Choose Approach B (Sharp MVP) over full plan | Mechanical | P3+P5 | Fits 2-weekend timeline, validates core thesis | Approach A (full plan) |
+| 3 | CEO | Accept NPC dialogue expansion | Mechanical | P1 | Makes landmarks feel alive, worth the effort | Deferring it |
+| 4 | CEO | Accept adaptive difficulty | Mechanical | P1 | Cheap (LLM reads state), good DM behavior | Deferring it |
+| 5 | CEO | Accept cached fallback events | Mechanical | P3 | Cost protection, simple KV reads | No caching |
+| 6 | CEO | Accept tiered model routing | Mechanical | P3 | Workers AI free tier for routine events | Haiku for everything |
+| 7 | CEO | Accept daily budget kill switch | Mechanical | P3 | Critical cost protection | No cost ceiling |
+| 8 | CEO | Defer personality vectors to V2 | Mechanical | P5 | Complex mechanic, validate core first | Building it now |
+| 9 | CEO | Defer cross-run memory to V2 | Mechanical | P3 | Storage complexity, V2 feature | Building it now |
+| 10 | CEO | Add event streaming/pre-fetch to plan | Mechanical | P5 | LLM latency kills UX without it | Ignoring latency |
+| 11 | CEO | Add input sanitization for character names | Mechanical | P1 | Prompt injection risk | No sanitization |
+| 12 | CEO | Add basic analytics endpoint | Mechanical | P1 | Need cost/usage visibility on launch day | No monitoring |
+| 13 | CEO | Newspaper should be styled HTML, not pure ASCII | Taste | P1 | Shareability depends on visual quality | Pure ASCII newspaper |
+| 14 | CEO | ROI thesis: portfolio + brand play (user confirmed) | Premise Gate | User decision | Conversion is indirect. Game demonstrates AI capability. | Direct-response funnel or kill |
+| 15 | CEO | Trademark: accept risk, use "Oregon Trail" in marketing | Premise Gate | User decision | Product has different name, marketing references the genre | Full rename |
+| 16 | CEO | All 3 tone tiers from launch (user override) | Premise Gate | User decision | Horror tier IS the marketing hook. "It goes as dark as you want" is the tweet. | Medium-only MVP |
+| 17 | Design | Tone selector gets its own screen after party naming | Mechanical | P5 | Emotional weight of "I'm choosing to put these people through horror" | Buried in creation form |
+| 18 | Design | Loading state: period typing animation during LLM calls | Mechanical | P1 | Blinking cursor on black = "is it broken?" | No loading state |
+| 19 | Design | Store tooltips for item guidance (static, not LLM) | Mechanical | P3 | Players don't know 1848 trail meta | LLM shopkeeper (too expensive) |
+| 20 | Design | Narrative error states ("trail shrouded in dust") | Mechanical | P1 | Players must never see a spinner or error modal | Raw error display |
+| 21 | Design | Dead members: strikethrough + death date in roster | Mechanical | P5 | Visual dread of watching roster shrink | No death visualization |
+| 22 | Design | 2-screen arrival before newspaper | Mechanical | P1 | Emotional payoff before shareable artifact | Jump to newspaper |
+| 23 | Design | Engine-injected personality overrides, LLM enhances | Mechanical | P5 | Can't rely on LLM reading personality vectors | LLM-only personality |
+| 24 | Design | AI trail rumor on first screen | Mechanical | P1 | Show the differentiator immediately | 5 min of forms first |
+| 25 | Design | Travel state: mile counter, date, supply burn | Mechanical | P1 | Player needs to feel movement between events | Empty waiting |
+| 26 | Design | Mid-run shareables (epitaphs + journal entries) | Mechanical | P1 | Virality requires sharing during, not just after | End-of-run only |
+| 27 | Design | 80-col centered terminal, party roster left gutter | Mechanical | P5 | Layout must be specified before implementation | "Terminal aesthetic" only |
+| 28 | Design | Newspaper: sepia broadsheet breaking terminal aesthetic | Taste | P1 | Shareability > aesthetic consistency for marketing artifact | Pure terminal newspaper |
+| 29 | Design | Choices: numbered, no consequence preview, agency-steal mechanic | Mechanical | P5 | Horror depends on watching input get stolen | Unspecified choice UX |
+| 30 | Design | Client sends compressed summary, journal in localStorage | Mechanical | P3 | Full state per call blows cost model (10K+ tokens) | Full history per API call |
+| 31 | Design | Prompt assembly: base + location + weather + party + events blocks | Mechanical | P1 | Unbounded prompts hit context limits by event 10 | Unspecified assembly |
+| 32 | Design | Mobile: 40-col, collapsible roster, full-width tap targets | Mechanical | P1 | 80-col terminal doesn't fit 375px viewport | "Responsive" one-liner |
+| 33 | Design | Hunting = choice event, no minigame | Mechanical | P3 | Minigame is 4hrs of scope creep | Unspecified hunting |
+| 34 | Design | River crossing: mechanical roll + LLM narrative | Mechanical | P5 | Pure LLM = unfair outcomes, player feels cheated | Unspecified formula |
+| 35 | Eng | HMAC-sign game state blob server-side | Mechanical | P1 | Journal/event injection is real prompt injection surface | Client holds unsigned state |
+| 36 | Eng | Token budget: 1,500 max input for game state, last-5-events window | Mechanical | P1 | Unbounded journal blows context + cost model | No compression spec |
+| 37 | Eng | JSON response stripping (markdown fences) + Zod validation | Mechanical | P5 | Haiku wraps JSON in backticks ~5% of time | No parsing defense |
+| 38 | Eng | 8-second LLM timeout + cache fallback | Mechanical | P3 | API spikes to 15s happen under load | No timeout spec |
+| 39 | Eng | Client retry with exponential backoff (3 retries) | Mechanical | P1 | 20-min sessions can't die to transient errors | No retry logic |
+| 40 | Eng | Unit tests for game state machine | Mechanical | P1 | Deterministic, catches balance bugs | No test plan |
+| 41 | Eng | Schema contract tests (20 real + 10 malformed responses) | Mechanical | P1 | Cache fallback is reliability floor | No validation tests |
+| 42 | Eng | Cost model smoke test (1 real run, count tokens) | Mechanical | P3 | $0.05 estimate is 30-40% low | Untested estimate |
+| 43 | Eng | Cached events: template format with variable slots + tags | Mechanical | P5 | Hard-coded names in cache feel wrong | Static cached events |
+| 44 | Eng | Per-IP rate limit: 10 calls/min | Mechanical | P3 | Stops scripts, invisible to humans | "Unlimited" or none |
+| 45 | Eng | Lock CORS to Pages domain | Mechanical | P1 | 5 lines, prevents API abuse from other origins | Open CORS |
+| 46 | Eng | Calibration timeline: 3-4 evenings (3 tiers), not 1-2 | Mechanical | P6 | 3x tiers = 3x work | 1-2 evening estimate |
+| 47 | Eng | Real cost: $0.07-0.08/run. Set kill switch accordingly. | Mechanical | P3 | Input tokens 2-3x higher than estimated | $0.05 estimate |
+| 48 | Eng | Minimal personality system: sanity + morale as 2 ints/character | Taste | P1 | Horror tier needs mechanical teeth, not just darker prose | Full deferral to V2 |
+| 49 | Eng | Blind Haiku vs Workers AI Llama quality comparison in calibration | Mechanical | P3 | Llama 8B may not maintain period voice or JSON schema | Assumed equivalent |
+| 50 | DX | Add project file tree to plan | Mechanical | P5 | Implementer needs to know what files to create | No scaffolding |
+| 51 | DX | Miniflare for local Workers dev | Mechanical | P3 | Can't test Workers without deploying | No local dev |
+| 52 | DX | List all required env vars (ANTHROPIC_API_KEY, KV namespace, etc.) | Mechanical | P1 | First 30 min of build will be "what do I need?" | No env spec |
+| 53 | DX | Historical context file: JSON format | Mechanical | P5 | Parseable by Workers, chunkable by segment | Format unspecified |
+| 54 | DX | Define wrangler.toml (routes, KV bindings, env) | Mechanical | P5 | Workers config is the first thing you write | Not in plan |
+| 55 | DX | Local prompt testing script (hit API directly) | Mechanical | P3 | Fast iteration on prompts without full deploy | No prompt dev loop |
+| 56 | Eng (Codex) | Cached events must be parametric templates, not fixed prose | Mechanical | P1 | Fixed cache under load = finite event tables, kills thesis | Static cached events |
+| 57 | Eng (Codex) | Red-team prompts during calibration + fallback tier policy for provider changes | Mechanical | P1 | Provider moderation changes can collapse horror tier overnight | Disclaimer-only safety |
+| 58 | Eng (Codex) | Historical context file: typed schema with segment IDs, hazard tags, probabilities | Mechanical | P5 | Prose dump is untestable, unindexable, hidden complexity | Unstructured reference |
+| 59 | Eng (Codex) | Abuse model: session quotas + signed requests beyond per-IP rate limit | Mechanical | P1 | Per-IP alone doesn't stop harvesting or replay traffic | Rate limit only |

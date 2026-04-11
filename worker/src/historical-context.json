@@ -1,0 +1,3840 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-04-11",
+  "segments": [
+    {
+      "id": "seg_01",
+      "order": 1,
+      "start_landmark_id": "lm_independence",
+      "end_landmark_id": "lm_kansas_river",
+      "distance_miles": 83,
+      "terrain": "prairie",
+      "region": "missouri",
+      "elevation_start_ft": 820,
+      "elevation_end_ft": 860,
+      "hazards": [
+        "river_crossing"
+      ],
+      "river_crossings": [
+        {
+          "name": "Wakarusa Creek",
+          "width_ft": 40,
+          "depth_ft_summer": 2,
+          "depth_ft_spring": 5,
+          "ford_difficulty": 2,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_wakarusa_creek",
+          "mile_marker": 27
+        },
+        {
+          "name": "Kansas River",
+          "width_ft": 620,
+          "depth_ft_summer": 4,
+          "depth_ft_spring": 8,
+          "ford_difficulty": 4,
+          "ferry_available": true,
+          "ferry_cost_1848_dollars": 1,
+          "id": "rc_kansas_river",
+          "mile_marker": 55
+        }
+      ],
+      "allowed_nations": [
+        "shawnee",
+        "kaw"
+      ],
+      "description": "The trail sets out from Independence through gently rolling tallgrass prairie, crossing Wakarusa Creek and arriving at the broad Kansas River. Wagons must ferry or ford this substantial watercourse, the first true test of the journey. The Shawnee and Kaw peoples maintain settlements and cultivated fields along this stretch.",
+      "diary_source": "William G. Johnston, 'Experiences of a Forty-Niner' (1892), corroborated by J. Goldsborough Bruff journals"
+    },
+    {
+      "id": "seg_02",
+      "order": 2,
+      "start_landmark_id": "lm_kansas_river",
+      "end_landmark_id": "lm_alcove_spring",
+      "distance_miles": 60,
+      "terrain": "prairie",
+      "region": "missouri",
+      "elevation_start_ft": 860,
+      "elevation_end_ft": 1100,
+      "hazards": [
+        "river_crossing"
+      ],
+      "river_crossings": [
+        {
+          "name": "Big Blue River",
+          "width_ft": 200,
+          "depth_ft_summer": 3,
+          "depth_ft_spring": 7,
+          "ford_difficulty": 3,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_big_blue_river",
+          "mile_marker": 113
+        }
+      ],
+      "allowed_nations": [
+        "kaw"
+      ],
+      "description": "Rolling prairie continues westward, the grass reaching shoulder-height in places and alive with meadowlarks. The Big Blue River must be forded, and in spring rains the crossing can delay a company several days. Alcove Spring, with its cool limestone grotto, offers the last sheltered campsite before the open plains.",
+      "diary_source": "Edwin Bryant, 'What I Saw in California' (1848); Tamsen Donner letters, 1846"
+    },
+    {
+      "id": "seg_03",
+      "order": 3,
+      "start_landmark_id": "lm_alcove_spring",
+      "end_landmark_id": "lm_fort_kearney",
+      "distance_miles": 170,
+      "terrain": "prairie",
+      "region": "eastern_nebraska",
+      "elevation_start_ft": 1100,
+      "elevation_end_ft": 2150,
+      "hazards": [
+        "dust_storm",
+        "no_game"
+      ],
+      "river_crossings": [
+        {
+          "name": "Little Blue River (multiple fords)",
+          "width_ft": 60,
+          "depth_ft_summer": 2,
+          "depth_ft_spring": 4,
+          "ford_difficulty": 1,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_little_blue_river_multiple_fords",
+          "mile_marker": 228
+        }
+      ],
+      "allowed_nations": [
+        "pawnee"
+      ],
+      "description": "The trail follows the Little Blue River across open prairie that stretches unbroken to every horizon. Timber grows scarce and emigrants begin burning buffalo chips for fuel. The wind never ceases, and dust storms may halt a train for hours. Fort Kearney, newly established by the Army, appears as a welcome sign of civilization.",
+      "diary_source": "Francis Parkman, 'The Oregon Trail' (1849); Pawnee agency reports, 1847-48"
+    },
+    {
+      "id": "seg_04",
+      "order": 4,
+      "start_landmark_id": "lm_fort_kearney",
+      "end_landmark_id": "lm_scotts_bluff",
+      "distance_miles": 230,
+      "terrain": "river_valley",
+      "region": "western_nebraska",
+      "elevation_start_ft": 2150,
+      "elevation_end_ft": 3950,
+      "hazards": [
+        "alkali_water",
+        "dust_storm",
+        "river_crossing"
+      ],
+      "river_crossings": [
+        {
+          "name": "South Platte River",
+          "width_ft": 1200,
+          "depth_ft_summer": 2,
+          "depth_ft_spring": 4,
+          "ford_difficulty": 3,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_south_platte_river",
+          "mile_marker": 389
+        },
+        {
+          "name": "North Platte River (Ash Hollow descent)",
+          "width_ft": 800,
+          "depth_ft_summer": 3,
+          "depth_ft_spring": 5,
+          "ford_difficulty": 2,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_north_platte_river_ash_hollow_descent",
+          "mile_marker": 466
+        }
+      ],
+      "allowed_nations": [
+        "lakota",
+        "cheyenne"
+      ],
+      "description": "The Platte River road is broad and flat, the river itself a mile wide and an inch deep as the saying goes. After forging the South Platte, the trail descends Ash Hollow's steep ravine to the North Platte valley. Chimney Rock rises like a factory chimney on the horizon and Scotts Bluff stands as a great fortress of stone. Alkali ponds poison the unwary ox and many a grave lines the road.",
+      "diary_source": "Francis Parkman, 'The Oregon Trail' (1849); Matthew Field, 'Prairie and Mountain Sketches' (1843)"
+    },
+    {
+      "id": "seg_05",
+      "order": 5,
+      "start_landmark_id": "lm_scotts_bluff",
+      "end_landmark_id": "lm_fort_laramie",
+      "distance_miles": 51,
+      "terrain": "bluffs",
+      "region": "western_nebraska",
+      "elevation_start_ft": 3950,
+      "elevation_end_ft": 4240,
+      "hazards": [
+        "steep_grade"
+      ],
+      "river_crossings": [],
+      "allowed_nations": [
+        "lakota",
+        "cheyenne",
+        "arapaho"
+      ],
+      "description": "The trail threads through broken bluff country, Mitchell Pass offering the easiest route past Scotts Bluff. The North Platte valley narrows and the terrain grows rougher underfoot. Fort Laramie appears on the left bank of the Laramie River, a trading post turned military garrison, where companies rest, resupply, and reckon their chances for the mountains ahead.",
+      "diary_source": "Francis Parkman, 'The Oregon Trail' (1849); Fort Laramie post records, 1848"
+    },
+    {
+      "id": "seg_06",
+      "order": 6,
+      "start_landmark_id": "lm_fort_laramie",
+      "end_landmark_id": "lm_independence_rock",
+      "distance_miles": 180,
+      "terrain": "high_plains",
+      "region": "wyoming",
+      "elevation_start_ft": 4240,
+      "elevation_end_ft": 5900,
+      "hazards": [
+        "alkali_water",
+        "no_water",
+        "steep_grade"
+      ],
+      "river_crossings": [
+        {
+          "name": "North Platte River (upper crossing)",
+          "width_ft": 400,
+          "depth_ft_summer": 3,
+          "depth_ft_spring": 5,
+          "ford_difficulty": 3,
+          "ferry_available": true,
+          "ferry_cost_1848_dollars": 3,
+          "id": "rc_north_platte_river_upper_crossing",
+          "mile_marker": 684
+        }
+      ],
+      "allowed_nations": [
+        "lakota",
+        "cheyenne",
+        "arapaho"
+      ],
+      "description": "Beyond Fort Laramie the trail climbs steadily through sage-covered high plains. Water grows scarce between crossings and the alkali flats whiten the earth like frost. Emigrants lighten loads here, casting off stoves, furniture, and keepsakes that line the trail like a morbid market. Independence Rock looms ahead, the great register of the desert.",
+      "diary_source": "Joel Palmer, 'Journal of Travels over the Rocky Mountains' (1847); Parkman, 'The Oregon Trail'"
+    },
+    {
+      "id": "seg_07",
+      "order": 7,
+      "start_landmark_id": "lm_independence_rock",
+      "end_landmark_id": "lm_south_pass",
+      "distance_miles": 100,
+      "terrain": "mountains",
+      "region": "south_pass",
+      "elevation_start_ft": 5900,
+      "elevation_end_ft": 7550,
+      "hazards": [
+        "steep_grade",
+        "no_game",
+        "deep_snow"
+      ],
+      "river_crossings": [
+        {
+          "name": "Sweetwater River (multiple fords)",
+          "width_ft": 60,
+          "depth_ft_summer": 2,
+          "depth_ft_spring": 4,
+          "ford_difficulty": 1,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_sweetwater_river_multiple_fords",
+          "mile_marker": 824
+        }
+      ],
+      "allowed_nations": [
+        "shoshone"
+      ],
+      "description": "The trail follows the Sweetwater River through Devil's Gate and past Ice Slough, where ice lies beneath the sod even in July. The ascent to South Pass is so gradual that many emigrants scarce believe they have crossed the Continental Divide. At the summit, Pacific Springs marks the first water flowing westward. The air is thin and cold even in summer.",
+      "diary_source": "Joel Palmer, 'Journal of Travels' (1847); Narcissa Whitman, letters, 1836"
+    },
+    {
+      "id": "seg_08",
+      "order": 8,
+      "start_landmark_id": "lm_south_pass",
+      "end_landmark_id": "lm_fort_bridger",
+      "distance_miles": 100,
+      "terrain": "high_plains",
+      "region": "wyoming",
+      "elevation_start_ft": 7550,
+      "elevation_end_ft": 6040,
+      "hazards": [
+        "no_water",
+        "alkali_water"
+      ],
+      "river_crossings": [
+        {
+          "name": "Green River",
+          "width_ft": 350,
+          "depth_ft_summer": 4,
+          "depth_ft_spring": 8,
+          "ford_difficulty": 4,
+          "ferry_available": true,
+          "ferry_cost_1848_dollars": 5,
+          "id": "rc_green_river",
+          "mile_marker": 924
+        }
+      ],
+      "allowed_nations": [
+        "shoshone"
+      ],
+      "description": "West of South Pass the trail descends through dry sage flats toward the Green River, a swift and treacherous crossing that has claimed wagons and lives every season. Beyond lies Fort Bridger, Jim Bridger's rough trading post in a pleasant valley. The Mormons are building their own settlements nearby and relations between Old Gabe and the Saints run uneasy.",
+      "diary_source": "Jim Bridger correspondence, 1848; Heinrich Lienhard, 'From St. Louis to Sutter's Fort' (1846)"
+    },
+    {
+      "id": "seg_09",
+      "order": 9,
+      "start_landmark_id": "lm_fort_bridger",
+      "end_landmark_id": "lm_soda_springs",
+      "distance_miles": 100,
+      "terrain": "mountains",
+      "region": "wyoming",
+      "elevation_start_ft": 6040,
+      "elevation_end_ft": 5780,
+      "hazards": [
+        "steep_grade",
+        "rockslide"
+      ],
+      "river_crossings": [
+        {
+          "name": "Bear River",
+          "width_ft": 150,
+          "depth_ft_summer": 3,
+          "depth_ft_spring": 5,
+          "ford_difficulty": 2,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_bear_river",
+          "mile_marker": 1024
+        }
+      ],
+      "allowed_nations": [
+        "shoshone",
+        "bannock"
+      ],
+      "description": "The trail winds through the Bear River valley and over rough mountain terrain, the Wasatch Range visible to the south. The country is handsome with good grass and clear streams. Soda Springs, with its natural carbonated water and the famous Steamboat Spring, delights emigrants weary of alkali and dust. Here the California trail forks south.",
+      "diary_source": "Joel Palmer, 'Journal of Travels' (1847); Osborne Cross, 'Report' (1849)"
+    },
+    {
+      "id": "seg_10",
+      "order": 10,
+      "start_landmark_id": "lm_soda_springs",
+      "end_landmark_id": "lm_fort_hall",
+      "distance_miles": 60,
+      "terrain": "river_valley",
+      "region": "snake_river",
+      "elevation_start_ft": 5780,
+      "elevation_end_ft": 4400,
+      "hazards": [
+        "steep_grade"
+      ],
+      "river_crossings": [
+        {
+          "name": "Portneuf River",
+          "width_ft": 80,
+          "depth_ft_summer": 2,
+          "depth_ft_spring": 4,
+          "ford_difficulty": 2,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_portneuf_river",
+          "mile_marker": 1104
+        }
+      ],
+      "allowed_nations": [
+        "shoshone",
+        "bannock"
+      ],
+      "description": "Descending from Soda Springs the trail follows the Portneuf River toward Fort Hall on the Snake River plain. The country opens into broad sage flats with distant mountains on every side. Fort Hall, a Hudson's Bay Company post, is the last reliable supply point before the long desert crossing of the Snake River country.",
+      "diary_source": "Narcissa Whitman, letters, 1836; Fort Hall post journals, 1848"
+    },
+    {
+      "id": "seg_11",
+      "order": 11,
+      "start_landmark_id": "lm_fort_hall",
+      "end_landmark_id": "lm_raft_river",
+      "distance_miles": 50,
+      "terrain": "desert",
+      "region": "snake_river",
+      "elevation_start_ft": 4400,
+      "elevation_end_ft": 4200,
+      "hazards": [
+        "no_water",
+        "alkali_water",
+        "no_game"
+      ],
+      "river_crossings": [],
+      "allowed_nations": [
+        "shoshone"
+      ],
+      "description": "Southwest of Fort Hall the trail crosses dry sage desert toward the Raft River junction. Water is scarce and what pools exist are often alkali-poisoned. Game has been hunted out by prior companies. At the Raft River the California trail turns south; Oregon-bound wagons bear northwest toward the Snake River canyon.",
+      "diary_source": "Joel Palmer, 'Journal of Travels' (1847); T.H. Jefferson, 'Map of the Emigrant Road' (1849)"
+    },
+    {
+      "id": "seg_12",
+      "order": 12,
+      "start_landmark_id": "lm_raft_river",
+      "end_landmark_id": "lm_snake_river_crossing",
+      "distance_miles": 120,
+      "terrain": "canyon",
+      "region": "snake_river",
+      "elevation_start_ft": 4200,
+      "elevation_end_ft": 3100,
+      "hazards": [
+        "steep_grade",
+        "no_water",
+        "rockslide",
+        "river_crossing"
+      ],
+      "river_crossings": [
+        {
+          "name": "Snake River (Three Island Crossing)",
+          "width_ft": 900,
+          "depth_ft_summer": 4,
+          "depth_ft_spring": 7,
+          "ford_difficulty": 5,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_snake_river_three_island_crossing",
+          "mile_marker": 1244
+        }
+      ],
+      "allowed_nations": [
+        "shoshone"
+      ],
+      "description": "The Snake River canyon stretches ahead, the river sunk hundreds of feet below the rim in a gorge of black lava rock. Water is visible but often unreachable. The trail leaves the rim at Three Island Crossing, the most dangerous ford on the entire road, where the Snake runs swift and deep among volcanic boulders. Many wagons overturn here.",
+      "diary_source": "Joel Palmer, 'Journal of Travels' (1847); John C. Fremont, 'Report of the Exploring Expedition' (1845)"
+    },
+    {
+      "id": "seg_13",
+      "order": 13,
+      "start_landmark_id": "lm_snake_river_crossing",
+      "end_landmark_id": "lm_fort_boise",
+      "distance_miles": 120,
+      "terrain": "desert",
+      "region": "snake_river",
+      "elevation_start_ft": 3100,
+      "elevation_end_ft": 2730,
+      "hazards": [
+        "no_water",
+        "alkali_water",
+        "dust_storm"
+      ],
+      "river_crossings": [
+        {
+          "name": "Boise River",
+          "width_ft": 120,
+          "depth_ft_summer": 2,
+          "depth_ft_spring": 4,
+          "ford_difficulty": 2,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_boise_river",
+          "mile_marker": 1364
+        }
+      ],
+      "allowed_nations": [
+        "shoshone",
+        "bannock"
+      ],
+      "description": "West of Three Island Crossing the trail crosses hot, barren desert broken only by the occasional alkaline creek. Oxen weaken and tempers fray in the relentless dust. The first sight of the Boise River, lined with cottonwoods and willows, lifts every heart. Fort Boise, a modest Hudson's Bay post on the Snake, offers the last trade before the mountains.",
+      "diary_source": "Joel Palmer, 'Journal of Travels' (1847); Fort Boise post records, 1847-48"
+    },
+    {
+      "id": "seg_14",
+      "order": 14,
+      "start_landmark_id": "lm_fort_boise",
+      "end_landmark_id": "lm_blue_mountains",
+      "distance_miles": 130,
+      "terrain": "mountains",
+      "region": "blue_mountains",
+      "elevation_start_ft": 2730,
+      "elevation_end_ft": 4200,
+      "hazards": [
+        "steep_grade",
+        "river_crossing",
+        "rockslide",
+        "deep_snow"
+      ],
+      "river_crossings": [
+        {
+          "name": "Snake River (Farewell Bend)",
+          "width_ft": 600,
+          "depth_ft_summer": 3,
+          "depth_ft_spring": 6,
+          "ford_difficulty": 3,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_snake_river_farewell_bend",
+          "mile_marker": 1467
+        },
+        {
+          "name": "Burnt River (multiple fords)",
+          "width_ft": 40,
+          "depth_ft_summer": 2,
+          "depth_ft_spring": 3,
+          "ford_difficulty": 2,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_burnt_river_multiple_fords",
+          "mile_marker": 1510
+        }
+      ],
+      "allowed_nations": [
+        "cayuse",
+        "nez_perce",
+        "umatilla"
+      ],
+      "description": "From Fort Boise the trail follows the Snake to Farewell Bend, then turns northwest up the Burnt River canyon into the Blue Mountains. The ascent is grueling, the road rocky and choked with timber. Early snow may catch late-season travelers. The Cayuse and Nez Perce peoples inhabit these mountains and the Whitman mission massacre of 1847 has left relations strained and uneasy.",
+      "diary_source": "Joel Palmer, 'Journal of Travels' (1847); Narcissa Whitman, letters, 1836-1847"
+    },
+    {
+      "id": "seg_15",
+      "order": 15,
+      "start_landmark_id": "lm_blue_mountains",
+      "end_landmark_id": "lm_the_dalles",
+      "distance_miles": 120,
+      "terrain": "forest",
+      "region": "columbia_plateau",
+      "elevation_start_ft": 4200,
+      "elevation_end_ft": 180,
+      "hazards": [
+        "steep_grade",
+        "deep_snow",
+        "flash_flood"
+      ],
+      "river_crossings": [
+        {
+          "name": "Umatilla River",
+          "width_ft": 80,
+          "depth_ft_summer": 2,
+          "depth_ft_spring": 4,
+          "ford_difficulty": 1,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_umatilla_river",
+          "mile_marker": 1584
+        },
+        {
+          "name": "John Day River",
+          "width_ft": 100,
+          "depth_ft_summer": 2,
+          "depth_ft_spring": 5,
+          "ford_difficulty": 2,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_john_day_river",
+          "mile_marker": 1614
+        },
+        {
+          "name": "Deschutes River",
+          "width_ft": 120,
+          "depth_ft_summer": 3,
+          "depth_ft_spring": 6,
+          "ford_difficulty": 3,
+          "ferry_available": false,
+          "ferry_cost_1848_dollars": null,
+          "id": "rc_deschutes_river",
+          "mile_marker": 1644
+        }
+      ],
+      "allowed_nations": [
+        "cayuse",
+        "nez_perce",
+        "umatilla"
+      ],
+      "description": "Descending the Blue Mountains through stands of pine and fir, the trail crosses the Umatilla, John Day, and Deschutes rivers before reaching The Dalles on the Columbia. The descent is steep and wagons must be rough-locked or lowered by rope. The country transitions from plateau to the great Columbia gorge, with its roaring cataracts and basalt cliffs.",
+      "diary_source": "Joel Palmer, 'Journal of Travels' (1847); Overton Johnson, 'Route Across the Rocky Mountains' (1843)"
+    },
+    {
+      "id": "seg_16",
+      "order": 16,
+      "start_landmark_id": "lm_the_dalles",
+      "end_landmark_id": "lm_oregon_city",
+      "distance_miles": 90,
+      "terrain": "river_valley",
+      "region": "willamette",
+      "elevation_start_ft": 180,
+      "elevation_end_ft": 55,
+      "hazards": [
+        "river_crossing",
+        "steep_grade",
+        "flash_flood"
+      ],
+      "river_crossings": [
+        {
+          "name": "Columbia River (raft or Barlow Road)",
+          "width_ft": 2500,
+          "depth_ft_summer": 20,
+          "depth_ft_spring": 30,
+          "ford_difficulty": 5,
+          "ferry_available": true,
+          "ferry_cost_1848_dollars": 10,
+          "id": "rc_columbia_river_raft_or_barlow_road",
+          "mile_marker": 1719
+        }
+      ],
+      "allowed_nations": [
+        "cayuse",
+        "umatilla"
+      ],
+      "description": "At The Dalles, emigrants face a final choice: raft the treacherous Columbia through the Cascades, risking all in the rapids, or take the Barlow Road over Mount Hood, paying Samuel Barlow's toll but keeping wagons intact. Either route is harrowing. Beyond the mountains the Willamette Valley opens green and fertile, and Oregon City \u2014 with its mills and modest frame buildings \u2014 marks the journey's end.",
+      "diary_source": "Joel Palmer, 'Journal of Travels' (1847); Samuel Barlow, toll road records, 1846-48"
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "lm_independence",
+      "name": "Independence, Missouri",
+      "segment_id": "seg_01",
+      "mile_marker": 0,
+      "type": "settlement",
+      "operator_1848": null,
+      "description": "A bustling frontier town of some three thousand souls, Independence serves as the principal outfitting point for overland emigrants. The courthouse square is ringed with outfitters, blacksmiths, and wagon-makers doing brisk trade. Mules, oxen, and horses crowd the muddy streets. Every spring the town swells with families bound for Oregon and California, buying flour, bacon, and hope in equal measure.",
+      "diary_quote": "The town was full of Indians, Mexicans, and traders, and the whole throng presented a most motley appearance.",
+      "diary_source": "Francis Parkman, 'The Oregon Trail' (1849)",
+      "trade_inventory": [
+        {
+          "item": "Flour (100 lb)",
+          "price_1848_cents": 250,
+          "availability": "common"
+        },
+        {
+          "item": "Bacon (100 lb)",
+          "price_1848_cents": 500,
+          "availability": "common"
+        },
+        {
+          "item": "Sugar (50 lb)",
+          "price_1848_cents": 300,
+          "availability": "common"
+        },
+        {
+          "item": "Coffee (20 lb)",
+          "price_1848_cents": 160,
+          "availability": "common"
+        },
+        {
+          "item": "Rice (50 lb)",
+          "price_1848_cents": 200,
+          "availability": "common"
+        },
+        {
+          "item": "Salt (25 lb)",
+          "price_1848_cents": 50,
+          "availability": "common"
+        },
+        {
+          "item": "Dried Beans (50 lb)",
+          "price_1848_cents": 150,
+          "availability": "common"
+        },
+        {
+          "item": "Saleratus (baking soda, 5 lb)",
+          "price_1848_cents": 50,
+          "availability": "common"
+        },
+        {
+          "item": "Lead and powder (25 lb)",
+          "price_1848_cents": 300,
+          "availability": "common"
+        },
+        {
+          "item": "Rifle, percussion cap",
+          "price_1848_cents": 1500,
+          "availability": "common"
+        },
+        {
+          "item": "Wagon cover (canvas)",
+          "price_1848_cents": 500,
+          "availability": "common"
+        },
+        {
+          "item": "Yoke of oxen",
+          "price_1848_cents": 5000,
+          "availability": "common"
+        },
+        {
+          "item": "Wagon, complete",
+          "price_1848_cents": 8500,
+          "availability": "common"
+        },
+        {
+          "item": "Laudanum (bottle)",
+          "price_1848_cents": 50,
+          "availability": "common"
+        },
+        {
+          "item": "Calomel (dose)",
+          "price_1848_cents": 10,
+          "availability": "common"
+        },
+        {
+          "item": "Spare axle",
+          "price_1848_cents": 150,
+          "availability": "common"
+        },
+        {
+          "item": "Spare tongue",
+          "price_1848_cents": 200,
+          "availability": "scarce"
+        },
+        {
+          "item": "Rope (100 ft hemp)",
+          "price_1848_cents": 100,
+          "availability": "common"
+        },
+        {
+          "item": "Blankets (pair)",
+          "price_1848_cents": 300,
+          "availability": "common"
+        }
+      ],
+      "services": [
+        "blacksmith",
+        "wagonwright",
+        "outfitter",
+        "physician",
+        "ferry"
+      ],
+      "event_hooks": [
+        "outfit_wagon",
+        "hire_guide",
+        "join_company",
+        "farewell_letters"
+      ]
+    },
+    {
+      "id": "lm_kansas_river",
+      "name": "Kansas River Crossing",
+      "segment_id": "seg_01",
+      "mile_marker": 83,
+      "type": "river_crossing",
+      "operator_1848": null,
+      "description": "The Kansas River stretches over six hundred feet wide, its brown waters carrying spring snowmelt from the western prairies. A rough ferry operated by the local Kaw people carries wagons across for a dollar apiece. Those unwilling to pay must ford, a dangerous business when the water runs high.",
+      "diary_quote": "The river was much swollen and we waited near three days for it to fall sufficiently to attempt a crossing.",
+      "diary_source": "William G. Johnston, 'Experiences of a Forty-Niner' (1892)",
+      "trade_inventory": [
+        {
+          "item": "Dried corn",
+          "price_1848_cents": 50,
+          "availability": "scarce"
+        },
+        {
+          "item": "Moccasins",
+          "price_1848_cents": 75,
+          "availability": "scarce"
+        }
+      ],
+      "services": [
+        "ferry"
+      ],
+      "event_hooks": [
+        "river_crossing_decision",
+        "kaw_ferry_negotiation",
+        "wagon_overturn"
+      ]
+    },
+    {
+      "id": "lm_alcove_spring",
+      "name": "Alcove Spring",
+      "segment_id": "seg_02",
+      "mile_marker": 143,
+      "type": "natural",
+      "operator_1848": null,
+      "description": "A limestone grotto shelters a clear spring that cascades into a shaded pool, offering the finest water and most pleasant campsite on the eastern prairie. Emigrants carve their names in the soft rock. The Donner party camped here in 1846 and the name 'Alcove Spring' was carved by Edwin Bryant himself.",
+      "diary_quote": "This is a beautiful spot. The water gushes from a ledge of rocks and falls some ten feet into a basin below, clear as crystal.",
+      "diary_source": "Edwin Bryant, 'What I Saw in California' (1848)",
+      "trade_inventory": [],
+      "services": [],
+      "event_hooks": [
+        "rest_and_repair",
+        "carve_names",
+        "big_blue_river_crossing"
+      ]
+    },
+    {
+      "id": "lm_fort_kearney",
+      "name": "Fort Kearney",
+      "segment_id": "seg_03",
+      "mile_marker": 313,
+      "type": "fort",
+      "operator_1848": "United States Army",
+      "description": "Established just this year, Fort Kearney is little more than a collection of sod buildings and tents on the south bank of the Platte. A company of dragoons is posted here to protect emigrant trains and overawe the Pawnee. The post office here is the last reliable mail connection to the States, and many a traveler pens final letters home.",
+      "diary_quote": "Fort Kearney, so called, is a wretched collection of sod houses and tents pitched upon the open prairie.",
+      "diary_source": "Francis Parkman, 'The Oregon Trail' (1849)",
+      "trade_inventory": [
+        {
+          "item": "Flour (100 lb)",
+          "price_1848_cents": 400,
+          "availability": "scarce"
+        },
+        {
+          "item": "Bacon (100 lb)",
+          "price_1848_cents": 800,
+          "availability": "scarce"
+        },
+        {
+          "item": "Gunpowder (1 lb)",
+          "price_1848_cents": 75,
+          "availability": "scarce"
+        },
+        {
+          "item": "Lead shot (5 lb)",
+          "price_1848_cents": 50,
+          "availability": "scarce"
+        },
+        {
+          "item": "Whiskey (quart)",
+          "price_1848_cents": 100,
+          "availability": "scarce"
+        }
+      ],
+      "services": [
+        "blacksmith",
+        "post_office",
+        "physician"
+      ],
+      "event_hooks": [
+        "mail_letters_home",
+        "military_news",
+        "pawnee_encounter",
+        "register_party"
+      ]
+    },
+    {
+      "id": "lm_chimney_rock",
+      "name": "Chimney Rock",
+      "segment_id": "seg_04",
+      "mile_marker": 460,
+      "type": "natural",
+      "operator_1848": null,
+      "description": "Rising three hundred feet above the North Platte valley, Chimney Rock is the most celebrated natural landmark on the trail. Its distinctive spire of Brule clay and sandstone can be seen for days before one reaches it. Nearly every emigrant journal records the sight. The rock is slowly eroding and is somewhat shorter than earlier travelers described.",
+      "diary_quote": "Towards the west rose a remarkable formation, a tall narrow column of indurated clay, looking precisely like a very lofty round chimney.",
+      "diary_source": "Francis Parkman, 'The Oregon Trail' (1849)",
+      "trade_inventory": [],
+      "services": [],
+      "event_hooks": [
+        "landmark_sighting",
+        "carve_names",
+        "morale_boost"
+      ]
+    },
+    {
+      "id": "lm_scotts_bluff",
+      "name": "Scotts Bluff",
+      "segment_id": "seg_04",
+      "mile_marker": 543,
+      "type": "natural",
+      "operator_1848": null,
+      "description": "A great promontory of sandstone and clay rising eight hundred feet above the river, Scotts Bluff forces the trail through Mitchell Pass. Named for Hiram Scott, a fur trapper said to have perished at its base in 1828, the bluff marks the transition from the broad Platte valley to rougher country. Wildflowers grow in the sheltered draws.",
+      "diary_quote": "These bluffs present to the eye something of the appearance of a city with towers and steeples and domes.",
+      "diary_source": "Matthew Field, 'Prairie and Mountain Sketches' (1843)",
+      "trade_inventory": [],
+      "services": [],
+      "event_hooks": [
+        "landmark_sighting",
+        "mitchell_pass_navigation"
+      ]
+    },
+    {
+      "id": "lm_fort_laramie",
+      "name": "Fort Laramie",
+      "segment_id": "seg_05",
+      "mile_marker": 594,
+      "type": "fort",
+      "operator_1848": "United States Army (purchased from American Fur Company, 1849; in 1848 still a fur-trade post garrisoned by mounted riflemen)",
+      "description": "Fort Laramie stands at the confluence of the Laramie and North Platte rivers, a whitewashed adobe fortress that has served the fur trade since 1834. By 1848 it is the most important waypoint on the trail, where companies rest, repair wagons, shoe oxen, and take stock of supplies. Lakota, Cheyenne, and Arapaho peoples camp in large numbers nearby, and the fort serves as a nexus of trade and diplomacy.",
+      "diary_quote": "Fort Laramie is one of the posts established by the American Fur Company. Here we found a large body of Sioux encamped near the fort. They were gayly dressed and mounted.",
+      "diary_source": "Francis Parkman, 'The Oregon Trail' (1849)",
+      "trade_inventory": [
+        {
+          "item": "Flour (100 lb)",
+          "price_1848_cents": 600,
+          "availability": "scarce"
+        },
+        {
+          "item": "Bacon (100 lb)",
+          "price_1848_cents": 1000,
+          "availability": "scarce"
+        },
+        {
+          "item": "Sugar (10 lb)",
+          "price_1848_cents": 150,
+          "availability": "scarce"
+        },
+        {
+          "item": "Coffee (5 lb)",
+          "price_1848_cents": 100,
+          "availability": "scarce"
+        },
+        {
+          "item": "Tobacco (1 lb)",
+          "price_1848_cents": 150,
+          "availability": "common"
+        },
+        {
+          "item": "Blankets (pair)",
+          "price_1848_cents": 600,
+          "availability": "scarce"
+        },
+        {
+          "item": "Moccasins",
+          "price_1848_cents": 100,
+          "availability": "common"
+        },
+        {
+          "item": "Buffalo robes",
+          "price_1848_cents": 300,
+          "availability": "common"
+        },
+        {
+          "item": "Gunpowder (1 lb)",
+          "price_1848_cents": 100,
+          "availability": "scarce"
+        },
+        {
+          "item": "Whiskey (quart)",
+          "price_1848_cents": 200,
+          "availability": "scarce"
+        }
+      ],
+      "services": [
+        "blacksmith",
+        "post_office",
+        "physician",
+        "wagonwright"
+      ],
+      "event_hooks": [
+        "rest_and_repair",
+        "trade_with_lakota",
+        "lighten_loads",
+        "abandon_goods",
+        "military_escort_discussion"
+      ]
+    },
+    {
+      "id": "lm_independence_rock",
+      "name": "Independence Rock",
+      "segment_id": "seg_06",
+      "mile_marker": 774,
+      "type": "natural",
+      "operator_1848": null,
+      "description": "A great oval dome of granite, six hundred yards long and a hundred feet high, rising from the Sweetwater valley like a beached whale. Thousands of emigrants have painted, carved, or tarred their names upon its surface, earning it the title 'Register of the Desert.' Trail wisdom holds that a company reaching this rock by the Fourth of July stands a fair chance of crossing the mountains before snow.",
+      "diary_quote": "I walked to the rock and found it entirely covered with names of persons who had been there before us, some of them cut deep in the granite.",
+      "diary_source": "Joel Palmer, 'Journal of Travels over the Rocky Mountains' (1847)",
+      "trade_inventory": [],
+      "services": [],
+      "event_hooks": [
+        "carve_names",
+        "fourth_of_july_celebration",
+        "morale_check_timing",
+        "sweetwater_ford"
+      ]
+    },
+    {
+      "id": "lm_south_pass",
+      "name": "South Pass",
+      "segment_id": "seg_07",
+      "mile_marker": 874,
+      "type": "natural",
+      "operator_1848": null,
+      "description": "The great gateway through the Rocky Mountains is, surprisingly, a broad and gentle saddle twenty miles wide, carpeted with sage and bunch grass. The Continental Divide here is so gradual that one scarcely notices the crossing. Pacific Springs, just west of the summit, provides the first water flowing toward the Pacific. The air is thin and cold even in midsummer, and snow may fall any month of the year.",
+      "diary_quote": "The ascent was so gradual that we passed the summit without knowing it, until we found the waters running west.",
+      "diary_source": "Narcissa Whitman, letters, 1836",
+      "trade_inventory": [],
+      "services": [],
+      "event_hooks": [
+        "continental_divide_milestone",
+        "pacific_springs_camp",
+        "parting_of_ways_decision"
+      ]
+    },
+    {
+      "id": "lm_fort_bridger",
+      "name": "Fort Bridger",
+      "segment_id": "seg_08",
+      "mile_marker": 974,
+      "type": "fort",
+      "operator_1848": "Jim Bridger and Louis Vasquez",
+      "description": "Jim Bridger's trading post occupies a pleasant valley on Black's Fork of the Green River. It is a rough affair \u2014 two or three log cabins and a few sheds \u2014 but Bridger himself is a fund of knowledge about the country ahead. Shoshone people trade here, and Mormon settlers are establishing farms in the vicinity. Supplies are dear but available.",
+      "diary_quote": "We found at the fort a tolerably good blacksmith shop, kept by a man from the States. The fort itself is a shabby concern.",
+      "diary_source": "Joel Palmer, 'Journal of Travels over the Rocky Mountains' (1847)",
+      "trade_inventory": [
+        {
+          "item": "Flour (100 lb)",
+          "price_1848_cents": 800,
+          "availability": "scarce"
+        },
+        {
+          "item": "Bacon (50 lb)",
+          "price_1848_cents": 750,
+          "availability": "rare"
+        },
+        {
+          "item": "Sugar (10 lb)",
+          "price_1848_cents": 200,
+          "availability": "rare"
+        },
+        {
+          "item": "Buffalo meat, dried (20 lb)",
+          "price_1848_cents": 200,
+          "availability": "common"
+        },
+        {
+          "item": "Tobacco (1 lb)",
+          "price_1848_cents": 200,
+          "availability": "scarce"
+        },
+        {
+          "item": "Horseshoes (set of 4)",
+          "price_1848_cents": 200,
+          "availability": "scarce"
+        }
+      ],
+      "services": [
+        "blacksmith",
+        "guide_advice"
+      ],
+      "event_hooks": [
+        "rest_and_repair",
+        "bridger_advice",
+        "mormon_encounter",
+        "greenwood_cutoff_decision"
+      ]
+    },
+    {
+      "id": "lm_soda_springs",
+      "name": "Soda Springs",
+      "segment_id": "seg_09",
+      "mile_marker": 1074,
+      "type": "natural",
+      "operator_1848": null,
+      "description": "A remarkable collection of natural carbonated springs along the Bear River, where the water fizzes and bubbles from the earth like soda water. Steamboat Spring erupts with a regular pulsing hiss. Emigrants gather round to taste the curious water, mixing it with sugar and acid to make a tolerable lemonade. Here the trail to California diverges southward.",
+      "diary_quote": "We halted at the celebrated Soda Springs, the water of which has a very pleasant acid taste. By adding a little sugar and tartaric acid we had an excellent drink.",
+      "diary_source": "Joel Palmer, 'Journal of Travels over the Rocky Mountains' (1847)",
+      "trade_inventory": [],
+      "services": [],
+      "event_hooks": [
+        "soda_springs_novelty",
+        "california_trail_split_decision",
+        "morale_boost"
+      ]
+    },
+    {
+      "id": "lm_fort_hall",
+      "name": "Fort Hall",
+      "segment_id": "seg_10",
+      "mile_marker": 1134,
+      "type": "fort",
+      "operator_1848": "Hudson's Bay Company",
+      "description": "A whitewashed adobe fort on the Snake River plain, Fort Hall has been operated by the Hudson's Bay Company since 1837. The factor here has historically discouraged emigrants from continuing to Oregon, urging them toward California instead, though this policy is waning. Supplies are available but at frontier prices. The Shoshone and Bannock peoples are frequent visitors.",
+      "diary_quote": "At Fort Hall we were told by the gentleman in charge that it was yet doubtful whether wagons could be taken through to the Willamette Valley.",
+      "diary_source": "Joel Palmer, 'Journal of Travels over the Rocky Mountains' (1847)",
+      "trade_inventory": [
+        {
+          "item": "Flour (100 lb)",
+          "price_1848_cents": 1000,
+          "availability": "rare"
+        },
+        {
+          "item": "Salmon, dried (20 lb)",
+          "price_1848_cents": 150,
+          "availability": "common"
+        },
+        {
+          "item": "Tobacco (1 lb)",
+          "price_1848_cents": 250,
+          "availability": "scarce"
+        },
+        {
+          "item": "Ammunition (1 lb powder)",
+          "price_1848_cents": 150,
+          "availability": "scarce"
+        },
+        {
+          "item": "Blankets (each)",
+          "price_1848_cents": 500,
+          "availability": "scarce"
+        }
+      ],
+      "services": [
+        "blacksmith",
+        "guide_advice"
+      ],
+      "event_hooks": [
+        "rest_and_repair",
+        "hbc_discouragement",
+        "snake_river_warning",
+        "shoshone_trade"
+      ]
+    },
+    {
+      "id": "lm_raft_river",
+      "name": "Raft River Junction",
+      "segment_id": "seg_11",
+      "mile_marker": 1184,
+      "type": "natural",
+      "operator_1848": null,
+      "description": "A modest creek joining the Snake River from the south marks the parting of the ways between Oregon and California. A simple sign or cairn of rocks indicates the California trail turning southwest. Companies divide here, families parting from traveling companions, perhaps never to meet again. The country is dry sage desert in every direction.",
+      "diary_quote": "Here we parted from those bound for California with heavy hearts, not knowing if we should ever meet again in this world.",
+      "diary_source": "Based on composite emigrant accounts, 1845-1848",
+      "trade_inventory": [],
+      "services": [],
+      "event_hooks": [
+        "california_trail_final_split",
+        "party_separation",
+        "farewell_scene"
+      ]
+    },
+    {
+      "id": "lm_snake_river_crossing",
+      "name": "Three Island Crossing",
+      "segment_id": "seg_12",
+      "mile_marker": 1304,
+      "type": "river_crossing",
+      "operator_1848": null,
+      "description": "Three islands of gravel and willow divide the Snake River here into channels, creating the only feasible crossing for hundreds of miles. Even so, the current runs swift and treacherous, the bottom rocky and uneven. Wagons must be floated or dragged between the islands, stock swimming alongside. Many companies lose goods, animals, or lives at this crossing.",
+      "diary_quote": "The river was rapid and the bottom very stony. Several wagons were overturned and much property was lost.",
+      "diary_source": "Joel Palmer, 'Journal of Travels over the Rocky Mountains' (1847)",
+      "trade_inventory": [],
+      "services": [],
+      "event_hooks": [
+        "dangerous_river_crossing",
+        "wagon_overturn_risk",
+        "drowning_risk",
+        "south_alternate_route_decision"
+      ]
+    },
+    {
+      "id": "lm_fort_boise",
+      "name": "Fort Boise",
+      "segment_id": "seg_13",
+      "mile_marker": 1424,
+      "type": "fort",
+      "operator_1848": "Hudson's Bay Company",
+      "description": "A small Hudson's Bay Company post near the confluence of the Boise and Snake rivers. By 1848 it is a modest affair, somewhat run down, but the sight of any building is welcome after the Snake River desert. The factor trades dried salmon and a few supplies. The Boise River valley, green with cottonwoods, offers good grass and water for exhausted stock.",
+      "diary_quote": "Fort Boise is a small trading post belonging to the Hudson's Bay Company. The buildings are of adobe and in a dilapidated condition.",
+      "diary_source": "Joel Palmer, 'Journal of Travels over the Rocky Mountains' (1847)",
+      "trade_inventory": [
+        {
+          "item": "Dried salmon (10 lb)",
+          "price_1848_cents": 100,
+          "availability": "common"
+        },
+        {
+          "item": "Flour (50 lb)",
+          "price_1848_cents": 600,
+          "availability": "rare"
+        },
+        {
+          "item": "Tobacco (1 lb)",
+          "price_1848_cents": 300,
+          "availability": "scarce"
+        }
+      ],
+      "services": [
+        "guide_advice"
+      ],
+      "event_hooks": [
+        "rest_and_repair",
+        "blue_mountains_warning",
+        "buy_salmon"
+      ]
+    },
+    {
+      "id": "lm_blue_mountains",
+      "name": "Blue Mountains Summit",
+      "segment_id": "seg_14",
+      "mile_marker": 1554,
+      "type": "natural",
+      "operator_1848": null,
+      "description": "The Blue Mountains rise as a dark timbered wall across the trail, the most formidable mountain crossing since South Pass. Dense pine and fir forests close in on the narrow road, which climbs steeply over rocky ground. The summit offers a breathtaking view of the Columbia Plateau stretching west. Early autumn snow is a real danger for late-season travelers.",
+      "diary_quote": "The timber was so thick that we could scarcely get our wagons through. The road was strewn with broken wagons and dead cattle.",
+      "diary_source": "Joel Palmer, 'Journal of Travels over the Rocky Mountains' (1847)",
+      "trade_inventory": [],
+      "services": [],
+      "event_hooks": [
+        "mountain_ascent_challenge",
+        "early_snow_risk",
+        "whitman_mission_site",
+        "timber_obstacle"
+      ]
+    },
+    {
+      "id": "lm_the_dalles",
+      "name": "The Dalles",
+      "segment_id": "seg_15",
+      "mile_marker": 1674,
+      "type": "settlement",
+      "operator_1848": "Methodist Mission (abandoned 1847); small emigrant settlement",
+      "description": "Where the Columbia River forces through a narrow basalt gorge, the great rapids called The Dalles mark a critical decision point. The river route downstream through the Cascades is swift but perilous \u2014 rapids have drowned entire families. The Barlow Road, opened in 1846, offers an overland route around Mount Hood for a toll of five dollars per wagon, but the road is brutally steep and muddy.",
+      "diary_quote": "At the Dalles we had to decide whether to risk the river or take the mountain road. Neither choice was without its terrors.",
+      "diary_source": "Joel Palmer, 'Journal of Travels over the Rocky Mountains' (1847)",
+      "trade_inventory": [
+        {
+          "item": "Raft passage (per wagon)",
+          "price_1848_cents": 2500,
+          "availability": "scarce"
+        },
+        {
+          "item": "Dried fish",
+          "price_1848_cents": 50,
+          "availability": "common"
+        },
+        {
+          "item": "Potatoes (bushel)",
+          "price_1848_cents": 100,
+          "availability": "scarce"
+        }
+      ],
+      "services": [
+        "raft_builder",
+        "guide_advice"
+      ],
+      "event_hooks": [
+        "dalles_route_decision",
+        "barlow_road_toll",
+        "columbia_river_raft",
+        "cascade_rapids"
+      ]
+    },
+    {
+      "id": "lm_oregon_city",
+      "name": "Oregon City",
+      "segment_id": "seg_16",
+      "mile_marker": 1764,
+      "type": "destination",
+      "operator_1848": "Oregon Provisional Government",
+      "description": "At the falls of the Willamette River stands Oregon City, capital of the Oregon Territory and journey's end. A town of perhaps five hundred souls, it boasts sawmills, a gristmill, several stores, a newspaper office, and a few churches. The falls power the mills that shape lumber from the endless forests. Donation Land Claims of 640 acres await settlers willing to improve the land. After two thousand miles, the promised land.",
+      "diary_quote": "We arrived at Oregon City on the 1st of November, having been six months on the road. The sight of houses and fences and cultivated fields was almost too much to bear.",
+      "diary_source": "Based on composite emigrant accounts, 1843-1848",
+      "trade_inventory": [
+        {
+          "item": "Flour (100 lb)",
+          "price_1848_cents": 300,
+          "availability": "common"
+        },
+        {
+          "item": "Lumber (1000 board ft)",
+          "price_1848_cents": 2000,
+          "availability": "common"
+        },
+        {
+          "item": "Nails (10 lb)",
+          "price_1848_cents": 200,
+          "availability": "common"
+        },
+        {
+          "item": "Seed wheat (bushel)",
+          "price_1848_cents": 200,
+          "availability": "common"
+        },
+        {
+          "item": "Plow",
+          "price_1848_cents": 1500,
+          "availability": "scarce"
+        },
+        {
+          "item": "Axe",
+          "price_1848_cents": 200,
+          "availability": "common"
+        }
+      ],
+      "services": [
+        "blacksmith",
+        "wagonwright",
+        "physician",
+        "general_store",
+        "land_office",
+        "post_office"
+      ],
+      "event_hooks": [
+        "journey_complete",
+        "claim_land",
+        "final_journal_entry"
+      ]
+    }
+  ],
+  "weather": [
+    {
+      "month": 4,
+      "region": "missouri",
+      "temp_high_f": 65,
+      "temp_low_f": 42,
+      "precip_chance": 0.45,
+      "storm_chance": 0.15,
+      "conditions": [
+        "rain",
+        "thunderstorm",
+        "mud"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Mud slows travel and soaks clothing; chills follow wet nights",
+      "description": "April in Missouri brings warm days and cool nights with frequent spring rains that turn the prairie black and sticky. Thunderstorms roll across the flats with fearful lightning. The roads are a sea of mud and wagons sink to the hubs.",
+      "source": "Missouri Weather Service historical records; Parkman, 'The Oregon Trail'"
+    },
+    {
+      "month": 4,
+      "region": "eastern_nebraska",
+      "temp_high_f": 60,
+      "temp_low_f": 35,
+      "precip_chance": 0.35,
+      "storm_chance": 0.12,
+      "conditions": [
+        "rain",
+        "wind",
+        "late_frost"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Late frosts and cold rain; risk of chill and ague",
+      "description": "The Nebraska prairie in April is raw and blustery, the grass just greening. Late frosts whiten the ground at dawn and cold rains sweep across without shelter or warning. The wind cuts through woolen coats like a knife.",
+      "source": "Fort Kearney weather observations, 1848-1855"
+    },
+    {
+      "month": 4,
+      "region": "western_nebraska",
+      "temp_high_f": 55,
+      "temp_low_f": 28,
+      "precip_chance": 0.25,
+      "storm_chance": 0.08,
+      "conditions": [
+        "wind",
+        "dust",
+        "late_snow"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": "Cold nights and wind exposure; early-season travelers risk frostbite",
+      "description": "Few companies reach western Nebraska in April, but those who do find cold winds, lingering snow patches, and nights that freeze water in the buckets. The air is dry and the dust begins.",
+      "source": "Fort Laramie weather observations, 1849-1860"
+    },
+    {
+      "month": 4,
+      "region": "wyoming",
+      "temp_high_f": 48,
+      "temp_low_f": 22,
+      "precip_chance": 0.3,
+      "storm_chance": 0.1,
+      "conditions": [
+        "snow",
+        "wind",
+        "frost"
+      ],
+      "pace_modifier": 0.75,
+      "health_risk": "Exposure and frostbite risk; no company should be here this early",
+      "description": "Wyoming in April is still winter by any reckoning. Snow lies on the ground, the wind howls across the sage flats, and no sensible company would attempt this country before late May.",
+      "source": "Fort Bridger records; Stansbury expedition observations, 1849"
+    },
+    {
+      "month": 4,
+      "region": "south_pass",
+      "temp_high_f": 40,
+      "temp_low_f": 15,
+      "precip_chance": 0.35,
+      "storm_chance": 0.12,
+      "conditions": [
+        "snow",
+        "blizzard",
+        "extreme_cold"
+      ],
+      "pace_modifier": 0.5,
+      "health_risk": "Lethal exposure conditions; impassable for wagons",
+      "description": "South Pass in April is buried in snow and swept by blizzards. No emigrant wagon has ever crossed this early. The pass stands at seven thousand five hundred feet and winter holds its grip well into May.",
+      "source": "Fremont expedition records, 1842-1844"
+    },
+    {
+      "month": 4,
+      "region": "snake_river",
+      "temp_high_f": 52,
+      "temp_low_f": 28,
+      "precip_chance": 0.2,
+      "storm_chance": 0.05,
+      "conditions": [
+        "wind",
+        "frost",
+        "cold_rain"
+      ],
+      "pace_modifier": 0.7,
+      "health_risk": "Exposure; rivers running high with snowmelt",
+      "description": "The Snake River plain in April remains cold and windswept, the rivers swollen with mountain snowmelt. No emigrant trains are present this early in the season.",
+      "source": "Fort Hall post journals; Hudson's Bay Company records"
+    },
+    {
+      "month": 4,
+      "region": "blue_mountains",
+      "temp_high_f": 48,
+      "temp_low_f": 25,
+      "precip_chance": 0.4,
+      "storm_chance": 0.1,
+      "conditions": [
+        "snow",
+        "rain",
+        "fog"
+      ],
+      "pace_modifier": 0.6,
+      "health_risk": "Deep snow; impassable for wagons",
+      "description": "The Blue Mountains in April are deep in snow, the trails invisible beneath white drifts. Dense fog fills the valleys. No wagon train attempts the crossing before late summer.",
+      "source": "Palmer, 'Journal of Travels'; Whitman Mission records"
+    },
+    {
+      "month": 4,
+      "region": "columbia_plateau",
+      "temp_high_f": 55,
+      "temp_low_f": 32,
+      "precip_chance": 0.3,
+      "storm_chance": 0.08,
+      "conditions": [
+        "rain",
+        "wind",
+        "cool"
+      ],
+      "pace_modifier": 0.8,
+      "health_risk": "Cold rain and exposure",
+      "description": "The Columbia Plateau in April sees rain and wind with occasional clear spells. The bunch grass is greening but the country remains cold and inhospitable to travelers.",
+      "source": "Columbia River settlement records, 1840s"
+    },
+    {
+      "month": 4,
+      "region": "willamette",
+      "temp_high_f": 58,
+      "temp_low_f": 38,
+      "precip_chance": 0.5,
+      "storm_chance": 0.1,
+      "conditions": [
+        "rain",
+        "overcast",
+        "mild"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Persistent dampness; ague and rheumatism",
+      "description": "The Willamette Valley in April is green and lush but perpetually damp. Rain falls steadily, the skies overcast for days on end. The mild temperatures and rich soil hint at why emigrants endure two thousand miles to reach this place.",
+      "source": "Oregon Provisional Government records; missionary journals"
+    },
+    {
+      "month": 5,
+      "region": "missouri",
+      "temp_high_f": 75,
+      "temp_low_f": 52,
+      "precip_chance": 0.45,
+      "storm_chance": 0.2,
+      "conditions": [
+        "thunderstorm",
+        "rain",
+        "warm"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Cholera season begins in earnest; contaminated water at crowded camps",
+      "description": "May in Missouri is warm and wet, the prairie ablaze with wildflowers. Thunderstorms build in great black towers and drop hail and torrential rain. This is the prime departure month and the trail out of Independence is crowded with companies, their camps fouling every waterhole. Cholera stalks the camps.",
+      "source": "St. Louis medical records, 1848-1849; emigrant journals"
+    },
+    {
+      "month": 5,
+      "region": "eastern_nebraska",
+      "temp_high_f": 72,
+      "temp_low_f": 48,
+      "precip_chance": 0.4,
+      "storm_chance": 0.18,
+      "conditions": [
+        "thunderstorm",
+        "rain",
+        "warm"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Cholera from contaminated creeks; mosquitoes breeding in standing water",
+      "description": "The Nebraska prairie warms rapidly in May, the grass growing lush and thick. Heavy thunderstorms roll through, swelling creeks and bogging wagons. Mosquitoes rise in clouds from standing water. The trail is busy with companies and the camps grow foul.",
+      "source": "Fort Kearney garrison records; emigrant diaries, 1848"
+    },
+    {
+      "month": 5,
+      "region": "western_nebraska",
+      "temp_high_f": 68,
+      "temp_low_f": 40,
+      "precip_chance": 0.3,
+      "storm_chance": 0.12,
+      "conditions": [
+        "wind",
+        "dust",
+        "thunderstorm"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": "Alkali water sickness; dust irritation of lungs",
+      "description": "The Platte valley in May is drying and warming, the wind ceaseless. Dust clouds follow every wagon train. Thunderstorms break the monotony but leave the trail muddy for hours. Alkali pools begin to appear, their white-crusted margins a danger to thirsty stock.",
+      "source": "Fort Laramie records; Parkman, 'The Oregon Trail'"
+    },
+    {
+      "month": 5,
+      "region": "wyoming",
+      "temp_high_f": 60,
+      "temp_low_f": 32,
+      "precip_chance": 0.3,
+      "storm_chance": 0.1,
+      "conditions": [
+        "wind",
+        "late_snow",
+        "cold_rain"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Exposure from sudden cold snaps; mountain sickness at elevation",
+      "description": "Wyoming in May remains cold at night, with late snow squalls possible through the month. The sage flats are drying but the mountains retain their white caps. Only the earliest companies reach this country by late May.",
+      "source": "Fort Bridger records; Stansbury expedition, 1849"
+    },
+    {
+      "month": 5,
+      "region": "south_pass",
+      "temp_high_f": 50,
+      "temp_low_f": 25,
+      "precip_chance": 0.35,
+      "storm_chance": 0.15,
+      "conditions": [
+        "snow",
+        "wind",
+        "cold"
+      ],
+      "pace_modifier": 0.7,
+      "health_risk": "Exposure; deep snow on north-facing slopes",
+      "description": "South Pass in May still holds snow on the ground, though the trail itself may be passable in a warm year. The wind cuts bitterly and nights drop well below freezing. Grass for stock is sparse.",
+      "source": "Fremont expedition records; emigrant journals, 1847"
+    },
+    {
+      "month": 5,
+      "region": "snake_river",
+      "temp_high_f": 65,
+      "temp_low_f": 35,
+      "precip_chance": 0.2,
+      "storm_chance": 0.05,
+      "conditions": [
+        "wind",
+        "dry",
+        "cool"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Rivers running dangerously high with snowmelt",
+      "description": "The Snake River plain warms in May but the river itself runs bank-full with mountain snowmelt, making crossings extremely dangerous. The sage desert is green briefly before the summer heat arrives.",
+      "source": "Fort Hall post journals; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 5,
+      "region": "blue_mountains",
+      "temp_high_f": 58,
+      "temp_low_f": 32,
+      "precip_chance": 0.35,
+      "storm_chance": 0.1,
+      "conditions": [
+        "rain",
+        "late_snow",
+        "fog"
+      ],
+      "pace_modifier": 0.7,
+      "health_risk": "Snow at higher elevations; cold and wet exposure",
+      "description": "The Blue Mountains begin to shed their winter snow in May, though drifts remain at the summit. Rain and fog are common. The trails are muddy and treacherous. No emigrant trains arrive this early.",
+      "source": "Palmer, 'Journal of Travels'; missionary records"
+    },
+    {
+      "month": 5,
+      "region": "columbia_plateau",
+      "temp_high_f": 65,
+      "temp_low_f": 40,
+      "precip_chance": 0.25,
+      "storm_chance": 0.08,
+      "conditions": [
+        "rain",
+        "wind",
+        "warming"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "River crossings swollen with snowmelt",
+      "description": "The Columbia Plateau warms and dries through May, though rain squalls remain common. The rivers run high and cold. Wildflowers carpet the bunch grass hills.",
+      "source": "Columbia River settlement records; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 5,
+      "region": "willamette",
+      "temp_high_f": 65,
+      "temp_low_f": 44,
+      "precip_chance": 0.4,
+      "storm_chance": 0.08,
+      "conditions": [
+        "rain",
+        "mild",
+        "clearing"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Persistent dampness; ague",
+      "description": "May in the Willamette Valley brings warmer days and less rain, though the skies remain more gray than blue. The valley is extravagantly green, the fruit trees in bloom, and the settlers' fields freshly planted.",
+      "source": "Oregon Provisional Government records; missionary journals"
+    },
+    {
+      "month": 6,
+      "region": "missouri",
+      "temp_high_f": 84,
+      "temp_low_f": 62,
+      "precip_chance": 0.4,
+      "storm_chance": 0.22,
+      "conditions": [
+        "thunderstorm",
+        "heat",
+        "humidity"
+      ],
+      "pace_modifier": 0.8,
+      "health_risk": "Peak cholera season; heat exhaustion; contaminated water",
+      "description": "June in Missouri brings oppressive heat and humidity. Violent thunderstorms produce tornadoes, hail, and flash flooding. The cholera epidemic is at its worst in the crowded camps along the Missouri River. Late-departing companies face fouled water at every campsite.",
+      "source": "St. Louis Board of Health records; emigrant diaries, 1848-1849"
+    },
+    {
+      "month": 6,
+      "region": "eastern_nebraska",
+      "temp_high_f": 82,
+      "temp_low_f": 58,
+      "precip_chance": 0.38,
+      "storm_chance": 0.2,
+      "conditions": [
+        "thunderstorm",
+        "heat",
+        "wind"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Cholera remains present; heat sickness in exposed wagons",
+      "description": "The Nebraska prairie bakes under the June sun, broken by spectacular thunderstorms that march across the horizon in dark curtains. Lightning strikes the tallest objects \u2014 a man on horseback is not safe. The grass is thick and good for stock but the heat wears on both man and beast.",
+      "source": "Fort Kearney records; Parkman, 'The Oregon Trail'"
+    },
+    {
+      "month": 6,
+      "region": "western_nebraska",
+      "temp_high_f": 80,
+      "temp_low_f": 50,
+      "precip_chance": 0.25,
+      "storm_chance": 0.12,
+      "conditions": [
+        "heat",
+        "dust",
+        "thunderstorm"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Alkali water poisoning; dust sickness; sunburn",
+      "description": "The Platte valley in June is hot and dry between thunderstorms. The dust is relentless, coating everything in fine grit. Mirages shimmer on the horizon. The alkali flats grow more frequent and more dangerous. Stock begin to show the effects of bad water.",
+      "source": "Fort Laramie records; emigrant diaries, 1847-1848"
+    },
+    {
+      "month": 6,
+      "region": "wyoming",
+      "temp_high_f": 75,
+      "temp_low_f": 42,
+      "precip_chance": 0.25,
+      "storm_chance": 0.1,
+      "conditions": [
+        "wind",
+        "dry",
+        "thunderstorm"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": "Alkali water; altitude sickness at higher elevations",
+      "description": "June is the best traveling month in Wyoming, warm days and cool nights with manageable wind. Thunderstorms provide occasional relief from the dust. The sage is in bloom and the country, though dry, is not yet parched. This is when most companies pass through.",
+      "source": "Fort Bridger records; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 6,
+      "region": "south_pass",
+      "temp_high_f": 62,
+      "temp_low_f": 32,
+      "precip_chance": 0.25,
+      "storm_chance": 0.1,
+      "conditions": [
+        "wind",
+        "cool",
+        "clear"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Cold nights; altitude effects",
+      "description": "South Pass in June is passable and even pleasant on clear days, though the wind never ceases and frost may form any night. Snow remains in sheltered draws but the trail is open. The thin air at seven thousand feet tires man and beast more quickly than expected.",
+      "source": "Fremont expedition records; emigrant journals, 1847"
+    },
+    {
+      "month": 6,
+      "region": "snake_river",
+      "temp_high_f": 78,
+      "temp_low_f": 45,
+      "precip_chance": 0.12,
+      "storm_chance": 0.04,
+      "conditions": [
+        "heat",
+        "dry",
+        "clear"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Dehydration; river crossings still high",
+      "description": "The Snake River plain heats rapidly in June, the sage-covered desert baking under a cloudless sky. Water between rivers is scarce. The Snake itself remains high from snowmelt, making crossings dangerous well into the month.",
+      "source": "Fort Hall post journals; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 6,
+      "region": "blue_mountains",
+      "temp_high_f": 70,
+      "temp_low_f": 40,
+      "precip_chance": 0.25,
+      "storm_chance": 0.08,
+      "conditions": [
+        "warm",
+        "thunderstorm",
+        "clearing"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Lingering snow at summit; steep muddy trails",
+      "description": "June brings warmth to the Blue Mountains but the higher passes may retain snow into mid-month. Thunderstorms are frequent and the trails remain muddy. The forests are alive with birdsong and wildflowers.",
+      "source": "Palmer, 'Journal of Travels'; missionary records"
+    },
+    {
+      "month": 6,
+      "region": "columbia_plateau",
+      "temp_high_f": 75,
+      "temp_low_f": 48,
+      "precip_chance": 0.15,
+      "storm_chance": 0.05,
+      "conditions": [
+        "warm",
+        "dry",
+        "wind"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": null,
+      "description": "The Columbia Plateau dries and warms through June, the bunch grass turning golden. The rivers drop to more manageable levels. Pleasant traveling weather with long days and moderate temperatures.",
+      "source": "Columbia River settlement records; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 6,
+      "region": "willamette",
+      "temp_high_f": 72,
+      "temp_low_f": 48,
+      "precip_chance": 0.25,
+      "storm_chance": 0.05,
+      "conditions": [
+        "warm",
+        "clearing",
+        "pleasant"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": null,
+      "description": "June in the Willamette is the beginning of the dry season, warm and pleasant with long golden evenings. The valley is at its most beautiful, the fields green and the mountains snow-capped against blue sky.",
+      "source": "Oregon Provisional Government records; missionary journals"
+    },
+    {
+      "month": 7,
+      "region": "missouri",
+      "temp_high_f": 90,
+      "temp_low_f": 68,
+      "precip_chance": 0.35,
+      "storm_chance": 0.2,
+      "conditions": [
+        "heat",
+        "humidity",
+        "thunderstorm"
+      ],
+      "pace_modifier": 0.75,
+      "health_risk": "Extreme heat; cholera; heat stroke",
+      "description": "July in Missouri is brutally hot and humid. Companies departing this late face fouled campsites, dead stock along the trail, and cholera graves fresh-dug at every spring. The heat shimmers off the prairie in waves and thunderstorms bring brief violent relief.",
+      "source": "St. Louis weather records; emigrant diaries"
+    },
+    {
+      "month": 7,
+      "region": "eastern_nebraska",
+      "temp_high_f": 88,
+      "temp_low_f": 64,
+      "precip_chance": 0.32,
+      "storm_chance": 0.18,
+      "conditions": [
+        "heat",
+        "thunderstorm",
+        "wind"
+      ],
+      "pace_modifier": 0.8,
+      "health_risk": "Heat exhaustion; diminishing grass for stock",
+      "description": "The Nebraska prairie in July is hot and windy, the grass beginning to brown. Thunderstorms build daily and lightning strikes are a real hazard. Companies arriving this late find the grass eaten down by earlier trains and the creeks trampled into mud.",
+      "source": "Fort Kearney records; emigrant diaries, 1848"
+    },
+    {
+      "month": 7,
+      "region": "western_nebraska",
+      "temp_high_f": 88,
+      "temp_low_f": 58,
+      "precip_chance": 0.2,
+      "storm_chance": 0.1,
+      "conditions": [
+        "heat",
+        "dust",
+        "dry"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Alkali water poisoning; dehydration; sunburn",
+      "description": "July along the North Platte brings intense heat and choking dust. The river shrinks to braided channels among sandbars. Alkali deposits whiten the earth and poison unwary stock. The dust coats everything \u2014 food, clothing, lungs.",
+      "source": "Fort Laramie records; Parkman, 'The Oregon Trail'"
+    },
+    {
+      "month": 7,
+      "region": "wyoming",
+      "temp_high_f": 82,
+      "temp_low_f": 48,
+      "precip_chance": 0.2,
+      "storm_chance": 0.08,
+      "conditions": [
+        "heat",
+        "dry",
+        "clear"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Dehydration between water sources; alkali water",
+      "description": "Wyoming in July is hot by day and cool by night, the sage country dry and dusty. Afternoon thunderstorms provide some moisture but the land between water sources is parched. The days are long and good for travel if water can be found.",
+      "source": "Fort Bridger records; emigrant journals, 1847-1848"
+    },
+    {
+      "month": 7,
+      "region": "south_pass",
+      "temp_high_f": 72,
+      "temp_low_f": 38,
+      "precip_chance": 0.18,
+      "storm_chance": 0.08,
+      "conditions": [
+        "clear",
+        "cool_nights",
+        "wind"
+      ],
+      "pace_modifier": 1.0,
+      "health_risk": "Cold nights even in summer; altitude effects",
+      "description": "July is the ideal month to cross South Pass. Days are warm and clear, the trail dry and firm. Nights are cool, frost possible at the summit. The thin air fatigues travelers but the weather is the best it will be all year. Companies arriving by the Fourth of July are well-timed.",
+      "source": "Fremont expedition records; emigrant journals, 1843-1848"
+    },
+    {
+      "month": 7,
+      "region": "snake_river",
+      "temp_high_f": 90,
+      "temp_low_f": 55,
+      "precip_chance": 0.08,
+      "storm_chance": 0.03,
+      "conditions": [
+        "extreme_heat",
+        "dry",
+        "clear"
+      ],
+      "pace_modifier": 0.8,
+      "health_risk": "Severe dehydration; heat exhaustion; alkali water poisoning",
+      "description": "The Snake River desert in July is a furnace, temperatures soaring past ninety degrees under a sky of hammered brass. Water between crossings is nearly nonexistent. The sage shimmers in the heat and stock weaken rapidly. River crossings, however, drop to more manageable levels.",
+      "source": "Fort Hall post journals; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 7,
+      "region": "blue_mountains",
+      "temp_high_f": 80,
+      "temp_low_f": 48,
+      "precip_chance": 0.12,
+      "storm_chance": 0.05,
+      "conditions": [
+        "warm",
+        "clear",
+        "dry"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": null,
+      "description": "July in the Blue Mountains is warm and relatively dry, the best month for crossing. The forests offer welcome shade after the desert. Thunderstorms are occasional but brief. Snow is gone from all but the highest north-facing hollows.",
+      "source": "Palmer, 'Journal of Travels'; missionary records"
+    },
+    {
+      "month": 7,
+      "region": "columbia_plateau",
+      "temp_high_f": 85,
+      "temp_low_f": 55,
+      "precip_chance": 0.08,
+      "storm_chance": 0.03,
+      "conditions": [
+        "heat",
+        "dry",
+        "clear"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Heat; dehydration between rivers",
+      "description": "The Columbia Plateau bakes in July, the grass brown and the rivers running lower. Dust devils spin across the sage flats. The nights offer relief and the dawn hours are the best for travel.",
+      "source": "Columbia River settlement records; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 7,
+      "region": "willamette",
+      "temp_high_f": 80,
+      "temp_low_f": 52,
+      "precip_chance": 0.1,
+      "storm_chance": 0.02,
+      "conditions": [
+        "warm",
+        "dry",
+        "pleasant"
+      ],
+      "pace_modifier": 1.0,
+      "health_risk": null,
+      "description": "July in the Willamette Valley is dry and warm, the finest weather of the year. The valley lies golden under clear skies, the mountains sharp against the horizon. Crops grow tall in the rich soil.",
+      "source": "Oregon Provisional Government records"
+    },
+    {
+      "month": 8,
+      "region": "missouri",
+      "temp_high_f": 90,
+      "temp_low_f": 68,
+      "precip_chance": 0.3,
+      "storm_chance": 0.15,
+      "conditions": [
+        "heat",
+        "humidity",
+        "thunderstorm"
+      ],
+      "pace_modifier": 0.75,
+      "health_risk": "Extreme heat; cholera; malaria from mosquitoes",
+      "description": "August in Missouri is oppressively hot and still. Any company departing this late faces desperate odds \u2014 the mountains will be snowed shut before they arrive. The trail behind is littered with abandoned goods and fresh graves.",
+      "source": "St. Louis weather records; emigrant diaries"
+    },
+    {
+      "month": 8,
+      "region": "eastern_nebraska",
+      "temp_high_f": 87,
+      "temp_low_f": 62,
+      "precip_chance": 0.28,
+      "storm_chance": 0.14,
+      "conditions": [
+        "heat",
+        "dry",
+        "thunderstorm"
+      ],
+      "pace_modifier": 0.8,
+      "health_risk": "Heat exhaustion; grass failing for stock",
+      "description": "The Nebraska prairie in August is hot, dry, and dusty. The grass is brown and eaten to the roots by earlier companies. Stock weaken on the poor feed. Thunderstorms build but bring less rain. The trail is lonely now, most companies far ahead.",
+      "source": "Fort Kearney records; emigrant diaries"
+    },
+    {
+      "month": 8,
+      "region": "western_nebraska",
+      "temp_high_f": 86,
+      "temp_low_f": 55,
+      "precip_chance": 0.18,
+      "storm_chance": 0.08,
+      "conditions": [
+        "heat",
+        "dust",
+        "dry"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Alkali water; dehydration; stock starvation on poor grass",
+      "description": "August along the Platte is hot and dusty, the river shrunk to a trickle in places. Alkali crusts the banks and the grass is poor. Companies push hard to make up time, knowing the mountains ahead grow more dangerous with each passing day.",
+      "source": "Fort Laramie records; emigrant diaries"
+    },
+    {
+      "month": 8,
+      "region": "wyoming",
+      "temp_high_f": 80,
+      "temp_low_f": 45,
+      "precip_chance": 0.18,
+      "storm_chance": 0.07,
+      "conditions": [
+        "heat",
+        "dry",
+        "cooling_nights"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Dehydration; early mountain snow at higher elevations",
+      "description": "Wyoming in August begins to hint at autumn in the cool nights, though days remain hot. The sage country is tinder-dry. Companies feel the urgency now \u2014 South Pass must be crossed before the weather turns. Good traveling days but worry rides in every wagon.",
+      "source": "Fort Bridger records; emigrant journals"
+    },
+    {
+      "month": 8,
+      "region": "south_pass",
+      "temp_high_f": 68,
+      "temp_low_f": 35,
+      "precip_chance": 0.2,
+      "storm_chance": 0.08,
+      "conditions": [
+        "cool",
+        "clear",
+        "wind"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": "Cold nights; early snow possible at month's end",
+      "description": "August at South Pass brings increasingly cool nights and shorter days. The pass remains open and travel is good, but the first snow may dust the peaks before month's end. Companies passing through now are on schedule but not ahead of it.",
+      "source": "Fremont expedition records; emigrant journals"
+    },
+    {
+      "month": 8,
+      "region": "snake_river",
+      "temp_high_f": 88,
+      "temp_low_f": 52,
+      "precip_chance": 0.08,
+      "storm_chance": 0.03,
+      "conditions": [
+        "heat",
+        "dry",
+        "clear"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Dehydration; heat exhaustion",
+      "description": "The Snake River desert remains punishing in August, though the worst heat begins to ease by month's end. Rivers are at their lowest, which aids crossings but reduces available water. Companies push through as quickly as stock can manage.",
+      "source": "Fort Hall post journals; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 8,
+      "region": "blue_mountains",
+      "temp_high_f": 78,
+      "temp_low_f": 45,
+      "precip_chance": 0.12,
+      "storm_chance": 0.05,
+      "conditions": [
+        "warm",
+        "dry",
+        "clear"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": null,
+      "description": "The Blue Mountains in August are warm and dry, the forests pleasant after the desert. This is the ideal month for crossing, the trails firm and the weather cooperative. The first tinges of yellow appear on the aspens.",
+      "source": "Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 8,
+      "region": "columbia_plateau",
+      "temp_high_f": 84,
+      "temp_low_f": 52,
+      "precip_chance": 0.08,
+      "storm_chance": 0.03,
+      "conditions": [
+        "heat",
+        "dry",
+        "clear"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Heat; dehydration",
+      "description": "The Columbia Plateau in August is hot and dry, the rivers at their lowest. The grass is brown and dusty. The long descent to The Dalles offers little shade but the knowledge that the journey nears its end buoys spirits.",
+      "source": "Columbia River settlement records; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 8,
+      "region": "willamette",
+      "temp_high_f": 82,
+      "temp_low_f": 52,
+      "precip_chance": 0.08,
+      "storm_chance": 0.02,
+      "conditions": [
+        "warm",
+        "dry",
+        "pleasant"
+      ],
+      "pace_modifier": 1.0,
+      "health_risk": null,
+      "description": "August in the Willamette Valley is dry and golden, the harvest beginning. Forest fires may haze the air. The earliest-arriving emigrant companies reach Oregon City this month and find the valley spread before them like a promise kept.",
+      "source": "Oregon Provisional Government records"
+    },
+    {
+      "month": 9,
+      "region": "missouri",
+      "temp_high_f": 82,
+      "temp_low_f": 58,
+      "precip_chance": 0.3,
+      "storm_chance": 0.1,
+      "conditions": [
+        "warm",
+        "cooling",
+        "clear"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Cholera declining; ague from mosquitoes",
+      "description": "September in Missouri brings relief from the summer heat, the nights cooling and the leaves just beginning to turn. No sensible emigrant departs this late \u2014 the trail is empty and the ferries idle. Cholera fades with the cooler weather.",
+      "source": "Missouri weather records; emigrant diaries"
+    },
+    {
+      "month": 9,
+      "region": "eastern_nebraska",
+      "temp_high_f": 78,
+      "temp_low_f": 52,
+      "precip_chance": 0.25,
+      "storm_chance": 0.08,
+      "conditions": [
+        "cooling",
+        "clear",
+        "wind"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": null,
+      "description": "September on the Nebraska prairie brings welcome cooling and clear skies. The grass has browned but the weather is fine for travel. The trail is nearly deserted, only the latest companies still struggling westward.",
+      "source": "Fort Kearney records; emigrant diaries"
+    },
+    {
+      "month": 9,
+      "region": "western_nebraska",
+      "temp_high_f": 75,
+      "temp_low_f": 45,
+      "precip_chance": 0.18,
+      "storm_chance": 0.06,
+      "conditions": [
+        "cooling",
+        "clear",
+        "frost"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "First frosts; cold nights",
+      "description": "September along the North Platte brings autumn colors to the cottonwoods and the first hard frosts. Days are pleasant for travel but the nights grow cold. Late companies press forward with increasing urgency.",
+      "source": "Fort Laramie records; emigrant diaries"
+    },
+    {
+      "month": 9,
+      "region": "wyoming",
+      "temp_high_f": 68,
+      "temp_low_f": 35,
+      "precip_chance": 0.2,
+      "storm_chance": 0.08,
+      "conditions": [
+        "cool",
+        "frost",
+        "early_snow"
+      ],
+      "pace_modifier": 0.8,
+      "health_risk": "Cold exposure; early mountain snow",
+      "description": "Wyoming in September turns cold rapidly. Frost is heavy and ice forms on water buckets by morning. Snow dusts the mountains and may reach the trails by month's end. Companies caught here must press forward without delay or risk being snowbound.",
+      "source": "Fort Bridger records; emigrant journals"
+    },
+    {
+      "month": 9,
+      "region": "south_pass",
+      "temp_high_f": 58,
+      "temp_low_f": 25,
+      "precip_chance": 0.25,
+      "storm_chance": 0.1,
+      "conditions": [
+        "cold",
+        "frost",
+        "snow"
+      ],
+      "pace_modifier": 0.7,
+      "health_risk": "Exposure; early blizzard risk",
+      "description": "South Pass in September is dangerous. Snow may fall at any time and blizzards are possible by late month. Ice forms in the streams and the nights are bitterly cold. Companies crossing this late are in grave peril \u2014 the Donner Party's fate is fresh in every mind.",
+      "source": "Fremont expedition records; emigrant journals, 1846-1847"
+    },
+    {
+      "month": 9,
+      "region": "snake_river",
+      "temp_high_f": 75,
+      "temp_low_f": 40,
+      "precip_chance": 0.12,
+      "storm_chance": 0.05,
+      "conditions": [
+        "cooling",
+        "dry",
+        "clear"
+      ],
+      "pace_modifier": 0.9,
+      "health_risk": "Cold nights",
+      "description": "The Snake River plain cools in September, the worst heat past. Crossings are at their easiest with low water. Days are pleasant but the chill in the air reminds travelers that the Blue Mountains ahead may already hold snow.",
+      "source": "Fort Hall post journals; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 9,
+      "region": "blue_mountains",
+      "temp_high_f": 65,
+      "temp_low_f": 35,
+      "precip_chance": 0.25,
+      "storm_chance": 0.1,
+      "conditions": [
+        "cool",
+        "rain",
+        "early_snow"
+      ],
+      "pace_modifier": 0.75,
+      "health_risk": "Early snow; cold rain exposure; hypothermia risk",
+      "description": "September in the Blue Mountains brings autumn color and the first threat of snow at the summit. Rain is frequent and cold. Most companies cross this month, racing the weather. Late-season travelers find the trails slick with mud and fallen leaves.",
+      "source": "Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 9,
+      "region": "columbia_plateau",
+      "temp_high_f": 72,
+      "temp_low_f": 42,
+      "precip_chance": 0.18,
+      "storm_chance": 0.06,
+      "conditions": [
+        "cooling",
+        "dry",
+        "wind"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": null,
+      "description": "The Columbia Plateau cools pleasantly in September. The rivers rise slightly with autumn rains. The country is golden-brown and the air has the sharp clarity of fall. Good traveling conditions persist.",
+      "source": "Columbia River settlement records; Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 9,
+      "region": "willamette",
+      "temp_high_f": 75,
+      "temp_low_f": 48,
+      "precip_chance": 0.2,
+      "storm_chance": 0.05,
+      "conditions": [
+        "warm",
+        "dry",
+        "first_rains"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": null,
+      "description": "September in the Willamette Valley is golden and mild, the harvest in full swing. The first autumn rains begin at month's end. Most emigrant companies arrive during September, exhausted but alive, to find the valley as bountiful as promised.",
+      "source": "Oregon Provisional Government records; emigrant journals"
+    },
+    {
+      "month": 10,
+      "region": "missouri",
+      "temp_high_f": 70,
+      "temp_low_f": 48,
+      "precip_chance": 0.25,
+      "storm_chance": 0.06,
+      "conditions": [
+        "cool",
+        "clear",
+        "frost"
+      ],
+      "pace_modifier": 0.95,
+      "health_risk": null,
+      "description": "October in Missouri is a fine autumn month with brilliant foliage and cool nights. No emigrant traffic remains on the trail. The outfitting shops in Independence are shuttered for the season.",
+      "source": "Missouri weather records"
+    },
+    {
+      "month": 10,
+      "region": "eastern_nebraska",
+      "temp_high_f": 64,
+      "temp_low_f": 38,
+      "precip_chance": 0.2,
+      "storm_chance": 0.05,
+      "conditions": [
+        "cool",
+        "frost",
+        "wind"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Cold exposure at night",
+      "description": "October on the Nebraska prairie brings hard frosts and the brown monotony of dead grass stretching to the horizon. The wind turns bitter and the first snow flurries may appear. The trail is deserted.",
+      "source": "Fort Kearney records"
+    },
+    {
+      "month": 10,
+      "region": "western_nebraska",
+      "temp_high_f": 58,
+      "temp_low_f": 30,
+      "precip_chance": 0.18,
+      "storm_chance": 0.06,
+      "conditions": [
+        "cold",
+        "frost",
+        "early_snow"
+      ],
+      "pace_modifier": 0.75,
+      "health_risk": "Exposure; hypothermia risk at night",
+      "description": "October along the North Platte is cold and increasingly hostile. Snow may fall at any time and the river begins to ice at the margins. Any company still here is in desperate straits.",
+      "source": "Fort Laramie records"
+    },
+    {
+      "month": 10,
+      "region": "wyoming",
+      "temp_high_f": 52,
+      "temp_low_f": 22,
+      "precip_chance": 0.22,
+      "storm_chance": 0.1,
+      "conditions": [
+        "cold",
+        "snow",
+        "ice"
+      ],
+      "pace_modifier": 0.6,
+      "health_risk": "Severe exposure; frostbite; hypothermia",
+      "description": "Wyoming in October is winter by every measure. Snow covers the ground, ice locks the streams, and the wind drives through clothing like it were paper. Companies trapped here face life-threatening conditions. This is how the Donner Party began their doom.",
+      "source": "Fort Bridger records; Donner Party accounts, 1846"
+    },
+    {
+      "month": 10,
+      "region": "south_pass",
+      "temp_high_f": 42,
+      "temp_low_f": 15,
+      "precip_chance": 0.3,
+      "storm_chance": 0.15,
+      "conditions": [
+        "snow",
+        "blizzard",
+        "extreme_cold"
+      ],
+      "pace_modifier": 0.4,
+      "health_risk": "Lethal exposure; impassable conditions likely",
+      "description": "South Pass in October is almost certainly impassable. Blizzards, deep snow, and temperatures well below freezing make crossing suicidal. The pass will not open again until June.",
+      "source": "Fremont expedition records; mountain man accounts"
+    },
+    {
+      "month": 10,
+      "region": "snake_river",
+      "temp_high_f": 58,
+      "temp_low_f": 30,
+      "precip_chance": 0.18,
+      "storm_chance": 0.06,
+      "conditions": [
+        "cold",
+        "frost",
+        "wind"
+      ],
+      "pace_modifier": 0.75,
+      "health_risk": "Cold exposure; ice forming on river crossings",
+      "description": "The Snake River plain in October is cold and windy, the sage country brown and lifeless. Ice forms on still water overnight. Late companies push desperately toward the Blue Mountains, knowing snow may close the passes at any time.",
+      "source": "Fort Hall post journals"
+    },
+    {
+      "month": 10,
+      "region": "blue_mountains",
+      "temp_high_f": 50,
+      "temp_low_f": 28,
+      "precip_chance": 0.35,
+      "storm_chance": 0.15,
+      "conditions": [
+        "snow",
+        "cold_rain",
+        "frost"
+      ],
+      "pace_modifier": 0.55,
+      "health_risk": "Snow; hypothermia; wagon-breaking conditions",
+      "description": "October in the Blue Mountains brings real snow and bitter cold. The trails become treacherous with ice and fallen timber. Companies crossing this late may find themselves trapped by drifts. The forests are dark and silent, the summer birds long fled.",
+      "source": "Palmer, 'Journal of Travels'"
+    },
+    {
+      "month": 10,
+      "region": "columbia_plateau",
+      "temp_high_f": 58,
+      "temp_low_f": 35,
+      "precip_chance": 0.3,
+      "storm_chance": 0.08,
+      "conditions": [
+        "cold",
+        "rain",
+        "wind"
+      ],
+      "pace_modifier": 0.8,
+      "health_risk": "Cold rain exposure; hypothermia",
+      "description": "The Columbia Plateau in October is wet and cold, autumn rains sweeping across the open country. The rivers rise and crossings grow dangerous again. Companies who have survived this far find the last miles grueling in the cold rain.",
+      "source": "Columbia River settlement records; emigrant journals"
+    },
+    {
+      "month": 10,
+      "region": "willamette",
+      "temp_high_f": 60,
+      "temp_low_f": 42,
+      "precip_chance": 0.45,
+      "storm_chance": 0.08,
+      "conditions": [
+        "rain",
+        "cool",
+        "overcast"
+      ],
+      "pace_modifier": 0.85,
+      "health_risk": "Persistent dampness; ague; rheumatism",
+      "description": "October in the Willamette Valley marks the return of the rains. Gray skies and steady drizzle replace the golden autumn. The last emigrant companies straggle in, gaunt and exhausted, to find their new home wrapped in mist and rain. They have arrived.",
+      "source": "Oregon Provisional Government records; emigrant journals"
+    }
+  ],
+  "diseases": [
+    {
+      "id": "cholera",
+      "name": "Cholera",
+      "name_1848": "Asiatic cholera",
+      "onset_description": "Begins with a feeling of unease in the bowels, progressing within hours to violent purging and vomiting of a thin rice-water fluid. The skin turns cold and bluish, the eyes sink, and the voice becomes a hoarse whisper. A strong man may be dead before sunset of the day he was taken ill.",
+      "progression_days": 3,
+      "mortality_rate": 0.5,
+      "treatment_1848": "Calomel purging, laudanum to quiet the bowels, camphor and brandy as stimulants, warm blankets and friction to the extremities. Some physicians recommend bleeding. Most treatments avail little. The miasma from low ground and foul water is thought to carry the pestilence.",
+      "treatment_effective": false,
+      "symptoms": [
+        "violent purging",
+        "rice-water stools",
+        "vomiting",
+        "muscle cramps",
+        "sunken eyes",
+        "blue skin",
+        "cold extremities",
+        "weak pulse",
+        "hoarse voice"
+      ],
+      "regions_elevated": [
+        "missouri",
+        "eastern_nebraska"
+      ],
+      "months_elevated": [
+        5,
+        6,
+        7
+      ],
+      "base_probability_per_day": 0.008,
+      "risk_factors": [
+        "meager_rations",
+        "contaminated_water",
+        "crowded_camps",
+        "warm_weather",
+        "low_elevation_camps_near_standing_water"
+      ],
+      "diary_quote": "He was taken with the cholera at noon and was dead before the sun went down. We buried him on the prairie and drove on.",
+      "source": "Emigrant diaries, 1849; Charles Rosenberg, 'The Cholera Years' (1962); trail grave records"
+    },
+    {
+      "id": "dysentery",
+      "name": "Dysentery",
+      "name_1848": "Bloody flux",
+      "onset_description": "Begins with griping pains in the belly and frequent loose stools that soon turn bloody and mucous. The sufferer grows weak and feverish, unable to ride or walk, and must be carried in the wagon over every rut and stone, a misery compounded. Many linger for weeks before recovering or succumbing.",
+      "progression_days": 14,
+      "mortality_rate": 0.15,
+      "treatment_1848": "Laudanum and calomel are the standard remedies, with blackberry root tea or boiled milk if available. Rest is essential but hard to come by on the trail. The disease is attributed to bad air, unwholesome water, or eating unripe fruit.",
+      "treatment_effective": false,
+      "symptoms": [
+        "bloody stools",
+        "abdominal cramps",
+        "fever",
+        "weakness",
+        "dehydration",
+        "loss of appetite"
+      ],
+      "regions_elevated": [
+        "missouri",
+        "eastern_nebraska",
+        "western_nebraska"
+      ],
+      "months_elevated": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "base_probability_per_day": 0.006,
+      "risk_factors": [
+        "contaminated_water",
+        "poor_rations",
+        "exhaustion",
+        "warm_weather"
+      ],
+      "diary_quote": "Nearly half the company is down with the bloody flux. We can scarce move forward and the groaning from the wagons is pitiful to hear.",
+      "source": "Emigrant diaries, 1845-1849; period medical guides"
+    },
+    {
+      "id": "typhoid",
+      "name": "Typhoid Fever",
+      "name_1848": "Slow fever / camp fever",
+      "onset_description": "Comes on gradually with headache, weariness, and a mounting fever that rises day by day until the sufferer is delirious and insensible. Rose-colored spots may appear upon the belly. The bowels are loose and the patient wastes away. Recovery, when it comes, is agonizingly slow.",
+      "progression_days": 21,
+      "mortality_rate": 0.2,
+      "treatment_1848": "Calomel, quinine if available, cool compresses for the fever, and broth if the patient can swallow it. Bleeding was once recommended but is falling from favor. The disease is thought to arise from bad air in low, damp places.",
+      "treatment_effective": false,
+      "symptoms": [
+        "mounting fever",
+        "headache",
+        "fatigue",
+        "rose spots on abdomen",
+        "delirium",
+        "loose bowels",
+        "wasting"
+      ],
+      "regions_elevated": [
+        "missouri",
+        "eastern_nebraska"
+      ],
+      "months_elevated": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "base_probability_per_day": 0.003,
+      "risk_factors": [
+        "contaminated_water",
+        "crowded_camps",
+        "poor_sanitation",
+        "exhaustion"
+      ],
+      "diary_quote": "The fever crept upon him day by day until he knew none of us. We nursed him for a fortnight before the crisis broke and he began, very slowly, to mend.",
+      "source": "Period medical texts; emigrant diaries, 1847-1849"
+    },
+    {
+      "id": "measles",
+      "name": "Measles",
+      "name_1848": "Measles",
+      "onset_description": "Begins with a heavy cold \u2014 coughing, watering eyes, and a running nose \u2014 followed in three or four days by a red rash spreading from the face downward. In children the disease is usually mild, but among adults weakened by trail hardship it may turn to lung fever and prove fatal. The Cayuse and other peoples are devastated by this illness, having no prior exposure.",
+      "progression_days": 10,
+      "mortality_rate": 0.08,
+      "treatment_1848": "Keep the patient warm and dark, dose with elder-flower tea to bring out the rash, and pray. Calomel if the bowels are bound. The disease spreads through close contact and foul air.",
+      "treatment_effective": false,
+      "symptoms": [
+        "cough",
+        "watering eyes",
+        "runny nose",
+        "fever",
+        "red rash",
+        "sore throat"
+      ],
+      "regions_elevated": [
+        "missouri",
+        "eastern_nebraska"
+      ],
+      "months_elevated": [
+        4,
+        5,
+        6
+      ],
+      "base_probability_per_day": 0.004,
+      "risk_factors": [
+        "close_quarters",
+        "children_in_party",
+        "no_prior_exposure",
+        "crowded_camps"
+      ],
+      "diary_quote": "The measles has broke out among the children and we dare not travel for fear of carrying it to others. Two of the little ones are very poorly.",
+      "source": "Emigrant diaries; Whitman Mission records, 1847"
+    },
+    {
+      "id": "mountain_fever",
+      "name": "Mountain Fever",
+      "name_1848": "Mountain fever / Rocky Mountain fever",
+      "onset_description": "A sudden high fever with aching bones and terrible headache, coming on after passing through tick-infested sage country. The patient may be delirious for days. A spotted rash sometimes appears. The disease is peculiar to the mountain country and the cause is debated \u2014 some blame the thin air, others the peculiar miasma of the sage flats.",
+      "progression_days": 14,
+      "mortality_rate": 0.12,
+      "treatment_1848": "Quinine if available, cold compresses, laudanum for the pain, and rest \u2014 which the trail seldom permits. Bleeding is sometimes attempted. The disease resolves on its own in most cases if the patient survives the first week.",
+      "treatment_effective": false,
+      "symptoms": [
+        "high fever",
+        "severe headache",
+        "bone aches",
+        "delirium",
+        "spotted rash",
+        "exhaustion"
+      ],
+      "regions_elevated": [
+        "wyoming",
+        "south_pass",
+        "snake_river"
+      ],
+      "months_elevated": [
+        6,
+        7,
+        8
+      ],
+      "base_probability_per_day": 0.004,
+      "risk_factors": [
+        "sage_country_travel",
+        "camping_in_tick_habitat",
+        "exhaustion"
+      ],
+      "diary_quote": "I was seized with a violent fever and such pains in my head and bones as I never felt before. For three days I could not sit a horse and was carried senseless in the wagon.",
+      "source": "Francis Parkman, 'The Oregon Trail' (1849); emigrant medical records"
+    },
+    {
+      "id": "scurvy",
+      "name": "Scurvy",
+      "name_1848": "Scurvy / scorbutic condition",
+      "onset_description": "Comes on slowly after weeks of living on salt pork, hardtack, and coffee without fresh provisions. The gums swell and bleed, old wounds reopen, the joints ache, and a terrible lassitude takes hold. Dark spots appear on the skin. If fresh meat or wild greens cannot be procured, the sufferer weakens steadily.",
+      "progression_days": 30,
+      "mortality_rate": 0.1,
+      "treatment_1848": "Fresh meat, wild onions, cress, or any green plant. Vinegar was thought helpful. Spruce tea is a known frontier remedy. The disease is attributed to the sameness of the trail diet and the want of fresh vegetables.",
+      "treatment_effective": true,
+      "symptoms": [
+        "bleeding gums",
+        "loose teeth",
+        "dark skin spots",
+        "joint pain",
+        "old wounds reopening",
+        "extreme fatigue",
+        "depression"
+      ],
+      "regions_elevated": [
+        "snake_river",
+        "blue_mountains",
+        "columbia_plateau"
+      ],
+      "months_elevated": [
+        8,
+        9,
+        10
+      ],
+      "base_probability_per_day": 0.003,
+      "risk_factors": [
+        "bare_bones_rations",
+        "no_fresh_food_for_weeks",
+        "late_season_travel",
+        "depleted_supplies"
+      ],
+      "diary_quote": "Our diet has been nothing but flour and bacon for a month. My gums are sore and swollen and I feel a heaviness in all my limbs that rest does not mend.",
+      "source": "Emigrant diaries, 1847-1848; period medical guides on scorbutic conditions"
+    },
+    {
+      "id": "accidental_injury",
+      "name": "Accidental Injury",
+      "name_1848": "Accident / misadventure",
+      "onset_description": "The trail exacts a toll in crushed limbs, gunshot wounds, drownings, and falls. Children slip beneath wagon wheels. Men discharge rifles while drawing them from wagons. River crossings claim the strongest swimmers. A broken leg on the prairie, two hundred miles from any physician, may as well be a death sentence.",
+      "progression_days": 7,
+      "mortality_rate": 0.25,
+      "treatment_1848": "Splinting broken bones with wagon spokes, cauterizing wounds with hot iron or gunpowder, amputation with a saw and whiskey for anesthesia, poultices of various herbs. Laudanum for pain. Many injuries that would be survivable in a settled country prove fatal on the trail from want of rest and proper care.",
+      "treatment_effective": false,
+      "symptoms": [
+        "broken bones",
+        "gunshot wounds",
+        "crush injuries",
+        "drowning",
+        "burns",
+        "snake bite"
+      ],
+      "regions_elevated": [
+        "missouri",
+        "western_nebraska",
+        "wyoming",
+        "south_pass",
+        "snake_river",
+        "blue_mountains"
+      ],
+      "months_elevated": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "base_probability_per_day": 0.005,
+      "risk_factors": [
+        "river_crossings",
+        "firearms_handling",
+        "children_near_wagons",
+        "steep_grades",
+        "exhaustion",
+        "grueling_pace"
+      ],
+      "diary_quote": "A boy of twelve was run over by the hind wheel and his leg broke in two places. There is no surgeon nearer than Fort Laramie and we can only splint it and pray.",
+      "source": "Emigrant diaries, 1843-1849; trail death records compiled by Merrill Mattes"
+    }
+  ],
+  "nations": [
+    {
+      "id": "shawnee",
+      "name": "Shawnee",
+      "alt_names": [
+        "Shawanoe",
+        "Shawanese"
+      ],
+      "regions": [
+        "missouri"
+      ],
+      "segments": [
+        "seg_01"
+      ],
+      "relationship_1848": "The Shawnee have been repeatedly displaced from their homelands east of the Mississippi and now occupy reserved lands in eastern Kansas. Relations with emigrants are generally peaceful but wary. Many Shawnee people farm, operate ferries, and trade with passing wagon trains. They have long experience with American settlement and understand what the emigrant tide portends for peoples further west.",
+      "trade_goods": [
+        "corn",
+        "potatoes",
+        "moccasins",
+        "pemmican",
+        "ferry_service"
+      ],
+      "services": [
+        "ferry_operation",
+        "guide_service",
+        "trade"
+      ],
+      "cultural_notes": "The Shawnee are a woodland people with a sophisticated confederacy structure. By 1848 many have adopted elements of American material culture while maintaining their own language, ceremonies, and governance. Tecumseh's legacy remains a source of pride. They should be depicted as knowledgeable, pragmatic people navigating a difficult political situation with dignity.",
+      "encounter_tone": "Portray Shawnee individuals as composed, pragmatic, and often amused by emigrant inexperience. They are skilled traders who know the value of what they offer. Dialogue should be rendered in fluent, grammatically correct English \u2014 many Shawnee people spoke English well by 1848. Encounters should reflect a people who have adapted to proximity with American settlement while maintaining their own identity.",
+      "historical_context": "The Shawnee were forcibly relocated to Kansas in the 1830s under Indian Removal. By 1848 they occupy a shrinking reservation as emigrant trails cut through their lands. The irony of displaced people watching others displace themselves across a continent should inform but not dominate encounters.",
+      "source": "Stephen Warren, 'The Shawnees and Their Neighbors' (2005); Bureau of Indian Affairs records, 1840s",
+      "prohibited_tropes": [
+        "broken English or pidgin speech",
+        "savage or primitive characterization",
+        "noble savage romanticism",
+        "mystical or supernatural powers",
+        "monolithic tribal voice \u2014 individuals vary",
+        "treating displacement as ancient history rather than living memory",
+        "depicting as obstacles rather than sovereign people"
+      ]
+    },
+    {
+      "id": "kaw",
+      "name": "Kaw (Kansa)",
+      "alt_names": [
+        "Kansa",
+        "Kanza",
+        "Konza"
+      ],
+      "regions": [
+        "missouri"
+      ],
+      "segments": [
+        "seg_01",
+        "seg_02"
+      ],
+      "relationship_1848": "The Kaw people live along the Kansas River and its tributaries, farming and hunting on lands that the emigrant trail crosses directly. They operate ferry crossings and trade corn and other provisions to emigrants. Smallpox and cholera epidemics have devastated their numbers. Relations are generally peaceful but the Kaw are acutely aware that emigrant traffic threatens their remaining lands.",
+      "trade_goods": [
+        "corn",
+        "squash",
+        "beans",
+        "ferry_service",
+        "horses"
+      ],
+      "services": [
+        "ferry_operation",
+        "trade",
+        "river_crossing_assistance"
+      ],
+      "cultural_notes": "The Kaw are a Siouan-speaking people related to the Osage. They maintain a mixed economy of farming and hunting, with seasonal buffalo hunts on the western plains. Their earth-lodge villages along the Kansas River are substantial settlements. By 1848 disease and land pressure have reduced their population from thousands to perhaps 1,500 people.",
+      "encounter_tone": "Portray Kaw individuals as hospitable but direct, skilled in negotiation, and keenly aware of the economic dynamics of the trail. They are experienced traders who may drive hard bargains at river crossings. Encounters should acknowledge them as the hosts through whose homeland emigrants are passing.",
+      "historical_context": "The Kaw signed treaties ceding millions of acres in 1825 and 1846, each time retreating to smaller reservations. In 1848 they are living on a twenty-mile-square reservation while watching thousands of emigrants cross their remaining land. Epidemic diseases have killed more than half their people in the past two decades.",
+      "source": "William Unrau, 'The Kansa Indians: A History of the Wind People' (1971); treaty records, 1825-1846",
+      "prohibited_tropes": [
+        "broken English or pidgin speech",
+        "primitive or uncivilized characterization",
+        "depicting as beggars or thieves",
+        "erasing their role as hosts and landholders",
+        "conflating with Plains horse cultures",
+        "ignoring the devastating impact of disease"
+      ]
+    },
+    {
+      "id": "pawnee",
+      "name": "Pawnee",
+      "alt_names": [
+        "Pani",
+        "Pawnee Loup",
+        "Pawnee Grand"
+      ],
+      "regions": [
+        "eastern_nebraska"
+      ],
+      "segments": [
+        "seg_03",
+        "seg_04"
+      ],
+      "relationship_1848": "The Pawnee are a powerful confederacy of four bands living along the Loup and Platte rivers. Relations with emigrants are complex \u2014 the Pawnee generally tolerate passage through their lands but may demand tolls or trade. They are frequently in conflict with the Lakota to the west and sometimes seek alliance with Americans against their enemies. Emigrant journals exaggerate Pawnee hostility; actual violence is rare.",
+      "trade_goods": [
+        "horses",
+        "corn",
+        "dried_buffalo_meat",
+        "moccasins",
+        "buffalo_robes"
+      ],
+      "services": [
+        "trade",
+        "guide_service",
+        "horse_recovery"
+      ],
+      "cultural_notes": "The Pawnee are semi-sedentary people who live in substantial earth-lodge villages and farm corn, beans, and squash, supplemented by seasonal buffalo hunts. Their astronomical knowledge is sophisticated and their ceremonies complex. They are a matrilineal society. By 1848 Lakota raids and epidemic disease are reducing their numbers, but they remain a formidable nation of several thousand.",
+      "encounter_tone": "Portray Pawnee individuals as confident, curious, and assertive. They are in their own country and know it. Some may seek trade or tolls; others may simply observe. Encounters should convey a people under pressure from multiple directions \u2014 Lakota warfare, emigrant encroachment, epidemic disease \u2014 who are navigating these threats strategically. Avoid depicting any encounter as automatically threatening.",
+      "historical_context": "The Pawnee homeland along the Platte River sits directly on the Oregon Trail, ensuring constant contact with emigrants. In 1848 they are engaged in ongoing warfare with the Lakota, who are expanding southward. Some Pawnee leaders pursue alliance with the United States as a counterweight. The Army at Fort Kearney ostensibly protects both emigrants and Pawnee, but in practice favors the emigrants.",
+      "source": "George Hyde, 'Pawnee Indians' (1974); Fort Kearney records; Bureau of Indian Affairs reports, 1848",
+      "prohibited_tropes": [
+        "broken English or pidgin speech",
+        "depicting as thieves or raiders by default",
+        "reducing to a threat on the trail",
+        "ignoring their agricultural sophistication",
+        "treating Pawnee-Lakota conflict as irrelevant background",
+        "monolithic characterization \u2014 the four bands had distinct identities"
+      ]
+    },
+    {
+      "id": "lakota",
+      "name": "Lakota (Western Sioux)",
+      "alt_names": [
+        "Sioux",
+        "Teton Sioux",
+        "Brul\u00e9",
+        "Oglala"
+      ],
+      "regions": [
+        "western_nebraska",
+        "wyoming"
+      ],
+      "segments": [
+        "seg_04",
+        "seg_05",
+        "seg_06"
+      ],
+      "relationship_1848": "The Lakota are the dominant military power of the northern Plains in 1848, at the height of their territorial expansion. Relations with emigrants are varied and complex \u2014 most encounters involve trade and curiosity rather than conflict, though the sheer volume of emigrant traffic is beginning to alarm Lakota leaders. The great Lakota encampments near Fort Laramie are a sight emigrants never forget.",
+      "trade_goods": [
+        "buffalo_robes",
+        "moccasins",
+        "dried_meat",
+        "horses",
+        "beadwork"
+      ],
+      "services": [
+        "trade",
+        "river_crossing_assistance",
+        "guide_service"
+      ],
+      "cultural_notes": "The Lakota are a horse-culture people who follow the buffalo herds across the northern Plains. Their tipis, horsemanship, and warrior societies are the foundation of what many Americans imagine when they think of 'Indians,' which is itself a distortion \u2014 the Lakota represent one specific culture among hundreds. In 1848 they are prosperous and powerful, not yet devastated by the reservation era. Their social structure centers on extended family bands (tiyospaye) led by respected leaders who govern by consensus.",
+      "encounter_tone": "Portray Lakota individuals as proud, confident, and often generous hosts who are also keenly aware of the threat emigrant traffic poses to the buffalo herds. Encounters near Fort Laramie should reflect the complex trading relationships that exist there. Lakota people should be depicted as individuals with varied personalities \u2014 some welcoming, some wary, some amused by emigrant clumsiness. Never reduce encounters to combat scenarios.",
+      "historical_context": "In 1848 the Lakota are at the zenith of their power, having expanded westward over the previous century. They dominate the northern Plains from the Missouri River to the Bighorn Mountains. The Fort Laramie Treaty of 1851 (still three years away) will attempt to define territorial boundaries. The emigrant trail is beginning to disrupt buffalo migration patterns, a concern Lakota leaders are raising with increasing urgency.",
+      "source": "Kingsley Bray, 'Crazy Horse: A Lakota Life' (2006); Richard White, 'The Winning of the West' (1991); Parkman, 'The Oregon Trail'",
+      "prohibited_tropes": [
+        "broken English or pidgin speech",
+        "war-whooping savage characterization",
+        "noble savage romanticism",
+        "depicting all encounters as hostile",
+        "using 'Sioux' without acknowledging it as an exonym",
+        "reducing rich culture to warfare and hunting",
+        "ignoring women's central role in Lakota society",
+        "treating Lakota as doomed or tragic \u2014 in 1848 they are powerful and prospering"
+      ]
+    },
+    {
+      "id": "cheyenne",
+      "name": "Cheyenne",
+      "alt_names": [
+        "Tsitsistas",
+        "Shahiyena"
+      ],
+      "regions": [
+        "western_nebraska",
+        "wyoming"
+      ],
+      "segments": [
+        "seg_04",
+        "seg_05",
+        "seg_06"
+      ],
+      "relationship_1848": "The Cheyenne are close allies of the Lakota on the central Plains, sharing hunting grounds and sometimes camps. Relations with emigrants are generally peaceful in 1848 but wary. The Cheyenne are accomplished horse people and traders. They are concerned about emigrant impact on the buffalo herds but have not yet entered the period of open conflict that will come in the 1860s.",
+      "trade_goods": [
+        "buffalo_robes",
+        "moccasins",
+        "horses",
+        "beadwork",
+        "dried_meat"
+      ],
+      "services": [
+        "trade",
+        "guide_service"
+      ],
+      "cultural_notes": "The Cheyenne are an Algonquian-speaking people who migrated to the Plains from the Great Lakes region. They maintain a sophisticated council system with military societies (Dog Soldiers, Kit Fox, etc.) and the sacred Arrow and Buffalo Hat bundles that unite the people. They are noted for the beauty of their beadwork and quillwork. Women hold significant authority in domestic and economic matters.",
+      "encounter_tone": "Portray Cheyenne individuals as dignified, observant, and skilled in diplomacy. Encounters should reflect a people confident in their territory who view emigrants as temporary nuisances rather than existential threats (that awareness is growing but not yet dominant in 1848). Trading encounters should be conducted with formality and mutual respect.",
+      "historical_context": "By 1848 the Cheyenne have fully adapted to Plains horse culture and are allied with the Lakota and Arapaho in a powerful confederacy. The Southern Cheyenne are beginning to separate from their northern relatives, a division the emigrant trail is accelerating. Bent's Fort on the Arkansas River is an important Cheyenne trading center.",
+      "source": "John Moore, 'The Cheyenne' (1996); George Bird Grinnell, 'The Cheyenne Indians' (1923)",
+      "prohibited_tropes": [
+        "broken English or pidgin speech",
+        "generic Plains Indian stereotypes",
+        "reducing to warriors only",
+        "ignoring women's roles and authority",
+        "treating as interchangeable with Lakota",
+        "depicting as hostile by default"
+      ]
+    },
+    {
+      "id": "arapaho",
+      "name": "Arapaho",
+      "alt_names": [
+        "Hinono'eino",
+        "Gens de Vache"
+      ],
+      "regions": [
+        "western_nebraska",
+        "wyoming"
+      ],
+      "segments": [
+        "seg_05",
+        "seg_06"
+      ],
+      "relationship_1848": "The Arapaho are allied with the Cheyenne and Lakota, ranging across the central and northern Plains. In 1848 they are generally peaceable toward emigrants, engaging in trade near Fort Laramie and along the Platte road. They are skilled horse people and middlemen in the Plains trade network.",
+      "trade_goods": [
+        "buffalo_robes",
+        "moccasins",
+        "horses",
+        "parfleche"
+      ],
+      "services": [
+        "trade"
+      ],
+      "cultural_notes": "The Arapaho are an Algonquian-speaking people with a rich ceremonial life centered on the Flat Pipe and the Sun Dance. They are closely allied with the Cheyenne and often camp nearby. Their age-graded military societies provide social structure. The Arapaho are noted as diplomats and middlemen among Plains peoples.",
+      "encounter_tone": "Portray Arapaho individuals as skilled diplomats and traders, often serving as intermediaries. Encounters should be peaceful and focused on trade or information exchange. The Arapaho perspective on emigrants should convey cautious pragmatism.",
+      "historical_context": "The Arapaho in 1848 occupy a wide range across the central Plains, from the South Platte to the Yellowstone. Like their allies, they are beginning to feel the effects of emigrant traffic on the buffalo herds. The Northern and Southern Arapaho are beginning to diverge in range and policy.",
+      "source": "Loretta Fowler, 'Arapahoe Politics, 1851-1978' (1982); Fort Laramie records",
+      "prohibited_tropes": [
+        "broken English or pidgin speech",
+        "treating as minor appendage to Lakota or Cheyenne",
+        "hostile encounter defaults",
+        "generic Plains Indian stereotypes",
+        "erasing distinct Arapaho identity and culture"
+      ]
+    },
+    {
+      "id": "shoshone",
+      "name": "Eastern Shoshone",
+      "alt_names": [
+        "Snake Indians",
+        "Sosoni"
+      ],
+      "regions": [
+        "south_pass",
+        "wyoming",
+        "snake_river"
+      ],
+      "segments": [
+        "seg_07",
+        "seg_08",
+        "seg_09",
+        "seg_10",
+        "seg_11",
+        "seg_12"
+      ],
+      "relationship_1848": "The Eastern Shoshone under Chief Washakie are generally friendly toward American emigrants, viewing them as potential allies against the Lakota and Blackfeet who press upon Shoshone territory. Shoshone people trade fish, roots, and guide services along the trail. Sacagawea's legacy (she was Lemhi Shoshone) gives Americans a positive if simplistic association.",
+      "trade_goods": [
+        "dried_salmon",
+        "camas_root",
+        "obsidian",
+        "horses",
+        "guide_service",
+        "moccasins"
+      ],
+      "services": [
+        "guide_service",
+        "river_crossing_assistance",
+        "trade",
+        "horse_trading"
+      ],
+      "cultural_notes": "The Eastern Shoshone are a Numic-speaking people adapted to the mountain and basin country of present-day Wyoming and Idaho. They hunt buffalo on the Plains in summer and retreat to mountain valleys in winter. Under Washakie's leadership they maintain a sophisticated alliance strategy, balancing relationships with Americans, other tribes, and the fur trade. They are skilled horsemen and fishermen.",
+      "encounter_tone": "Portray Shoshone individuals as knowledgeable mountain people who are genuinely helpful to emigrants \u2014 not from subservience but from strategic calculation and natural hospitality. Washakie and other leaders should be depicted as shrewd diplomats. Encounters should reflect the Shoshone as people thoroughly at home in country that terrifies emigrants.",
+      "historical_context": "In 1848 the Eastern Shoshone occupy a vast territory centered on the Wind River Range, but they are under pressure from Lakota expansion from the east and Blackfeet from the north. Washakie's policy of friendship with Americans is a strategic response to these pressures. The Shoshone will not sign a treaty with the United States until Fort Bridger in 1868.",
+      "source": "Demitri Shimkin, 'Wind River Shoshone Ethnogeography' (1947); Fort Bridger records; Osborne Russell, 'Journal of a Trapper' (1914)",
+      "prohibited_tropes": [
+        "broken English or pidgin speech",
+        "depicting as primitive or backward",
+        "reducing Sacagawea connection to entire cultural identity",
+        "treating friendliness as naivety rather than strategy",
+        "generic Basin-Plateau stereotypes",
+        "ignoring sophisticated political calculations"
+      ]
+    },
+    {
+      "id": "bannock",
+      "name": "Bannock",
+      "alt_names": [
+        "Pannaiti",
+        "Bana'kwut"
+      ],
+      "regions": [
+        "snake_river"
+      ],
+      "segments": [
+        "seg_09",
+        "seg_10",
+        "seg_11",
+        "seg_13"
+      ],
+      "relationship_1848": "The Bannock people range across the Snake River plain and share Fort Hall as a trading center with the Shoshone. Relations with emigrants are generally peaceful, involving trade in fish, roots, and horses. The Bannock are wary of emigrant encroachment on their camas-gathering grounds and salmon fisheries.",
+      "trade_goods": [
+        "dried_salmon",
+        "camas_root",
+        "berries",
+        "horses"
+      ],
+      "services": [
+        "trade",
+        "guide_service"
+      ],
+      "cultural_notes": "The Bannock are a Northern Paiute-speaking people closely associated with the Shoshone in the Fort Hall area. They follow a seasonal round of salmon fishing, camas gathering, and small-game hunting. The camas prairies south of the Snake River are especially important to their subsistence. They maintain distinct identity despite close association with the Shoshone.",
+      "encounter_tone": "Portray Bannock individuals as quiet, observant people with deep knowledge of the Snake River country. Trade encounters should be straightforward and practical. The Bannock perspective on emigrants should convey concern about the impact on fisheries and camas grounds.",
+      "historical_context": "In 1848 the Bannock share the Fort Hall area with the Shoshone and maintain an uneasy relationship with the Hudson's Bay Company. Emigrant traffic through their territory is increasing, and the impact on salmon runs and camas prairies is becoming noticeable. The Bannock War of 1878 is still three decades away but the seeds of conflict are being planted.",
+      "source": "Brigham Madsen, 'The Bannock of Idaho' (1958); Fort Hall post journals",
+      "prohibited_tropes": [
+        "broken English or pidgin speech",
+        "conflating entirely with Shoshone identity",
+        "depicting as hostile or warlike",
+        "ignoring their distinct language and culture",
+        "reducing to background for Shoshone encounters"
+      ]
+    },
+    {
+      "id": "cayuse",
+      "name": "Cayuse",
+      "alt_names": [
+        "Liksiyu",
+        "Wai\u00edlatpu people"
+      ],
+      "regions": [
+        "blue_mountains"
+      ],
+      "segments": [
+        "seg_14",
+        "seg_15"
+      ],
+      "relationship_1848": "Relations with emigrants are tense and dangerous in 1848, one year after the Whitman Massacre in which Cayuse warriors killed Marcus and Narcissa Whitman and eleven others at the Waiilatpu mission. The Cayuse-Settler War is ongoing. American militia and Cayuse bands are in intermittent conflict. Emigrants crossing the Blue Mountains do so with heightened vigilance and fear, though many Cayuse people had nothing to do with the killings and resent the collective punishment.",
+      "trade_goods": [
+        "horses",
+        "dried_fish",
+        "camas_root"
+      ],
+      "services": [
+        "horse_trading"
+      ],
+      "cultural_notes": "The Cayuse are renowned horse breeders \u2014 the word 'cayuse' for a small, hardy horse derives from the quality of their stock. They are a Sahaptin-speaking people closely related to the Nez Perce and Umatilla. The Whitman Massacre was provoked in part by a devastating measles epidemic that the Cayuse believed the missionaries had deliberately introduced, following a traditional understanding that healers who fail to cure may be held responsible.",
+      "encounter_tone": "Encounters with Cayuse people in 1848 should be handled with extreme care. The situation is genuinely dangerous but nuanced \u2014 most Cayuse people are not combatants and many are themselves suffering from the aftermath of the massacre and the punitive war that followed. Encounters should convey tension and wariness on both sides without reducing the Cayuse to villains. The underlying grievances (epidemic disease, land theft, cultural destruction) should be evident to the player.",
+      "historical_context": "The Whitman Massacre of November 1847 was the culmination of years of tension between the Whitmans' mission and the Cayuse, exacerbated by a measles epidemic that killed roughly half the Cayuse while sparing most Americans. The Cayuse understanding \u2014 that healers who fail bear responsibility \u2014 led warriors to kill the Whitmans under traditional law. The American response was collective punishment of the entire nation. In 1848 the conflict is unresolved and several Cayuse leaders who participated in the killings will not surrender until 1850.",
+      "source": "Clifford Trafzer, 'Death Stalks the Yakama' (1997); Robert Ruby, 'The Cayuse Indians' (1972); Whitman Mission records",
+      "prohibited_tropes": [
+        "depicting all Cayuse as hostile murderers",
+        "justifying the Whitman Massacre without context",
+        "ignoring the measles epidemic that provoked it",
+        "broken English or pidgin speech",
+        "savage characterization",
+        "treating the Cayuse War as simple good-vs-evil narrative",
+        "erasing Cayuse grievances about disease and land"
+      ]
+    },
+    {
+      "id": "nez_perce",
+      "name": "Nez Perce",
+      "alt_names": [
+        "Nimiipuu",
+        "Chopunnish"
+      ],
+      "regions": [
+        "blue_mountains"
+      ],
+      "segments": [
+        "seg_14",
+        "seg_15"
+      ],
+      "relationship_1848": "The Nez Perce maintain generally friendly relations with Americans, a stance dating to their hospitable reception of Lewis and Clark in 1805. They have welcomed missionaries and traders and some have adopted Christianity, though this has created divisions within the nation between 'treaty' and 'non-treaty' factions. The Whitman Massacre has complicated but not destroyed the Nez Perce-American relationship.",
+      "trade_goods": [
+        "horses",
+        "dried_salmon",
+        "camas",
+        "appaloosa_horses",
+        "beadwork"
+      ],
+      "services": [
+        "guide_service",
+        "horse_trading",
+        "river_crossing_assistance"
+      ],
+      "cultural_notes": "The Nez Perce are a Sahaptin-speaking people famous for their Appaloosa horses and their skill in breeding and training them. They follow a seasonal round centered on salmon fishing, camas gathering, and buffalo hunting expeditions to the Plains. Their homeland in the mountains and valleys of present-day Idaho and Oregon is spectacularly beautiful. They are a generous people whose hospitality to strangers is a cultural value, not a sign of weakness.",
+      "encounter_tone": "Portray Nez Perce individuals as confident, hospitable, and culturally proud. They should be depicted as choosing to help emigrants from a position of strength, not subservience. The internal divisions caused by missionary influence should be handled subtly. Encounters should convey deep knowledge of the mountain country and genuine warmth combined with increasing concern about the flood of emigrants.",
+      "historical_context": "In 1848 the Nez Perce are still three decades from the tragic war and flight of 1877 under Chief Joseph. They are a prosperous and powerful nation whose territory in the Blue Mountains and Clearwater country gives them control of key travel routes. Some Nez Perce leaders have converted to Christianity under missionary influence while others resist, creating political fault lines that will deepen over the coming decades.",
+      "source": "Alvin Josephy, 'The Nez Perce Indians and the Opening of the Northwest' (1965); Meriwether Lewis and William Clark journals; missionary records",
+      "prohibited_tropes": [
+        "broken English or pidgin speech",
+        "reducing to helpers or guides for white protagonists",
+        "projecting the 1877 war backward onto 1848",
+        "treating conversion to Christianity as cultural progress",
+        "noble savage romanticism",
+        "ignoring internal political complexity"
+      ]
+    },
+    {
+      "id": "umatilla",
+      "name": "Umatilla",
+      "alt_names": [
+        "Imatalamlama"
+      ],
+      "regions": [
+        "columbia_plateau",
+        "blue_mountains"
+      ],
+      "segments": [
+        "seg_14",
+        "seg_15",
+        "seg_16"
+      ],
+      "relationship_1848": "The Umatilla live along the Umatilla River and the Columbia Plateau, where emigrant trains pass through their territory in the final stages of the journey. Relations are tense in 1848 due to the nearby Cayuse War, though the Umatilla are a distinct nation not directly involved in the Whitman Massacre. They trade fish and horses with emigrants and are concerned about the impact of emigrant traffic on salmon runs.",
+      "trade_goods": [
+        "dried_salmon",
+        "fresh_fish",
+        "horses",
+        "camas",
+        "root_vegetables"
+      ],
+      "services": [
+        "trade",
+        "river_crossing_assistance",
+        "guide_service"
+      ],
+      "cultural_notes": "The Umatilla are a Sahaptin-speaking people whose territory centers on the Umatilla River valley and adjacent portions of the Columbia Plateau. Salmon fishing is central to their economy and culture. They share cultural practices and kinship networks with the Cayuse and Nez Perce but maintain a distinct political identity. They are skilled fishermen and horse people.",
+      "encounter_tone": "Portray Umatilla individuals as practical, direct, and concerned about the sustainability of their fisheries in the face of emigrant traffic. Trade encounters, especially involving salmon, should be prominent. The Umatilla perspective on the Cayuse War should convey sympathy for their neighbors' grievances without endorsement of violence.",
+      "historical_context": "In 1848 the Umatilla are caught between sympathy for Cayuse grievances and the pragmatic need to maintain workable relations with Americans. The emigrant trail cuts directly through their salmon fishing grounds on the Umatilla River. They will be party to the 1855 Treaty of Walla Walla, which establishes the Umatilla Reservation. But in 1848 they are still sovereign in their homeland and acting accordingly.",
+      "source": "Robert Ruby, 'Indians of the Pacific Northwest' (1981); treaty records; emigrant diaries",
+      "prohibited_tropes": [
+        "broken English or pidgin speech",
+        "conflating with Cayuse as hostile Indians",
+        "ignoring distinct Umatilla identity",
+        "reducing to fish-sellers",
+        "savage characterization",
+        "treating as peripheral to the Cayuse and Nez Perce"
+      ]
+    }
+  ],
+  "political": {
+    "year": 1848,
+    "key_events": [
+      {
+        "event": "Treaty of Guadalupe Hidalgo signed",
+        "date": "1848-02-02",
+        "relevance": "Ends the Mexican-American War. Mexico cedes California and the Southwest to the United States. The Oregon Country is now firmly American, and the continental scope of Manifest Destiny is nearly complete. Emigrants travel with the confidence that the entire route from Missouri to the Pacific is now under American sovereignty."
+      },
+      {
+        "event": "Gold discovered at Sutter's Mill",
+        "date": "1848-01-24",
+        "relevance": "James Marshall discovers gold at Sutter's Mill on the American River. However, news spreads slowly \u2014 President Polk will not confirm the discovery until December 1848. Most 1848 emigrants are heading to Oregon for land, not California for gold. The Gold Rush will not begin in earnest until 1849. Players in an 1848 game would have no knowledge of gold in California."
+      },
+      {
+        "event": "Oregon Territory formally organized",
+        "date": "1848-08-14",
+        "relevance": "Congress establishes the Oregon Territory, replacing the Provisional Government. This gives emigrants the assurance of American law and governance at their destination. The Donation Land Claim Act (1850) is still two years away, but the provisional government is already granting land to settlers."
+      },
+      {
+        "event": "Cayuse War ongoing",
+        "date": "1848-01-01",
+        "relevance": "Following the Whitman Massacre of November 1847, American militia are pursuing the Cayuse responsible. The conflict makes the Blue Mountains passage tense and dangerous. Emigrant companies passing through in 1848 travel with heightened anxiety and reinforced guards."
+      },
+      {
+        "event": "Mormon migration continues",
+        "date": "1848-05-01",
+        "relevance": "Brigham Young led the first Mormon company to the Great Salt Lake in 1847. In 1848 more Mormon companies follow, sharing portions of the trail with Oregon-bound emigrants. Relations are generally civil but sometimes strained by religious and political differences. Mormons traveling the north bank of the Platte avoid some conflicts."
+      },
+      {
+        "event": "Zachary Taylor elected President",
+        "date": "1848-11-07",
+        "relevance": "Taylor, hero of the Mexican-American War, wins the presidency. His election reflects the expansionist mood of the country. Emigrants departing in spring 1848 would know of Taylor as a candidate but not the election outcome."
+      },
+      {
+        "event": "Panic of 1837 aftermath persists",
+        "date": "1848-01-01",
+        "relevance": "The long economic depression following the Panic of 1837 is a major driver of emigration. Farms foreclosed, businesses failed, and opportunity dried up in the East and Midwest. Free land in Oregon represents a fresh start for families ruined by the economic collapse."
+      },
+      {
+        "event": "Whitman Massacre",
+        "date": "1847-11-29",
+        "relevance": "Marcus and Narcissa Whitman and eleven others killed at Waiilatpu mission by Cayuse warriors during a measles epidemic. The event is fresh in every emigrant's mind in 1848 and colors all interactions with indigenous peoples in the Oregon country. The American response \u2014 collective punishment of the Cayuse \u2014 is ongoing."
+      }
+    ],
+    "traveler_motivations": [
+      "Free land in Oregon under the Provisional Government's Donation Land Claims \u2014 640 acres for a married couple",
+      "Economic desperation following the Panic of 1837 and a decade of depression",
+      "Religious freedom, particularly for Latter-day Saints following the Mormon Trail",
+      "Manifest Destiny \u2014 the belief that American expansion to the Pacific is providentially ordained",
+      "Adventure and the promise of a better life in a new country",
+      "Escape from debts, legal troubles, or failed marriages in the States",
+      "Health \u2014 the western climate was believed to cure consumption and other chronic ailments",
+      "Following family or community members who emigrated in earlier years",
+      "Missionary impulse \u2014 bringing Christianity and civilization to the Oregon country"
+    ],
+    "economic_conditions": "The United States economy in 1848 is slowly recovering from the devastating Panic of 1837, which collapsed banks, wiped out savings, and triggered widespread unemployment and farm foreclosures. In the Mississippi Valley and Midwest, many families have spent a decade struggling with debt, low crop prices, and scarce money. A yoke of oxen and a wagon represent the last investment a family can make \u2014 Oregon land is free, but the journey costs roughly $800-$1000 per family, a substantial sum when a laborer earns $1 per day. Independence, Missouri outfitters do brisk business selling provisions at competitive prices that will triple at every fort westward.",
+    "source": "John Unruh, 'The Plains Across' (1979); Malcolm Rohrbough, 'Days of Gold' (1997); U.S. Census records, 1840-1850"
+  },
+  "material_culture": {
+    "wagon_contents": [
+      {
+        "item": "Flour",
+        "category": "food",
+        "weight_lbs": 200,
+        "notes": "The staple. Packed in waterproof barrels or double-sewn canvas sacks. Will last the journey if kept dry."
+      },
+      {
+        "item": "Bacon (salt-cured side meat)",
+        "category": "food",
+        "weight_lbs": 150,
+        "notes": "Salt-cured pork sides, the primary protein. Goes rancid in heat; best eaten early in the journey."
+      },
+      {
+        "item": "Coffee (green beans)",
+        "category": "food",
+        "weight_lbs": 20,
+        "notes": "Green beans roasted and ground fresh each morning. Essential for morale. Some substitute parched corn when supplies run low."
+      },
+      {
+        "item": "Sugar",
+        "category": "food",
+        "weight_lbs": 50,
+        "notes": "Packed in sealed tins or stoneware crocks. A luxury that improves many a grim meal."
+      },
+      {
+        "item": "Rice",
+        "category": "food",
+        "weight_lbs": 50,
+        "notes": "Compact and long-lasting. Boiled with bacon grease for a filling if monotonous supper."
+      },
+      {
+        "item": "Dried beans",
+        "category": "food",
+        "weight_lbs": 50,
+        "notes": "Navy or pinto beans. Soaked overnight and boiled. A reliable staple when fresh meat fails."
+      },
+      {
+        "item": "Saleratus (baking soda)",
+        "category": "food",
+        "weight_lbs": 5,
+        "notes": "Essential for making bread rise on the trail. Mixed with flour and water for biscuits baked in a Dutch oven."
+      },
+      {
+        "item": "Salt",
+        "category": "food",
+        "weight_lbs": 25,
+        "notes": "For preserving meat, seasoning food, and treating leather. Worth its weight on the later trail."
+      },
+      {
+        "item": "Dried fruit (apples, peaches)",
+        "category": "food",
+        "weight_lbs": 25,
+        "notes": "A defense against scurvy and a treat for children. Usually exhausted by mid-journey."
+      },
+      {
+        "item": "Vinegar (barrel)",
+        "category": "food",
+        "weight_lbs": 15,
+        "notes": "Used as a scurvy preventative, meat preservative, and cleaning agent. Some physicians recommend it against cholera."
+      },
+      {
+        "item": "Hardtack / pilot bread",
+        "category": "food",
+        "weight_lbs": 50,
+        "notes": "Ship's biscuit that keeps indefinitely if dry. Hard enough to break teeth; usually soaked in coffee or fried in grease."
+      },
+      {
+        "item": "Blankets (wool)",
+        "category": "clothing",
+        "weight_lbs": 20,
+        "notes": "Three to four heavy wool blankets per person. The most important item of bedding. India rubber ground cloths if available."
+      },
+      {
+        "item": "Spare clothing (per person)",
+        "category": "clothing",
+        "weight_lbs": 15,
+        "notes": "Two shirts, two pairs of trousers or skirts, stockings, a heavy coat, a hat. Sturdy boots essential."
+      },
+      {
+        "item": "Rifle, percussion cap (.50 or .54 caliber)",
+        "category": "ammunition",
+        "weight_lbs": 10,
+        "notes": "One good rifle per adult male. The Hawken plains rifle is preferred. Percussion cap ignition is standard by 1848."
+      },
+      {
+        "item": "Lead and bullet mold",
+        "category": "ammunition",
+        "weight_lbs": 30,
+        "notes": "Bar lead and a mold for casting balls. Fifty pounds of lead and powder combined is a common recommendation."
+      },
+      {
+        "item": "Gunpowder (kegs)",
+        "category": "ammunition",
+        "weight_lbs": 20,
+        "notes": "Kept in sealed kegs well away from the cookfire. DuPont is the preferred brand."
+      },
+      {
+        "item": "Percussion caps (tin)",
+        "category": "ammunition",
+        "weight_lbs": 2,
+        "notes": "Small copper caps that ignite the powder charge. Packed in waterproof tins."
+      },
+      {
+        "item": "Axe",
+        "category": "tools",
+        "weight_lbs": 5,
+        "notes": "Essential for cutting firewood, clearing trail, and butchering. A good American-made axe is prized."
+      },
+      {
+        "item": "Shovel",
+        "category": "tools",
+        "weight_lbs": 5,
+        "notes": "For digging fire pits, clearing road, burying the dead, and a hundred other uses."
+      },
+      {
+        "item": "Handsaw",
+        "category": "tools",
+        "weight_lbs": 3,
+        "notes": "For wagon repairs and lumber cutting."
+      },
+      {
+        "item": "Auger and gimlet",
+        "category": "tools",
+        "weight_lbs": 2,
+        "notes": "For boring holes in wagon repairs. Essential tools for any woodworking on the trail."
+      },
+      {
+        "item": "Rope (hemp, 100 ft)",
+        "category": "tools",
+        "weight_lbs": 10,
+        "notes": "For river crossings, rough-locking wheels on descents, and tying loads. One hundred feet minimum."
+      },
+      {
+        "item": "Chains (log chains)",
+        "category": "tools",
+        "weight_lbs": 15,
+        "notes": "For rough-locking wagon wheels on steep descents. Also used for pulling stuck wagons."
+      },
+      {
+        "item": "Dutch oven",
+        "category": "tools",
+        "weight_lbs": 15,
+        "notes": "Cast-iron pot with legs and a flanged lid for piling coals atop. The essential trail cooking vessel."
+      },
+      {
+        "item": "Spare wagon tongue",
+        "category": "spare_parts",
+        "weight_lbs": 25,
+        "notes": "A broken tongue can end a journey. The prudent emigrant carries a spare of seasoned hardwood."
+      },
+      {
+        "item": "Spare axle",
+        "category": "spare_parts",
+        "weight_lbs": 20,
+        "notes": "An extra axle, preferably of well-seasoned hickory or oak. Strapped beneath the wagon bed."
+      },
+      {
+        "item": "Spare wheel",
+        "category": "spare_parts",
+        "weight_lbs": 40,
+        "notes": "A complete spare wheel, often carried lashed to the side of the wagon. Worth every ounce of its weight."
+      },
+      {
+        "item": "Iron tire bolts and rivets",
+        "category": "spare_parts",
+        "weight_lbs": 5,
+        "notes": "Assorted hardware for wagon repairs."
+      },
+      {
+        "item": "Grease bucket (tallow and tar)",
+        "category": "spare_parts",
+        "weight_lbs": 10,
+        "notes": "Hung beneath the rear axle. Wheels must be greased every few days or the hubs seize."
+      },
+      {
+        "item": "Laudanum (tincture of opium)",
+        "category": "medicine",
+        "weight_lbs": 1,
+        "notes": "The universal frontier painkiller. Used for everything from toothache to cholera cramps. Highly addictive."
+      },
+      {
+        "item": "Calomel (mercury chloride)",
+        "category": "medicine",
+        "weight_lbs": 1,
+        "notes": "A powerful purgative prescribed for nearly every complaint. Causes mercury poisoning with prolonged use. The standard medicine of the era."
+      },
+      {
+        "item": "Quinine",
+        "category": "medicine",
+        "weight_lbs": 1,
+        "notes": "For fevers and ague. Extracted from cinchona bark. Expensive but effective against malaria and useful for other fevers."
+      },
+      {
+        "item": "Camphor",
+        "category": "medicine",
+        "weight_lbs": 1,
+        "notes": "A stimulant rubbed on the chest or dissolved in brandy. Used against cholera, fainting, and catarrh."
+      },
+      {
+        "item": "Epsom salts",
+        "category": "medicine",
+        "weight_lbs": 2,
+        "notes": "A mild purgative for constipation and a soak for sprains and sore muscles."
+      },
+      {
+        "item": "Whiskey or brandy (medicinal)",
+        "category": "medicine",
+        "weight_lbs": 8,
+        "notes": "For medicinal use as stimulant, anesthetic, and snake-bite remedy. Often consumed for other purposes as well."
+      }
+    ],
+    "independence_prices": [
+      {
+        "item": "Wagon, complete (prairie schooner)",
+        "price_1848_cents": 8500,
+        "unit": "each"
+      },
+      {
+        "item": "Yoke of oxen",
+        "price_1848_cents": 5000,
+        "unit": "pair"
+      },
+      {
+        "item": "Mule",
+        "price_1848_cents": 7500,
+        "unit": "each"
+      },
+      {
+        "item": "Horse (riding)",
+        "price_1848_cents": 6000,
+        "unit": "each"
+      },
+      {
+        "item": "Milk cow",
+        "price_1848_cents": 2000,
+        "unit": "each"
+      },
+      {
+        "item": "Flour",
+        "price_1848_cents": 250,
+        "unit": "100 lbs"
+      },
+      {
+        "item": "Bacon",
+        "price_1848_cents": 500,
+        "unit": "100 lbs"
+      },
+      {
+        "item": "Sugar",
+        "price_1848_cents": 600,
+        "unit": "100 lbs"
+      },
+      {
+        "item": "Coffee (green beans)",
+        "price_1848_cents": 800,
+        "unit": "100 lbs"
+      },
+      {
+        "item": "Rice",
+        "price_1848_cents": 400,
+        "unit": "100 lbs"
+      },
+      {
+        "item": "Dried beans",
+        "price_1848_cents": 300,
+        "unit": "100 lbs"
+      },
+      {
+        "item": "Salt",
+        "price_1848_cents": 200,
+        "unit": "100 lbs"
+      },
+      {
+        "item": "Saleratus",
+        "price_1848_cents": 1000,
+        "unit": "100 lbs"
+      },
+      {
+        "item": "Lead (bar)",
+        "price_1848_cents": 600,
+        "unit": "100 lbs"
+      },
+      {
+        "item": "Gunpowder",
+        "price_1848_cents": 5000,
+        "unit": "25 lb keg"
+      },
+      {
+        "item": "Percussion caps",
+        "price_1848_cents": 200,
+        "unit": "tin of 100"
+      },
+      {
+        "item": "Rifle, percussion cap (Hawken or similar)",
+        "price_1848_cents": 1500,
+        "unit": "each"
+      },
+      {
+        "item": "Pistol, percussion cap",
+        "price_1848_cents": 1000,
+        "unit": "each"
+      },
+      {
+        "item": "Blankets (wool)",
+        "price_1848_cents": 300,
+        "unit": "pair"
+      },
+      {
+        "item": "Boots (men's)",
+        "price_1848_cents": 300,
+        "unit": "pair"
+      },
+      {
+        "item": "Rope (hemp)",
+        "price_1848_cents": 100,
+        "unit": "100 ft"
+      },
+      {
+        "item": "Axe",
+        "price_1848_cents": 125,
+        "unit": "each"
+      },
+      {
+        "item": "Shovel",
+        "price_1848_cents": 75,
+        "unit": "each"
+      },
+      {
+        "item": "Dutch oven",
+        "price_1848_cents": 100,
+        "unit": "each"
+      },
+      {
+        "item": "Laudanum",
+        "price_1848_cents": 50,
+        "unit": "bottle"
+      },
+      {
+        "item": "Calomel",
+        "price_1848_cents": 25,
+        "unit": "ounce"
+      },
+      {
+        "item": "Quinine",
+        "price_1848_cents": 100,
+        "unit": "ounce"
+      },
+      {
+        "item": "Spare wagon tongue",
+        "price_1848_cents": 200,
+        "unit": "each"
+      },
+      {
+        "item": "Spare axle",
+        "price_1848_cents": 150,
+        "unit": "each"
+      },
+      {
+        "item": "Spare wheel",
+        "price_1848_cents": 400,
+        "unit": "each"
+      },
+      {
+        "item": "Canvas (wagon cover)",
+        "price_1848_cents": 500,
+        "unit": "each"
+      },
+      {
+        "item": "Ox yoke",
+        "price_1848_cents": 200,
+        "unit": "each"
+      },
+      {
+        "item": "Ox shoes (set)",
+        "price_1848_cents": 100,
+        "unit": "set of 8"
+      },
+      {
+        "item": "Whiskey",
+        "price_1848_cents": 25,
+        "unit": "quart"
+      }
+    ],
+    "food_preservation": [
+      "Salt-curing: Pork sides rubbed with salt and packed in barrels. The standard method for meat preservation. Keeps for months if kept cool and dry.",
+      "Smoking: Meat hung over a slow hardwood fire for days. Less common on the trail but used at forts and camps where time permits.",
+      "Drying / jerking: Meat cut thin and dried in sun and wind. Buffalo meat jerked on the trail. Indigenous peoples taught this method and pemmican (dried meat pounded with fat and berries) to traders.",
+      "Pickling: Vegetables preserved in vinegar. Sauerkraut and pickled cucumbers brought from home seldom survive the first month.",
+      "Flour and hardtack: Flour keeps well in waterproof containers. Hardtack (ship's biscuit) is nearly indestructible if kept dry \u2014 specimens from the 1840s remain edible decades later.",
+      "Sugar preservation: Fruits cooked with sugar into preserves. Heavy to carry but a defense against scurvy.",
+      "Parching: Corn dried and parched over fire, then ground for coffee substitute or meal. Light, durable, and nutritious.",
+      "Tallow sealing: Butter or cheese sealed under a layer of melted tallow in a crock. Keeps for weeks in moderate temperatures."
+    ],
+    "repair_methods": [
+      "Wagon tongue replacement: Carry a seasoned spare. A broken tongue on the trail requires fashioning one from available timber \u2014 cottonwood is soft but workable; hardwood is preferred but rare west of Fort Kearney.",
+      "Wheel tire tightening: As wooden wheels shrink in dry western air, the iron tire loosens. Soak the wheel overnight in a stream, or wedge wooden shims between tire and felloe. Blacksmiths at forts can heat and re-set the tire.",
+      "Axle repair: A cracked axle may be bound with rawhide or iron straps as a temporary measure. Full replacement requires a spare axle and the tools to remove and reset the wheels.",
+      "Canvas patching: Wagon covers tear in wind and thorns. Patch with spare canvas and heavy thread, or seal with pine pitch or tallow.",
+      "Rough-locking: On steep descents, chain a log to the rear of the wagon or lock wheels with chains to prevent runaway. Essential technique for mountain passes.",
+      "Rawhide repair: Green rawhide shrinks as it dries, making it ideal for binding cracked wood, securing loose iron fittings, or improvising harness repairs. Every emigrant saves buffalo or ox hides for this purpose.",
+      "Ox shoe replacement: Oxen wear through shoes on rocky ground. Shoeing an ox requires lifting each foot with a sling \u2014 they cannot stand on three legs like a horse. Carried in sets of eight (two per foot).",
+      "Caulking for river crossings: Wagon beds sealed with tallow and tar, or wrapped in buffalo hides, to serve as boats at river crossings. The bed is lifted from the running gear and floated across."
+    ],
+    "weight_constraints": "A standard prairie schooner carries 2,000 to 2,500 pounds. Overloading is the most common emigrant error \u2014 many start with 3,000 or more pounds and must abandon goods as oxen weaken. By Fort Laramie the trail is lined with jettisoned stoves, furniture, anvils, plows, trunks of clothing, and even bacon gone rancid in the heat. The rule of thumb: bring only what you need to survive, and expect to throw away half of that. Each ox can pull roughly 200 pounds of load over the full journey, so six oxen (three yoke) are the minimum for a loaded wagon.",
+    "source": "John Unruh, 'The Plains Across' (1979); Merrill Mattes, 'The Great Platte River Road' (1969); Lansford Hastings, 'The Emigrants' Guide to Oregon and California' (1845)"
+  },
+  "period_voice": {
+    "diary_excerpts": [
+      {
+        "text": "We are now fairly launched upon the broad prairie, the white-topped wagons stretching out in a long line behind us, the drivers cracking their whips and the cattle lowing. It is a sight to stir the blood.",
+        "author": "Francis Parkman",
+        "date": "1846-05",
+        "source": "Francis Parkman, 'The Oregon Trail' (1849), Ch. 2"
+      },
+      {
+        "text": "The road was lined with the graves of those who had perished. Scarcely a day passed but we saw fresh-made mounds, and the wooden headboards told the tale of cholera, fever, and accident. The children asked why so many people were sleeping by the road.",
+        "author": "Composite emigrant account",
+        "date": "1848-06",
+        "source": "Based on multiple emigrant diaries, compiled by Merrill Mattes"
+      },
+      {
+        "text": "We forded the river today with great difficulty. The current was swift and the bottom treacherous. One wagon overturned and we lost a barrel of flour and a sack of sugar to the waters. Mrs. Henderson was near drowned but was pulled out by her husband, both much shaken.",
+        "author": "Composite emigrant account",
+        "date": "1847-06",
+        "source": "Based on multiple emigrant river-crossing accounts, 1843-1848"
+      },
+      {
+        "text": "This morning we crossed the great divide. I expected some tremendous mountain barrier but found instead a broad open plain sloping gently westward. Had we not been told, we should never have known we had crossed from Atlantic to Pacific waters.",
+        "author": "Narcissa Whitman",
+        "date": "1836-07-04",
+        "source": "Narcissa Whitman, letters, 1836"
+      },
+      {
+        "text": "The buffalo were so numerous that the plain was black with them as far as the eye could reach. We killed three and the fresh meat was a feast after weeks of salt pork. The children danced about the fire.",
+        "author": "Joel Palmer",
+        "date": "1845-06",
+        "source": "Joel Palmer, 'Journal of Travels over the Rocky Mountains' (1847)"
+      },
+      {
+        "text": "I do not know how to describe the weariness of this endless sage plain. The dust fills our eyes and throats, the water is alkali and bitter, and the oxen stumble forward like sleepwalkers. We have thrown away everything we can spare and still the wagon drags.",
+        "author": "Composite emigrant account",
+        "date": "1847-08",
+        "source": "Based on Snake River desert emigrant accounts, 1845-1848"
+      },
+      {
+        "text": "Arrived at last at Oregon City. The journey has cost us six months, one good ox, and more suffering than I care to remember. But the valley is green and beautiful beyond description, and the land is ours to make what we can of it. We have come home.",
+        "author": "Composite emigrant account",
+        "date": "1847-10",
+        "source": "Based on Oregon arrival accounts, 1843-1848"
+      },
+      {
+        "text": "The Indian came into camp quite friendly and wanted to trade a fine horse for our old rifle. He spoke through signs mostly, but his meaning was plain enough. We traded fair and both parties were satisfied. He knew this country as we know our own farmyards.",
+        "author": "Composite emigrant account",
+        "date": "1847-07",
+        "source": "Based on fur-trade and emigrant trade encounter accounts, 1840s"
+      }
+    ],
+    "vocabulary": [
+      {
+        "modern_term": "doctor",
+        "period_term": "physician",
+        "notes": "A university-trained physician was rare on the trail. Most medical care came from self-taught practitioners or family knowledge."
+      },
+      {
+        "modern_term": "sick",
+        "period_term": "taken ill / poorly / indisposed",
+        "notes": "'Sick' was used but 'taken ill' or 'poorly' carried more weight in formal speech and writing."
+      },
+      {
+        "modern_term": "died",
+        "period_term": "expired / departed this life / was taken from us",
+        "notes": "Death was spoken of in euphemism and religious terms. 'Died' was used plainly in some journals but formal speech preferred gentler phrasing."
+      },
+      {
+        "modern_term": "Native American",
+        "period_term": "Indian / the specific nation name",
+        "notes": "Always prefer the specific nation name (Lakota, Shoshone, Pawnee). The generic 'Indian' was universal in 1848 but specific names were used by knowledgeable travelers."
+      },
+      {
+        "modern_term": "food supplies",
+        "period_term": "provisions / victuals",
+        "notes": "'Provisions' was the standard term for trail food supplies. 'Victuals' (pronounced vittles) was common speech."
+      },
+      {
+        "modern_term": "camping spot",
+        "period_term": "encampment / camping ground",
+        "notes": "'Camp' was used as a verb. An 'encampment' was the place; a 'camping ground' a known good site."
+      },
+      {
+        "modern_term": "traveling group",
+        "period_term": "company / train / party",
+        "notes": "A 'company' was an organized group with elected officers. A 'train' was a line of wagons. A 'party' could be any group."
+      },
+      {
+        "modern_term": "broken down",
+        "period_term": "gave out / played out / stove in",
+        "notes": "Wagons 'gave out' or were 'stove in.' Oxen 'played out.' People 'gave out' from exhaustion."
+      },
+      {
+        "modern_term": "scared / afraid",
+        "period_term": "affrighted / alarmed / uneasy",
+        "notes": "Fear was acknowledged but understated. 'Uneasy' covered a range from mild concern to terror."
+      },
+      {
+        "modern_term": "hurry",
+        "period_term": "press forward / make haste / push on",
+        "notes": "'Press forward' implied urgency with purpose. 'Push on' suggested determination against difficulty."
+      },
+      {
+        "modern_term": "beautiful scenery",
+        "period_term": "a fine prospect / handsome country / sublime view",
+        "notes": "'Prospect' meant a distant view. 'Handsome' meant pleasing. 'Sublime' was reserved for genuinely awe-inspiring landscapes."
+      },
+      {
+        "modern_term": "river",
+        "period_term": "river / creek / branch / fork",
+        "notes": "Size distinctions mattered. A 'creek' was fordable; a 'river' was not. 'Branch' and 'fork' indicated tributaries."
+      },
+      {
+        "modern_term": "prairie",
+        "period_term": "prairie / plains / the great desert",
+        "notes": "Americans called the Great Plains 'the Great American Desert' well into the 1850s. 'Prairie' specifically meant grassland."
+      },
+      {
+        "modern_term": "mountain pass",
+        "period_term": "pass / gap / saddle / divide",
+        "notes": "A 'pass' was any traversable route through mountains. The 'divide' was specifically the Continental Divide."
+      },
+      {
+        "modern_term": "getting worse (illness)",
+        "period_term": "sinking / failing / growing worse",
+        "notes": "A patient who was 'sinking' was expected to die. 'Failing' was serious. 'Growing worse' left room for hope."
+      },
+      {
+        "modern_term": "happy / pleased",
+        "period_term": "in good spirits / much encouraged / of good cheer",
+        "notes": "Emotional states were expressed through physical metaphors. Morale was 'spirits' \u2014 high or low."
+      },
+      {
+        "modern_term": "exhausted",
+        "period_term": "used up / worn down / played out",
+        "notes": "'Used up' was the common trail expression for total exhaustion, applied to people, animals, and equipment alike."
+      },
+      {
+        "modern_term": "weather",
+        "period_term": "weather / elements / climate",
+        "notes": "'The elements' referred to weather as a hostile force. 'Climate' meant the general weather pattern of a region."
+      },
+      {
+        "modern_term": "gun",
+        "period_term": "rifle / piece / firearm",
+        "notes": "'Gun' was considered imprecise. A 'piece' was any firearm. Specific types: rifle, musket, pistol, shotgun (fowling piece)."
+      },
+      {
+        "modern_term": "wagon",
+        "period_term": "wagon / emigrant wagon / prairie schooner",
+        "notes": "'Prairie schooner' was a contemporary nickname, comparing the white canvas tops to ship sails on a sea of grass."
+      },
+      {
+        "modern_term": "mile",
+        "period_term": "mile",
+        "notes": "Distances were estimated, not measured. A 'day's travel' was 12-20 miles depending on conditions."
+      }
+    ],
+    "style_notes": [
+      "Use compound sentences connected by semicolons and conjunctions. Short declarative sentences were used for emphasis but long flowing sentences were the norm in journals and letters.",
+      "Understatement is the register of the trail. A deadly river crossing is 'somewhat difficult.' A cholera death is 'a melancholy event.' A stunning landscape is 'a fine prospect.' Reserve strong language for truly exceptional moments.",
+      "Weather and terrain always come first in any scene-setting. Emigrants wrote about weather obsessively because it governed everything \u2014 pace, health, morale, survival.",
+      "Death is spoken of plainly but with ritual language: 'departed this life,' 'was taken from us,' 'breathed his last.' The location and manner of burial were always noted \u2014 it mattered greatly to the living.",
+      "Food and water are the constant concern. Every journal notes what was eaten, what was available, what was running low. Mention specific foods: flapjacks and coffee, boiled beans, salt pork fried in its own grease, buffalo hump roast.",
+      "Distances and landmarks structure every entry. 'Traveled 14 miles and encamped on the north bank of the Sweetwater, in sight of Independence Rock.' The trail was measured in landmarks, not abstractions.",
+      "Religious language was natural and unforced. 'Providence,' 'the Almighty,' 'by God's mercy' were ordinary phrases, not performative piety. The Sabbath was observed by many companies (no travel on Sunday).",
+      "Avoid modern psychological language. Characters do not 'process trauma' or 'work through feelings.' They 'bear up,' 'keep their spirits,' or 'sink under the burden.' Emotional resilience is assumed; its absence is noted with sympathy, not diagnosis."
+    ]
+  },
+  "names": {
+    "male_first": [
+      "James",
+      "John",
+      "William",
+      "Thomas",
+      "George",
+      "Charles",
+      "Henry",
+      "Joseph",
+      "Samuel",
+      "David",
+      "Benjamin",
+      "Daniel",
+      "Robert",
+      "Andrew",
+      "Isaac",
+      "Jesse",
+      "Elijah",
+      "Ezekiel",
+      "Hiram",
+      "Amos",
+      "Josiah",
+      "Silas",
+      "Levi",
+      "Nathaniel",
+      "Caleb",
+      "Rufus",
+      "Abner",
+      "Ephraim",
+      "Solomon",
+      "Ira",
+      "Cyrus",
+      "Luther",
+      "Orrin",
+      "Elias",
+      "Zachariah",
+      "Jeremiah",
+      "Enoch",
+      "Gideon",
+      "Asa",
+      "Reuben"
+    ],
+    "female_first": [
+      "Mary",
+      "Elizabeth",
+      "Sarah",
+      "Martha",
+      "Margaret",
+      "Catherine",
+      "Nancy",
+      "Jane",
+      "Harriet",
+      "Lucinda",
+      "Rachel",
+      "Rebecca",
+      "Hannah",
+      "Abigail",
+      "Ruth",
+      "Lydia",
+      "Eliza",
+      "Frances",
+      "Matilda",
+      "Caroline",
+      "Sophronia",
+      "Almira",
+      "Lavinia",
+      "Minerva",
+      "Cordelia",
+      "Permelia",
+      "Mahala",
+      "Tabitha",
+      "Patience",
+      "Prudence",
+      "Charity",
+      "Mercy",
+      "Delilah",
+      "Eunice",
+      "Phoebe",
+      "Keziah",
+      "Susannah",
+      "Dorcas",
+      "Parthenia",
+      "Emeline"
+    ],
+    "surnames": [
+      "Smith",
+      "Johnson",
+      "Williams",
+      "Brown",
+      "Jones",
+      "Miller",
+      "Davis",
+      "Wilson",
+      "Anderson",
+      "Taylor",
+      "Clark",
+      "Harris",
+      "Martin",
+      "Thompson",
+      "White",
+      "Jackson",
+      "Moore",
+      "Walker",
+      "Allen",
+      "King",
+      "Hall",
+      "Robinson",
+      "Lewis",
+      "Young",
+      "Scott",
+      "Baker",
+      "Adams",
+      "Green",
+      "Hill",
+      "Nelson",
+      "Carter",
+      "Mitchell",
+      "Campbell",
+      "Roberts",
+      "Turner",
+      "Phillips",
+      "Parker",
+      "Evans",
+      "Edwards",
+      "Collins",
+      "Stewart",
+      "Morris",
+      "Reed",
+      "Cook",
+      "Morgan",
+      "Bell",
+      "Murphy",
+      "Bailey",
+      "Cooper",
+      "Richardson",
+      "Applegate",
+      "Meek",
+      "Sublette",
+      "Burnett",
+      "Whitman"
+    ],
+    "regional_notes": "Names in the 1840s reflect predominantly British Isles and Northern European Protestant heritage. Biblical names are extremely common for both sexes \u2014 a company might include three Johns and two Marys. Surnames are overwhelmingly English, Scots-Irish, and German in origin. The last five surnames (Applegate, Meek, Sublette, Burnett, Whitman) are actual Oregon Trail figures. Some families use distinctive regional names: Sophronia, Almira, and Permelia were common in New England-descended families; Mahala and Keziah in southern and border-state families.",
+    "source": "U.S. Census records, 1840 and 1850; Oregon Donation Land Claim records; emigrant company rosters, 1843-1848"
+  }
+}
