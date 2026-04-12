@@ -88,3 +88,7 @@ export function getNextRiverCrossing(
 export function getTotalTrailDistance(ctx: HistoricalContext): number {
   return ctx.segments.reduce((sum, s) => sum + s.distance_miles, 0);
 }
+
+export function getLandmarkById(ctx: HistoricalContext, landmarkId: string): Landmark | undefined {
+  return ctx.landmarks.find(l => l.id === landmarkId);
+}

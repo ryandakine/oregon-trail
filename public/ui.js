@@ -149,6 +149,209 @@ const LANDMARK_ART = {
 `,
 };
 
+// ── Travel Animation Frames (frame-swap, NOT CSS parallax) ──
+
+const TERRAIN_FRAMES = {
+  prairie: [
+    `     ~  ~        ~  ~        ~  ~
+   ~    ~  ~    ~   ~    ~  ~    ~
+  ___         ___         ___
+ / . \\  ~~~  / . \\  ~~~  / . \\
+/~~~~~\\     /~~~~~\\     /~~~~~\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `  ~  ~        ~  ~        ~  ~
+    ~    ~  ~    ~   ~    ~  ~
+       ___         ___
+ ~~~  / . \\  ~~~  / . \\  ~~~
+     /~~~~~\\     /~~~~~\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `        ~  ~        ~  ~
+ ~  ~      ~    ~  ~    ~   ~
+ ___         ___         ___
+/ . \\  ~~~  / . \\  ~~~  / . \\
+~~~~~\\     /~~~~~\\     /~~~~~\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  ],
+  river_valley: [
+    ` \\\\    //    \\\\    //    \\\\
+  \\\\  //      \\\\  //      \\\\
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~ ~ ~ ~ ~ RIVER ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`,
+    `  \\\\    //    \\\\    //    \\\\
+   \\\\  //      \\\\  //      \\\\
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ ~ ~ ~ ~ ~ RIVER ~ ~ ~ ~ ~ ~ ~ ~ ~
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`,
+    `\\\\    //    \\\\    //    \\\\
+ \\\\  //      \\\\  //      \\\\
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ ~ ~ ~ ~ RIVER ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`,
+  ],
+  bluffs: [
+    `      /\\
+     /  \\      /\\
+    / .. \\    /  \\       /\\
+   /  ..  \\  / .  \\     / .\\
+  /________\\/______\\   /____\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `        /\\
+       /  \\      /\\
+      / .. \\    /  \\       /\\
+     /  ..  \\  / .  \\     / .\\
+    /________\\/______\\   /____\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `    /\\
+   /  \\      /\\
+  / .. \\    /  \\       /\\
+ /  ..  \\  / .  \\     / .\\
+/________\\/______\\   /____\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  ],
+  high_plains: [
+    `                                .
+.                          .
+       .        .                   .
+  .         .        .
+                .          .     .
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `  .                          .
+         .        .
+                         .     .
+    .         .        .
+                  .          .
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `         .                .
+  .                    .
+       .        .                .
+                    .     .
+  .         .        .          .
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  ],
+  mountains: [
+    `       /\\
+      /  \\   /\\
+     / /\\ \\ /  \\      /\\
+    / /  \\ / /\\ \\    /  \\
+   / /    / /  \\ \\  / /\\ \\
+  /_/    /_/    \\_\\/_/  \\_\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `         /\\
+        /  \\   /\\
+       / /\\ \\ /  \\      /\\
+      / /  \\ / /\\ \\    /  \\
+     / /    / /  \\ \\  / /\\ \\
+    /_/    /_/    \\_\\/_/  \\_\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `     /\\
+    /  \\   /\\
+   / /\\ \\ /  \\      /\\
+  / /  \\ / /\\ \\    /  \\
+ / /    / /  \\ \\  / /\\ \\
+/_/    /_/    \\_\\/_/  \\_\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  ],
+  desert: [
+    `         .  *         .  *
+   *          .   *
+.      *  .           *     .
+     .          *  .
+*       .   *          .  *
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `   .  *         .  *
+         *          .   *
+  .      *  .           *     .
+       .          *  .
+  *       .   *          .
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `           *         .  *
+     .  *          .   *
+  .      *  .           *
+       .     *    *  .       .
+*       .   *          .  *
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  ],
+  forest: [
+    `  |  |     |  |     |  |
+ /|  |\\   /|  |\\   /|  |\\
+/ |  | \\ / |  | \\ / |  | \\
+  |  |     |  |     |  |
+  |  |     |  |     |  |
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `    |  |     |  |     |  |
+   /|  |\\   /|  |\\   /|  |\\
+  / |  | \\ / |  | \\ / |  | \\
+    |  |     |  |     |  |
+    |  |     |  |     |  |
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `|  |     |  |     |  |
+|  |\\   /|  |\\   /|  |\\
+|  | \\ / |  | \\ / |  | \\
+|  |     |  |     |  |
+|  |     |  |     |  |
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  ],
+  canyon: [
+    `\\                          /
+ \\    SNAKE RIVER         /
+  \\    CANYON            /
+   \\                   /
+    \\  ~~~~~~~~~~~~  /
+     \\ ~~~~~~~~~~~~ /
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `  \\                          /
+   \\    SNAKE RIVER         /
+    \\    CANYON            /
+     \\                   /
+      \\  ~~~~~~~~~~~~  /
+       \\ ~~~~~~~~~~~~ /
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `\\                            /
+ \\      SNAKE RIVER         /
+  \\      CANYON            /
+   \\                     /
+    \\    ~~~~~~~~~~~~  /
+     \\  ~~~~~~~~~~~~ /
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  ],
+};
+
+const WAGON_TRAVEL = `       _____________
+  ____| ___     ___ |
+ |    ||   |   |   ||
+ |____|L___|___|___||
+ ~~~~~~~~o~~~~~~~o~~`;
+
+// ── Static NPC Dialogue Pools ─────────────────────
+
+const NPC_DIALOGUE = {
+  fort: [
+    { speaker: 'Fort Trader', text: 'Prices are higher here than Independence, friend. But you won\'t find another outfitter for two hundred miles.' },
+    { speaker: 'Army Sergeant', text: 'Keep your oxen fed and your powder dry. The plains ahead have neither shade nor mercy.' },
+    { speaker: 'Emigrant Wife', text: 'We buried our youngest at Ash Hollow. If your children fall ill, do not wait to rest.' },
+    { speaker: 'Blacksmith', text: 'I can patch an axle, but I can\'t replace one. You\'d best carry a spare.' },
+    { speaker: 'Scout', text: 'The Platte runs wide but shallow. Don\'t let that fool you -- the bottom is quicksand in places.' },
+    { speaker: 'Missionary', text: 'We have seen the elephant, as they say. Oregon is real, but the cost of reaching it is higher than any fare.' },
+    { speaker: 'Fur Trapper', text: 'The beaver are trapped out, but the land remains. That\'s why you\'re all headed west, I suppose.' },
+    { speaker: 'Army Doctor', text: 'Boil your water. I know it takes time, but cholera takes more.' },
+  ],
+  settlement: [
+    { speaker: 'Settler', text: 'We came through last year. Lost two oxen and a wagon tongue, but we made it.' },
+    { speaker: 'Innkeeper', text: 'Rest while you can. The Blue Mountains don\'t care how tired you are.' },
+    { speaker: 'Farmer\'s Wife', text: 'The soil here is rich, but Oregon\'s is richer. That\'s the promise, anyway.' },
+    { speaker: 'Old Timer', text: 'I\'ve watched a hundred wagons roll through. Maybe half make it all the way.' },
+    { speaker: 'Shopkeeper', text: 'Coffee, flour, and hope -- that\'s what keeps a wagon train moving.' },
+    { speaker: 'Preacher', text: 'The Lord provides, but He expects you to drive the wagon yourself.' },
+  ],
+  natural: [
+    { speaker: 'Fellow Traveler', text: 'They say Chimney Rock means you\'re a third of the way. Feels more like half already.' },
+    { speaker: 'Guide', text: 'Mark this place in your journal. You\'ll want to remember you were here.' },
+    { speaker: 'Pioneer', text: 'My grandfather would not believe his eyes if he could see this land.' },
+    { speaker: 'Cartographer', text: 'The maps say one thing. The trail says another. Trust the trail.' },
+  ],
+};
+
 class GameUI {
   constructor(engine) {
     this.engine = engine;
@@ -157,16 +360,23 @@ class GameUI {
     this.$narrative = document.getElementById('narrative');
     this.$actionBar = document.getElementById('action-bar');
     this.$newspaper = document.getElementById('newspaper-overlay');
+    this.$pause = document.getElementById('pause-overlay');
+    this.$tombstone = document.getElementById('tombstone-overlay');
 
     this._typingAbort = null;
     this._choiceCooldown = false;
     this._agencyStealTimer = null;
+    this._travelInterval = null;
+    this._travelFrameIdx = 0;
+    this._paused = false;
 
     engine.on('stateChange', (e) => this.onStateChange(e));
     engine.on('daysAdvanced', (e) => this.onDaysAdvanced(e));
     engine.on('loading', (loading) => this.onLoading(loading));
     engine.on('error', (e) => this.onError(e));
     engine.on('settingsChanged', (e) => this.onSettingsChanged(e));
+    engine.on('huntResults', (r) => this.onHuntResults(r));
+    engine.on('landmarkActionResult', (r) => this.onLandmarkActionResult(r));
 
     document.addEventListener('keydown', (e) => this.onKeyDown(e));
     document.addEventListener('click', () => this._completeTyping());
@@ -187,6 +397,7 @@ class GameUI {
       case 'EVENT':       this.renderEvent(data); break;
       case 'LANDMARK':    this.renderLandmark(data); break;
       case 'RIVER':       this.renderRiver(data); break;
+      case 'HUNTING':     this.renderHunt(); break;
       case 'DEATH':       this.renderDeath(data); break;
       case 'ARRIVAL':     this.renderArrival(); break;
       case 'WIPE':        this.renderWipe(); break;
@@ -250,19 +461,10 @@ class GameUI {
 
   async onDaysAdvanced({ summaries, days }) {
     this._clearLoading();
+    this._stopTravelAnimation();
 
     // Wipe narrative clean for each advance batch
     this.$narrative.innerHTML = '';
-
-    const gs = this.engine.gameState;
-    const miles = gs?.position?.miles_traveled || 0;
-    const terrain = this._getTerrain(miles);
-
-    // Show terrain ASCII art at top
-    const artEl = document.createElement('div');
-    artEl.className = 'terrain-art';
-    artEl.innerHTML = `<pre>${TERRAIN_ART[terrain] || TERRAIN_ART.prairie}</pre>`;
-    this.$narrative.appendChild(artEl);
 
     // Show day summaries
     for (const summary of summaries) {
@@ -333,6 +535,23 @@ class GameUI {
     // Complete typing on any key
     this._completeTyping();
 
+    // Pause toggle (P key)
+    if (e.key === 'p' || e.key === 'P') {
+      if (this.engine.state === 'TRAVEL' || this._paused) {
+        this._togglePause();
+        return;
+      }
+    }
+
+    // Hunt (H key)
+    if ((e.key === 'h' || e.key === 'H') && this.engine.state === 'TRAVEL') {
+      const ammo = this.engine.supplies?.ammo || 0;
+      if (ammo > 0) {
+        this.engine.startHunt();
+        return;
+      }
+    }
+
     if (e.key === 'Enter') {
       if (this._pendingRetry) {
         this._pendingRetry = false;
@@ -348,9 +567,13 @@ class GameUI {
 
     // Number keys for choices
     const num = parseInt(e.key);
-    if (num >= 1 && num <= 9 && this._pendingChoices) {
+    if (num >= 0 && num <= 9 && this._pendingChoices) {
+      if (num === 0 && this._zeroChoiceHandler) {
+        this._zeroChoiceHandler();
+        return;
+      }
       const idx = num - 1;
-      if (idx < this._pendingChoices.length) {
+      if (idx >= 0 && idx < this._pendingChoices.length) {
         this._selectChoice(idx);
       }
     }
@@ -365,6 +588,7 @@ class GameUI {
       this._choiceHandler(idx);
       this._choiceHandler = null;
       this._pendingChoices = null;
+      this._zeroChoiceHandler = null;
     }
   }
 
@@ -730,6 +954,7 @@ class GameUI {
       document.removeEventListener('keydown', this._storeKeyHandler);
       this._storeKeyHandler = null;
     }
+    this._stopTravelAnimation();
 
     this._clearLoading();
     this.$narrative.innerHTML = '';
@@ -737,18 +962,58 @@ class GameUI {
     this._updateRoster();
     this._updateActionBar();
 
-    // Show wagon art while loading
-    const waitEl = document.createElement('div');
-    waitEl.className = 'terrain-art';
-    waitEl.innerHTML = `<pre>${WAGON_ART}</pre>`;
-    this.$narrative.appendChild(waitEl);
+    // Build travel animation display
+    const gs = this.engine.gameState;
+    const miles = gs?.position?.miles_traveled || 0;
+    const terrain = this._getTerrain(miles);
+    const frames = TERRAIN_FRAMES[terrain] || TERRAIN_FRAMES.prairie;
+
+    this._travelFrameIdx = 0;
+
+    const displayDiv = document.createElement('div');
+    displayDiv.className = 'travel-display';
+
+    const terrainPre = document.createElement('pre');
+    terrainPre.className = 'terrain-frame';
+    terrainPre.textContent = frames[0];
+    displayDiv.appendChild(terrainPre);
+
+    const wagonPre = document.createElement('pre');
+    wagonPre.className = 'wagon-overlay';
+    wagonPre.textContent = WAGON_TRAVEL;
+    displayDiv.appendChild(wagonPre);
+
+    const statsDiv = document.createElement('div');
+    statsDiv.className = 'travel-stats';
+    statsDiv.textContent = `Mile ${miles}`;
+    displayDiv.appendChild(statsDiv);
+
+    this.$narrative.appendChild(displayDiv);
+
+    // Start frame-swap interval
+    this._travelInterval = setInterval(() => {
+      this._travelFrameIdx = (this._travelFrameIdx + 1) % frames.length;
+      terrainPre.style.opacity = '0';
+      setTimeout(() => {
+        terrainPre.textContent = frames[this._travelFrameIdx];
+        terrainPre.style.opacity = '1';
+      }, 150);
+    }, 1500);
 
     // Auto-advance
     setTimeout(() => this.engine.advance(), 100);
   }
 
+  _stopTravelAnimation() {
+    if (this._travelInterval) {
+      clearInterval(this._travelInterval);
+      this._travelInterval = null;
+    }
+  }
+
   // EVENT
   async renderEvent(eventData) {
+    this._stopTravelAnimation();
     this._clearLoading();
     this._updateTopBar();
     this._updateRoster();
@@ -853,6 +1118,7 @@ class GameUI {
 
   // LANDMARK
   renderLandmark(data) {
+    this._stopTravelAnimation();
     this._clearLoading();
     this._updateTopBar();
     this._updateRoster();
@@ -863,6 +1129,9 @@ class GameUI {
       this.engine.resolveLandmark('continue');
       return;
     }
+
+    // Store landmark data for action results
+    this._currentLandmarkData = data;
 
     // ASCII art for landmark type
     const lmType = data.type || 'natural';
@@ -891,14 +1160,29 @@ class GameUI {
     block.innerHTML = html;
     this.$narrative.appendChild(block);
 
-    // Options
+    // Data-driven buttons
     const choicesDiv = document.createElement('div');
     choicesDiv.className = 'choices';
-    const options = [
-      { label: 'Rest here', action: 'rest' },
-      { label: 'Look for trade', action: 'trade' },
-      { label: 'Continue on the trail', action: 'continue' },
-    ];
+    const options = [];
+    let choiceIdx = 1;
+
+    // Rest: only at forts and settlements
+    if (lmType === 'fort' || lmType === 'settlement') {
+      options.push({ label: 'Rest here (+health, 1 day)', action: 'rest' });
+    }
+
+    // Trade: only if trade_inventory exists and has items
+    if (data.trade_inventory && Object.keys(data.trade_inventory).length > 0) {
+      options.push({ label: 'Trade supplies', action: 'trade' });
+    }
+
+    // Talk: only at forts/settlements, uses static dialogue
+    if (lmType === 'fort' || lmType === 'settlement') {
+      options.push({ label: 'Talk to someone', action: 'talk' });
+    }
+
+    // Continue is always available
+    options.push({ label: 'Continue on the trail', action: 'continue' });
 
     options.forEach((opt, i) => {
       const btn = document.createElement('button');
@@ -913,16 +1197,157 @@ class GameUI {
 
     this._pendingChoices = options;
     this._choiceHandler = (idx) => {
+      const action = options[idx].action;
+
+      if (action === 'talk') {
+        this._showNPCDialogue(lmType);
+        return;
+      }
+
+      if (action === 'trade') {
+        this._showTradeScreen(data);
+        return;
+      }
+
+      if (action === 'rest') {
+        choicesDiv.querySelectorAll('.choice').forEach(b => {
+          b.classList.add('disabled');
+          b.disabled = true;
+        });
+        this.engine.resolveLandmark('rest');
+        return;
+      }
+
+      // continue
       choicesDiv.querySelectorAll('.choice').forEach(b => {
         b.classList.add('disabled');
         b.disabled = true;
       });
-      this.engine.resolveLandmark(options[idx].action);
+      this.engine.resolveLandmark('continue');
     };
+  }
+
+  _showNPCDialogue(landmarkType) {
+    const pool = NPC_DIALOGUE[landmarkType] || NPC_DIALOGUE.natural;
+    const npc = pool[Math.floor(Math.random() * pool.length)];
+
+    // Clear and show dialogue
+    this.$narrative.innerHTML = '';
+
+    const artEl = document.createElement('div');
+    artEl.className = 'terrain-art';
+    const art = LANDMARK_ART[landmarkType] || LANDMARK_ART.natural;
+    artEl.innerHTML = `<pre>${art}</pre>`;
+    this.$narrative.appendChild(artEl);
+
+    const dialogueDiv = document.createElement('div');
+    dialogueDiv.className = 'narrative-block';
+    dialogueDiv.innerHTML = `
+      <div class="narrative-dim" style="margin-top:0.5em">${this._esc(npc.speaker)}:</div>
+      <div class="narrative-italic">"${this._esc(npc.text)}"</div>
+    `;
+    this.$narrative.appendChild(dialogueDiv);
+
+    // Press Enter to go back
+    const promptDiv = document.createElement('div');
+    promptDiv.className = 'narrative-block narrative-dim';
+    promptDiv.textContent = 'Press ENTER to go back.';
+    this.$narrative.appendChild(promptDiv);
+    this._scrollNarrative();
+
+    this._pendingEnter = () => {
+      this.renderLandmark(this._currentLandmarkData);
+    };
+  }
+
+  _showTradeScreen(data) {
+    const inventory = data.trade_inventory || {};
+    const items = Object.entries(inventory);
+    if (items.length === 0) {
+      this.renderLandmark(this._currentLandmarkData);
+      return;
+    }
+
+    this.$narrative.innerHTML = '';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'narrative-block';
+    titleEl.innerHTML = `<div class="narrative-title">Trade at ${this._esc(data.name || 'Landmark')}</div>
+      <div class="narrative-dim">Available for trade:</div>`;
+    this.$narrative.appendChild(titleEl);
+
+    const tradeChoices = [];
+    const choicesDiv = document.createElement('div');
+    choicesDiv.className = 'choices';
+
+    items.forEach(([item, info], i) => {
+      const label = typeof info === 'object'
+        ? `${item}: ${info.quantity || '?'} available @ ${info.price || '?'}`
+        : `${item}: ${info}`;
+      tradeChoices.push({ item, info });
+      const btn = document.createElement('button');
+      btn.className = 'choice';
+      btn.innerHTML = `<span class="choice-number">[${i + 1}]</span> Buy ${this._esc(label)}`;
+      btn.addEventListener('click', () => {
+        choicesDiv.querySelectorAll('.choice').forEach(b => {
+          b.classList.add('disabled');
+          b.disabled = true;
+        });
+        this.engine.resolveLandmark('trade', [{ item, quantity: 1 }]);
+      });
+      choicesDiv.appendChild(btn);
+    });
+
+    // Back button
+    const backBtn = document.createElement('button');
+    backBtn.className = 'choice';
+    backBtn.innerHTML = `<span class="choice-number">[0]</span> Back`;
+    backBtn.addEventListener('click', () => {
+      this.renderLandmark(this._currentLandmarkData);
+    });
+    choicesDiv.appendChild(backBtn);
+
+    this.$narrative.appendChild(choicesDiv);
+    this._scrollNarrative();
+
+    this._pendingChoices = tradeChoices;
+    this._zeroChoiceHandler = () => {
+      this.renderLandmark(this._currentLandmarkData);
+    };
+    this._choiceHandler = (idx) => {
+      if (idx < tradeChoices.length) {
+        choicesDiv.querySelectorAll('.choice').forEach(b => {
+          b.classList.add('disabled');
+          b.disabled = true;
+        });
+        this.engine.resolveLandmark('trade', [{ item: tradeChoices[idx].item, quantity: 1 }]);
+      }
+    };
+  }
+
+  onLandmarkActionResult({ action, message }) {
+    this._clearLoading();
+    this._updateTopBar();
+    this._updateRoster();
+
+    // Show result message then re-render landmark
+    if (message) {
+      const msgEl = document.createElement('div');
+      msgEl.className = 'narrative-block';
+      msgEl.innerHTML = `<div class="narrative-text">${this._esc(message)}</div>`;
+      this.$narrative.appendChild(msgEl);
+      this._scrollNarrative();
+    }
+
+    // Re-render landmark after a beat
+    setTimeout(() => {
+      this.renderLandmark(this._currentLandmarkData);
+    }, 1500);
   }
 
   // RIVER
   renderRiver(data) {
+    this._stopTravelAnimation();
     this._clearLoading();
     this._updateTopBar();
     this._updateRoster();
@@ -1015,6 +1440,7 @@ class GameUI {
 
   // DEATH
   async renderDeath(data) {
+    this._stopTravelAnimation();
     this._clearLoading();
     this.$actionBar.innerHTML = '';
     this._updateRoster();
@@ -1023,6 +1449,21 @@ class GameUI {
     if (!data) {
       this._pendingEnter = () => this.engine.transition('TRAVEL');
       return;
+    }
+
+    // Handle both flat and array trigger_data shapes
+    let deathInfo = data;
+    if (Array.isArray(data)) {
+      deathInfo = data[0] || {};
+    }
+    if (data.all_deaths && Array.isArray(data.all_deaths)) {
+      deathInfo = data;
+    }
+
+    // If epitaph is missing, try to generate one
+    if (!deathInfo.epitaph && deathInfo.name) {
+      const generated = await this.engine.generateEpitaph(deathInfo.name);
+      if (generated) deathInfo.epitaph = generated;
     }
 
     // Grave ASCII art
@@ -1036,8 +1477,8 @@ class GameUI {
 
     block.innerHTML = `
       <div class="death-separator">\u2500\u2500\u2500 \u2020 \u2500\u2500\u2500</div>
-      <div class="death-name">${this._esc(data.name || 'Unknown')}</div>
-      <div class="narrative-dim">${this._esc(data.date || '')} &middot; ${this._esc(data.cause || '')}</div>
+      <div class="death-name">${this._esc(deathInfo.name || 'Unknown')}</div>
+      <div class="narrative-dim">${this._esc(deathInfo.date || '')} &middot; ${this._esc(deathInfo.cause || '')}</div>
       <div class="death-epitaph" id="death-epitaph"></div>
       <div class="death-separator">\u2500\u2500\u2500 \u2020 \u2500\u2500\u2500</div>
     `;
@@ -1047,24 +1488,38 @@ class GameUI {
 
     // Type epitaph slowly
     const epitaphEl = document.getElementById('death-epitaph');
-    if (data.epitaph && epitaphEl) {
-      await this.typeText(epitaphEl, data.epitaph, 25);
+    if (deathInfo.epitaph && epitaphEl) {
+      await this.typeText(epitaphEl, deathInfo.epitaph, 25);
     }
 
-    // Share button
+    // Share buttons
     const shareDiv = document.createElement('div');
     shareDiv.className = 'share-buttons';
+
     const copyBtn = document.createElement('button');
     copyBtn.className = 'share-btn';
     copyBtn.textContent = 'Copy epitaph';
     copyBtn.addEventListener('click', () => {
-      const text = `${data.name}\n${data.date}\n\n${data.epitaph || ''}\n\n-- The Oregon Trail AI Edition`;
+      const text = `${deathInfo.name}\n${deathInfo.date}\n\n${deathInfo.epitaph || ''}\n\n-- The Oregon Trail AI Edition`;
       navigator.clipboard.writeText(text).then(() => {
         copyBtn.textContent = 'Copied!';
         setTimeout(() => { copyBtn.textContent = 'Copy epitaph'; }, 2000);
       });
     });
     shareDiv.appendChild(copyBtn);
+
+    // Tombstone download button
+    const tombBtn = document.createElement('button');
+    tombBtn.className = 'share-btn';
+    tombBtn.textContent = 'Download Tombstone';
+    tombBtn.addEventListener('click', () => {
+      if (this.$tombstone && typeof renderTombstone === 'function') {
+        renderTombstone(this.$tombstone, deathInfo, this.engine);
+        this.$tombstone.classList.remove('hidden');
+      }
+    });
+    shareDiv.appendChild(tombBtn);
+
     this.$narrative.appendChild(shareDiv);
 
     // Continue prompt
@@ -1081,6 +1536,7 @@ class GameUI {
 
   // ARRIVAL
   renderArrival() {
+    this._stopTravelAnimation();
     this._clearLoading();
     this.$actionBar.innerHTML = '';
     this._updateRoster();
@@ -1154,6 +1610,7 @@ class GameUI {
 
   // WIPE
   renderWipe() {
+    this._stopTravelAnimation();
     this._clearLoading();
     this.$actionBar.innerHTML = '';
     this._updateRoster();
@@ -1258,6 +1715,289 @@ class GameUI {
     document.getElementById('share-replay')?.addEventListener('click', () => {
       this.engine.restart();
     });
+  }
+
+  // ── Pause Menu ──────────────────────────────
+
+  _togglePause() {
+    if (this._paused) {
+      // Resume
+      this._paused = false;
+      this.$pause.classList.add('hidden');
+      this.engine.resumeAdvance();
+      this.engine.advance();
+    } else {
+      // Pause (only in TRAVEL state)
+      if (this.engine.state !== 'TRAVEL') return;
+      this._paused = true;
+      this._stopTravelAnimation();
+      this.engine.pauseAdvance();
+      this.renderPause();
+      this.$pause.classList.remove('hidden');
+    }
+  }
+
+  renderPause() {
+    const gs = this.engine.gameState;
+    if (!gs) return;
+
+    const members = gs.party?.members || [];
+    const supplies = gs.supplies || {};
+    const position = gs.position || {};
+    const totalMiles = 1764;
+    const pct = Math.min(100, Math.round((position.miles_traveled || 0) / totalMiles * 100));
+    const currentPace = this.engine.pendingPace || gs.settings?.pace || 'steady';
+    const currentRations = this.engine.pendingRations || gs.settings?.rations || 'filling';
+    const paces = ['steady', 'strenuous', 'grueling'];
+    const rations = ['filling', 'meager', 'bare_bones'];
+
+    // Party section
+    let partyHtml = '';
+    members.forEach(m => {
+      if (m.alive) {
+        let healthClass = '';
+        if (m.health < 25) healthClass = 'critical';
+        else if (m.health < 50) healthClass = 'low';
+        const fillCls = 'health-fill' + (healthClass ? ' ' + healthClass : '');
+
+        let extras = '';
+        if (m.morale !== undefined) extras += ` Morale:${m.morale}`;
+        if (m.sanity !== undefined && gs.settings?.tone_tier === 'high') extras += ` Sanity:${m.sanity}`;
+        if (m.disease) extras += ` [${m.disease.id}]`;
+
+        partyHtml += `
+          <div class="pause-member">
+            <span class="pause-member-name">${this._esc(m.name)}</span>
+            <div class="health-bar"><span class="${fillCls}" style="width:${m.health}%"></span></div>
+            <span class="pause-member-stats">${m.health}%${extras}</span>
+          </div>`;
+      } else {
+        const death = gs.deaths?.find(d => d.name === m.name);
+        partyHtml += `
+          <div class="pause-member">
+            <span class="pause-member-name dead">${this._esc(m.name)}</span>
+            <span class="pause-member-stats">${death ? this._esc(death.cause) : 'Deceased'}</span>
+          </div>`;
+      }
+    });
+
+    // Supplies section (2 columns)
+    const supplyItems = [
+      ['Food', `${supplies.food || 0} lbs`],
+      ['Ammo', `${supplies.ammo || 0} rounds`],
+      ['Clothing', `${supplies.clothing || 0} sets`],
+      ['Spare Parts', `${supplies.spare_parts || 0}`],
+      ['Medicine', `${supplies.medicine || 0} doses`],
+      ['Money', this.engine.formatMoney(supplies.money || 0)],
+      ['Oxen', `${supplies.oxen || 0}`],
+    ];
+    let suppliesHtml = '<div class="pause-supplies-grid">';
+    supplyItems.forEach(([label, val]) => {
+      suppliesHtml += `<div class="pause-supply-item"><span class="pause-supply-label">${label}:</span><span>${val}</span></div>`;
+    });
+    suppliesHtml += '</div>';
+
+    // Trail section
+    const segment = position.current_segment_id || 'Unknown';
+    const trailHtml = `
+      <div>Miles: ${position.miles_traveled || 0} / ${totalMiles} (${pct}%)</div>
+      <div>Date: ${this._esc(this.engine.formatDate(position.date))}</div>
+      <div>Segment: ${this._esc(segment)}</div>
+    `;
+
+    // Journal section (last 8 entries)
+    const recentJournal = this.engine.fullJournal.slice(-8);
+    let journalHtml = '';
+    if (recentJournal.length > 0) {
+      recentJournal.forEach(entry => {
+        journalHtml += `<div class="pause-journal-entry">${this._esc(entry)}</div>`;
+      });
+    } else {
+      journalHtml = '<div class="narrative-dim">No journal entries yet.</div>';
+    }
+
+    // Pace/Rations controls
+    let paceHtml = paces.map(p =>
+      `<button class="action-btn${p === currentPace ? ' active' : ''}" data-pause-pace="${p}">${p}</button>`
+    ).join('');
+    let rationHtml = rations.map(r =>
+      `<button class="action-btn${r === currentRations ? ' active' : ''}" data-pause-ration="${r}">${r.replace('_', ' ')}</button>`
+    ).join('');
+
+    this.$pause.innerHTML = `
+      <div class="pause-menu">
+        <div class="pause-title">PAUSED</div>
+
+        <div class="pause-section">
+          <div class="pause-section-title">Party</div>
+          ${partyHtml}
+        </div>
+
+        <div class="pause-section">
+          <div class="pause-section-title">Supplies</div>
+          ${suppliesHtml}
+        </div>
+
+        <div class="pause-section">
+          <div class="pause-section-title">Trail</div>
+          ${trailHtml}
+        </div>
+
+        <div class="pause-section">
+          <div class="pause-section-title">Journal</div>
+          ${journalHtml}
+        </div>
+
+        <div class="pause-section">
+          <div class="pause-section-title">Settings</div>
+          <div class="pause-controls">
+            <span class="action-label">Pace:</span>
+            ${paceHtml}
+          </div>
+          <div class="pause-controls" style="margin-top:0.5em">
+            <span class="action-label">Rations:</span>
+            ${rationHtml}
+          </div>
+        </div>
+
+        <div class="pause-resume">Press P to resume</div>
+      </div>
+    `;
+
+    // Wire up pace/ration buttons inside pause menu
+    this.$pause.querySelectorAll('[data-pause-pace]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.engine.changePace(btn.dataset.pausePace);
+        this.renderPause();
+      });
+    });
+    this.$pause.querySelectorAll('[data-pause-ration]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.engine.changeRations(btn.dataset.pauseRation);
+        this.renderPause();
+      });
+    });
+  }
+
+  // ── Hunting ─────────────────────────────────
+
+  renderHunt() {
+    this._stopTravelAnimation();
+    this._clearLoading();
+    this._updateTopBar();
+    this._updateRoster();
+    this.$actionBar.innerHTML = '';
+    this.$narrative.innerHTML = '';
+
+    const ammo = this.engine.supplies?.ammo || 0;
+
+    const huntDiv = document.createElement('div');
+    huntDiv.className = 'hunt-screen';
+
+    huntDiv.innerHTML = `
+      <div class="hunt-box">
+        <div class="hunt-box-title">\u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 HUNTING \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510</div>
+        <div class="hunt-ammo">Ammo: ${ammo} rounds</div>
+        <div class="hunt-prompt">How many rounds to spend hunting?</div>
+      </div>
+    `;
+
+    this.$narrative.appendChild(huntDiv);
+
+    const choicesDiv = document.createElement('div');
+    choicesDiv.className = 'choices';
+
+    const huntOptions = [
+      { label: 'Careful shot (5 rounds)', ammo: 5 },
+      { label: 'Several shots (10 rounds)', ammo: 10 },
+      { label: 'Shooting spree (20 rounds)', ammo: 20 },
+    ];
+
+    // Filter options based on available ammo
+    const available = huntOptions.filter(o => o.ammo <= ammo);
+
+    available.forEach((opt, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'choice';
+      btn.innerHTML = `<span class="choice-number">[${i + 1}]</span> ${this._esc(opt.label)}`;
+      btn.addEventListener('click', () => this._selectChoice(i));
+      choicesDiv.appendChild(btn);
+    });
+
+    // Cancel option
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'choice';
+    cancelBtn.innerHTML = '<span class="choice-number">[0]</span> Cancel \u2014 return to trail';
+    cancelBtn.addEventListener('click', () => {
+      this._zeroChoiceHandler?.();
+    });
+    choicesDiv.appendChild(cancelBtn);
+
+    this.$narrative.appendChild(choicesDiv);
+    this._scrollNarrative();
+
+    this._pendingChoices = available;
+    this._zeroChoiceHandler = () => {
+      this._pendingChoices = null;
+      this._choiceHandler = null;
+      this._zeroChoiceHandler = null;
+      this.engine.resumeAdvance();
+      this.engine.transition('TRAVEL');
+    };
+    this._choiceHandler = (idx) => {
+      if (idx < available.length) {
+        choicesDiv.querySelectorAll('.choice').forEach(b => {
+          b.classList.add('disabled');
+          b.disabled = true;
+        });
+        this.engine.submitHunt(available[idx].ammo);
+      }
+    };
+  }
+
+  onHuntResults(results) {
+    this._clearLoading();
+    this.$narrative.innerHTML = '';
+
+    const huntDiv = document.createElement('div');
+    huntDiv.className = 'hunt-screen';
+
+    let resultText = '';
+    if (results) {
+      const hits = results.hits || {};
+      const parts = [];
+      if (hits.rabbit) parts.push(`${hits.rabbit} rabbit${hits.rabbit > 1 ? 's' : ''}`);
+      if (hits.deer) parts.push(`${hits.deer} deer`);
+      if (hits.buffalo) parts.push(`${hits.buffalo} buffalo`);
+      if (parts.length > 0) {
+        resultText = `You bagged ${parts.join(' and ')}!`;
+      } else {
+        resultText = 'You didn\'t hit anything.';
+      }
+      if (results.food_gained) {
+        resultText += ` +${results.food_gained} lbs food`;
+      }
+    } else {
+      resultText = 'The hunt is over.';
+    }
+
+    huntDiv.innerHTML = `
+      <div class="hunt-box">
+        <div class="hunt-box-title">HUNTING RESULTS</div>
+        <div class="hunt-results">${this._esc(resultText)}</div>
+      </div>
+      <div class="narrative-dim">Press ENTER to continue.</div>
+    `;
+
+    this.$narrative.appendChild(huntDiv);
+    this._updateTopBar();
+    this._updateRoster();
+    this._scrollNarrative();
+
+    this._pendingEnter = () => {
+      this.engine.resumeAdvance();
+      this.engine.transition('TRAVEL');
+    };
   }
 
   // ── Top Bar ──────────────────────────────────
@@ -1410,6 +2150,8 @@ class GameUI {
       `<button class="action-btn${r === currentRations ? ' active' : ''}" data-ration="${r}">${r.replace('_', ' ')}</button>`
     ).join('');
 
+    const ammo = gs.supplies?.ammo || 0;
+
     this.$actionBar.innerHTML = `
       <div class="action-controls">
         <div class="action-group">
@@ -1419,6 +2161,10 @@ class GameUI {
         <div class="action-group">
           <span class="action-label">Rations:</span>
           ${rationHtml}
+        </div>
+        <div class="action-group">
+          ${ammo > 0 ? '<button class="action-btn" id="action-hunt">[H]unt</button>' : ''}
+          <button class="action-btn" id="action-pause">[P]ause</button>
         </div>
       </div>
     `;
@@ -1435,6 +2181,14 @@ class GameUI {
         this.engine.changeRations(btn.dataset.ration);
         this._updateActionBar();
       });
+    });
+
+    document.getElementById('action-hunt')?.addEventListener('click', () => {
+      this.engine.startHunt();
+    });
+
+    document.getElementById('action-pause')?.addEventListener('click', () => {
+      this._togglePause();
     });
   }
 

@@ -14,7 +14,11 @@ import type {
   SignedGameState,
   HistoricalContext,
   ToneTier,
+  LandmarkRequest,
+  HuntRequest,
+  HuntResult,
 } from "./types";
+import { getLandmarkById } from "./context-loader";
 import ctx from "./historical-context.json";
 
 export interface Env {
@@ -104,6 +108,10 @@ export default {
           return await handleEpitaph(request, env, origin);
         case "/api/river":
           return await handleRiver(request, env, origin);
+        case "/api/landmark":
+          return await handleLandmark(request, env, origin);
+        case "/api/hunt":
+          return await handleHunt(request, env, origin);
         default:
           return jsonResponse({ error: "not_found" }, 404, origin);
       }
@@ -256,6 +264,16 @@ async function handleAdvance(
     state: result.state,
     signature,
   };
+
+  // Enrich landmark trigger_data with full landmark info
+  if (result.trigger === "landmark") {
+    const lm = (ctx as unknown as HistoricalContext).landmarks.find(
+      l => l.id === (result.triggerData as any).landmark_id
+    );
+    if (lm) {
+      result.triggerData = lm;
+    }
+  }
 
   const response: AdvanceResponse = {
     days_advanced: result.summaries.length,
@@ -544,4 +562,196 @@ async function handleRiver(
 
   const signature = await signState(next, env.HMAC_SECRET);
   return jsonResponse({ signed_state: { state: next, signature }, narrative }, 200, origin);
+}
+
+function mapTradeItemToSupplyKey(itemName: string): keyof GameState["supplies"] | null {
+  const lower = itemName.toLowerCase();
+  if (/flour|bacon|coffee|sugar|food/.test(lower)) return "food";
+  if (/ammunition|ammo/.test(lower)) return "ammo";
+  if (/clothing|blanket/.test(lower)) return "clothing";
+  if (/medicine|laudanum|quinine/.test(lower)) return "medicine";
+  if (/oxen|ox|mule/.test(lower)) return "oxen";
+  if (/wheel|axle|tongue/.test(lower)) return "spare_parts";
+  return null;
+}
+
+async function handleLandmark(
+  request: Request,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const body = (await request.json()) as LandmarkRequest;
+
+  const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
+  if (!verified.valid) {
+    return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  if (!body.landmark_id || !["rest", "trade"].includes(body.action)) {
+    return jsonResponse({ error: "invalid_request" }, 400, origin);
+  }
+
+  // Verify player has visited this landmark
+  if (!verified.state.simulation.visited_landmarks.includes(body.landmark_id)) {
+    return jsonResponse({ error: "landmark_not_visited" }, 400, origin);
+  }
+
+  const next = structuredClone(verified.state);
+  const historical = ctx as unknown as HistoricalContext;
+
+  if (body.action === "rest") {
+    // Advance date +1 day
+    const d = new Date(next.position.date + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() + 1);
+    next.position.date = d.toISOString().split("T")[0];
+
+    // Heal all living members +10 health (capped 100)
+    for (const member of next.party.members) {
+      if (!member.alive) continue;
+      member.health = Math.min(100, member.health + 10);
+    }
+
+    // Deduct food for the day
+    const alive = next.party.members.filter(m => m.alive).length;
+    const foodPerDay = 3 * alive; // filling rations equivalent for rest
+    next.supplies.food = Math.max(0, next.supplies.food - foodPerDay);
+
+    const signature = await signState(next, env.HMAC_SECRET);
+    return jsonResponse({
+      signed_state: { state: next, signature },
+      message: "The party rested for a day and recovered some strength.",
+    }, 200, origin);
+  }
+
+  // TRADE action
+  const landmark = getLandmarkById(historical, body.landmark_id);
+  if (!landmark) {
+    return jsonResponse({ error: "landmark_not_found" }, 400, origin);
+  }
+
+  if (!landmark.trade_inventory || landmark.trade_inventory.length === 0) {
+    return jsonResponse({ error: "no_trade_available" }, 400, origin);
+  }
+
+  if (!Array.isArray(body.trade_items) || body.trade_items.length === 0) {
+    return jsonResponse({ error: "no_items_specified" }, 400, origin);
+  }
+
+  let totalCost = 0;
+  const purchases: { supplyKey: keyof GameState["supplies"]; amount: number; name: string }[] = [];
+
+  for (const tradeReq of body.trade_items) {
+    if (!tradeReq.item || typeof tradeReq.quantity !== "number" || tradeReq.quantity <= 0) {
+      return jsonResponse({ error: `invalid_trade_item: ${tradeReq.item}` }, 400, origin);
+    }
+
+    const inventoryItem = landmark.trade_inventory.find(
+      ti => ti.item.toLowerCase() === tradeReq.item.toLowerCase()
+    );
+    if (!inventoryItem) {
+      return jsonResponse({ error: `item_not_available: ${tradeReq.item}` }, 400, origin);
+    }
+
+    const supplyKey = mapTradeItemToSupplyKey(inventoryItem.item);
+    if (!supplyKey) {
+      return jsonResponse({ error: `unmappable_item: ${tradeReq.item}` }, 400, origin);
+    }
+
+    const cost = inventoryItem.price_1848_cents * tradeReq.quantity;
+    totalCost += cost;
+
+    // Calculate supply amount: food items = 1 lb per 5 cents, others = quantity
+    let amount: number;
+    if (supplyKey === "food") {
+      amount = Math.max(1, Math.round((inventoryItem.price_1848_cents * tradeReq.quantity) / 5));
+    } else {
+      amount = tradeReq.quantity;
+    }
+
+    purchases.push({ supplyKey, amount, name: inventoryItem.item });
+  }
+
+  if (totalCost > next.supplies.money) {
+    return jsonResponse({ error: "insufficient_funds" }, 400, origin);
+  }
+
+  // Apply purchases
+  next.supplies.money -= totalCost;
+  for (const p of purchases) {
+    next.supplies[p.supplyKey] += p.amount;
+  }
+
+  const itemNames = purchases.map(p => p.name).join(", ");
+  const signature = await signState(next, env.HMAC_SECRET);
+  return jsonResponse({
+    signed_state: { state: next, signature },
+    message: `Traded for ${itemNames} at ${landmark.name}.`,
+  }, 200, origin);
+}
+
+async function handleHunt(
+  request: Request,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const body = (await request.json()) as HuntRequest;
+
+  const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
+  if (!verified.valid) {
+    return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  const ammoSpent = body.ammo_spent;
+  if (typeof ammoSpent !== "number" || ammoSpent <= 0) {
+    return jsonResponse({ error: "invalid_ammo_spent" }, 400, origin);
+  }
+  if (ammoSpent > verified.state.supplies.ammo) {
+    return jsonResponse({ error: "insufficient_ammo" }, 400, origin);
+  }
+  if (ammoSpent > 20) {
+    return jsonResponse({ error: "ammo_cap_exceeded: max 20 per hunt" }, 400, origin);
+  }
+
+  const next = structuredClone(verified.state);
+  const hits = { rabbit: 0, deer: 0, buffalo: 0, miss: 0 };
+  let foodGained = 0;
+
+  for (let i = 0; i < ammoSpent; i++) {
+    const roll = Math.random();
+    if (roll < 0.4) {
+      hits.miss++;
+    } else if (roll < 0.7) {
+      hits.rabbit++;
+      foodGained += 5;
+    } else if (roll < 0.9) {
+      hits.deer++;
+      foodGained += 15;
+    } else {
+      hits.buffalo++;
+      foodGained += 40;
+    }
+  }
+
+  // Cap food per hunt
+  foodGained = Math.min(200, foodGained);
+
+  // Apply: deduct ammo, add food, advance date +1 day
+  next.supplies.ammo -= ammoSpent;
+  next.supplies.food += foodGained;
+
+  const d = new Date(next.position.date + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  next.position.date = d.toISOString().split("T")[0];
+
+  const results: HuntResult = {
+    shots: ammoSpent,
+    hits,
+    food_gained: foodGained,
+  };
+
+  const signature = await signState(next, env.HMAC_SECRET);
+  return jsonResponse({
+    signed_state: { state: next, signature },
+    results,
+  }, 200, origin);
 }

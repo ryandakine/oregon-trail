@@ -287,6 +287,7 @@ class GameEngine {
           this.transition('EVENT', res.trigger_data);
           break;
         case 'landmark':
+          this.currentLandmark = res.trigger_data;
           this.transition('LANDMARK', res.trigger_data);
           break;
         case 'river':
@@ -363,10 +364,33 @@ class GameEngine {
     }
   }
 
-  async resolveLandmark(action) {
-    // Landmark actions: rest, trade, continue
-    // For MVP, just resume travel
-    this.transition('TRAVEL');
+  async resolveLandmark(action, tradeItems) {
+    if (action === 'continue') {
+      this.currentLandmark = null;
+      this.transition('TRAVEL');
+      return;
+    }
+
+    this.emit('loading', true);
+    try {
+      const body = {
+        signed_state: this.signedState,
+        landmark_id: this.currentLandmark?.id || this.currentLandmark?.name,
+        action,
+      };
+      if (action === 'trade' && tradeItems) {
+        body.trade_items = tradeItems;
+      }
+
+      const res = await this.api('/api/landmark', body);
+      this.signedState = res.signed_state;
+      this.emit('loading', false);
+      // Re-render landmark with updated state and message
+      this.emit('landmarkActionResult', { action, message: res.message });
+    } catch (e) {
+      this.emit('loading', false);
+      this.emit('error', { message: e.message, recoverable: true });
+    }
   }
 
   async generateNewspaper() {
@@ -407,6 +431,44 @@ class GameEngine {
       survivors: survivors.map(m => m.name),
       deaths: this.deaths,
     };
+  }
+
+  // ── Hunting ─────────────────────────────────
+
+  startHunt() {
+    if (this.state !== 'TRAVEL') return;
+    this.pauseAdvance();
+    this.transition('HUNTING');
+  }
+
+  async submitHunt(ammoSpent) {
+    this.emit('loading', true);
+    try {
+      const res = await this.api('/api/hunt', {
+        signed_state: this.signedState,
+        ammo_spent: ammoSpent,
+      });
+      this.signedState = res.signed_state;
+      this.emit('loading', false);
+      this.emit('huntResults', res.results);
+    } catch (e) {
+      this.emit('loading', false);
+      this.emit('error', { message: e.message, recoverable: true });
+    }
+  }
+
+  // ── Epitaph Generation ─────────────────────
+
+  async generateEpitaph(name) {
+    try {
+      const res = await this.api('/api/epitaph', {
+        signed_state: this.signedState,
+        name,
+      });
+      return res.epitaph || null;
+    } catch (_) {
+      return null;
+    }
   }
 
   changePace(pace) {

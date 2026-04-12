@@ -361,6 +361,24 @@ export interface EventApiResponse {
   signed_state: SignedGameState;
 }
 
+export interface LandmarkRequest {
+  signed_state: SignedGameState;
+  landmark_id: string;
+  action: "rest" | "trade";
+  trade_items?: { item: string; quantity: number }[];
+}
+
+export interface HuntRequest {
+  signed_state: SignedGameState;
+  ammo_spent: number;
+}
+
+export interface HuntResult {
+  shots: number;
+  hits: { rabbit: number; deer: number; buffalo: number; miss: number };
+  food_gained: number;
+}
+
 // ── Prompt Assembly Types ───────────────────────
 
 export interface AssembledPrompt {

@@ -213,12 +213,14 @@ export function advanceDays(
 
     // Short-circuit on death trigger
     if (deathTriggered) {
+      const todaysDeaths = next.deaths.filter((d) => d.date === dayDate);
       return {
         state: next,
         summaries,
         trigger: "death",
         triggerData: {
-          deaths: next.deaths.filter((d) => d.date === dayDate),
+          ...todaysDeaths[0],
+          all_deaths: todaysDeaths,
         },
       };
     }
