@@ -251,7 +251,8 @@ class GameEngine {
   }
 
   async advance() {
-    if (this._advancePaused) return;
+    if (this._advancePaused || this._advancing) return;
+    this._advancing = true;
     this.emit('loading', true);
     try {
       const body = { signed_state: this.signedState };
@@ -289,6 +290,7 @@ class GameEngine {
           this.transition('LANDMARK', res.trigger_data);
           break;
         case 'river':
+          this.currentRiver = res.trigger_data;
           this.transition('RIVER', res.trigger_data);
           break;
         case 'death':
@@ -308,6 +310,8 @@ class GameEngine {
     } catch (e) {
       this.emit('loading', false);
       this.emit('error', { message: e.message, recoverable: true });
+    } finally {
+      this._advancing = false;
     }
   }
 
@@ -337,9 +341,26 @@ class GameEngine {
   }
 
   async resolveRiver(choice) {
-    // River resolution is handled server-side
-    // Just resume travel
-    this.transition('TRAVEL');
+    if (!this.currentRiver) {
+      this.transition('TRAVEL');
+      return;
+    }
+    this.emit('loading', true);
+    try {
+      const res = await this.api('/api/river', {
+        signed_state: this.signedState,
+        crossing_id: this.currentRiver.id,
+        choice,
+      });
+      this.signedState = res.signed_state;
+      this.currentRiver = null;
+      this.emit('loading', false);
+      this.emit('riverResolved', { narrative: res.narrative, choice });
+      this.transition('TRAVEL');
+    } catch (e) {
+      this.emit('loading', false);
+      this.emit('error', { message: e.message, recoverable: true });
+    }
   }
 
   async resolveLandmark(action) {

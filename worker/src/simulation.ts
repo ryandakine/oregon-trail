@@ -223,7 +223,7 @@ export function advanceDays(
       };
     }
 
-    // 11. Landmark check
+    // 11. Landmark check (before rivers — player should "arrive" before "cross")
     const nextLm = getNextLandmark(ctx, next.position.miles_traveled - milesGained);
     if (
       nextLm &&
@@ -239,7 +239,7 @@ export function advanceDays(
       };
     }
 
-    // 12. River check
+    // 12. River check (after landmarks)
     const river = getNextRiverCrossing(
       ctx,
       next.position.current_segment_id,
