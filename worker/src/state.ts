@@ -124,6 +124,12 @@ export async function applyEventAndSign(
       member.health = Math.max(0, Math.min(100, member.health + c.health));
       if (member.health === 0) {
         member.alive = false;
+        next.deaths.push({
+          name: member.name,
+          date: next.position.date,
+          cause: event.title || "unknown",
+          epitaph: null,
+        });
       }
     }
     if (c.morale !== undefined) {
@@ -177,6 +183,9 @@ export async function applyStoreAndSign(
 
   let totalCost = 0;
   for (const purchase of purchases) {
+    if (!Number.isInteger(purchase.quantity) || purchase.quantity <= 0) {
+      throw new Error(`invalid_quantity: ${purchase.item} must be a positive integer`);
+    }
     const priceInfo = STORE_PRICES[purchase.item];
     if (!priceInfo) throw new Error(`unknown_item: ${purchase.item}`);
     const cost = purchase.quantity * priceInfo.price_cents;

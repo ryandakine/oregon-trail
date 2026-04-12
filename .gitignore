@@ -1,2 +1,4 @@
 node_modules/
 .claude/worktrees/
+.gstack/
+.dev.vars

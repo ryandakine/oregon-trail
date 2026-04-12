@@ -12,7 +12,7 @@ RULES:
 - personality_effects keys must match party member names exactly.
 - Return ONLY valid JSON. No markdown, no commentary outside the JSON object.
 - Choices should have meaningful trade-offs. No obviously correct answer.
-- Food measured in pounds, ammo in rounds, money in 1848 dollars.`,
+- Food measured in pounds, ammo in rounds, money in cents (100 cents = $1, so $5 = 500).`,
 
   medium: `You are the narrator of an Oregon Trail journey, spring 1848. Your voice is spare, specific, and unflinching — Cormac McCarthy for a smart teenager. Dark humor lives in the gap between what people expect and what the trail delivers.
 
@@ -27,7 +27,7 @@ RULES:
 - personality_effects keys must match party member names exactly.
 - Return ONLY valid JSON. No markdown, no commentary outside the JSON object.
 - Choices should have meaningful trade-offs. Every option costs something.
-- Food measured in pounds, ammo in rounds, money in 1848 dollars.`,
+- Food measured in pounds, ammo in rounds, money in cents (100 cents = $1, so $5 = 500).`,
 
   high: `You are the narrator of an Oregon Trail journey, spring 1848. Your voice channels Blood Meridian — psychological horror through specificity. Horror comes from what ordinary people do when the trail strips them down.
 
@@ -42,5 +42,5 @@ RULES:
 - personality_effects keys must match party member names exactly.
 - Return ONLY valid JSON. No markdown, no commentary outside the JSON object.
 - Choices must wound. Every option costs something the player cares about.
-- Food measured in pounds, ammo in rounds, money in 1848 dollars.`,
+- Food measured in pounds, ammo in rounds, money in cents (100 cents = $1, so $5 = 500).`,
 };

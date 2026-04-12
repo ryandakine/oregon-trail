@@ -72,7 +72,7 @@ export function buildPartyBlock(state: GameState): string {
   lines.push(`Party: ${memberLines.join(', ')}`);
 
   const s = state.supplies;
-  lines.push(`Supplies: food:${s.food}lb ammo:${s.ammo} clothes:${s.clothing} parts:${s.spare_parts} meds:${s.medicine} $${s.money} oxen:${s.oxen}`);
+  lines.push(`Supplies: food:${s.food}lb ammo:${s.ammo} clothes:${s.clothing} parts:${s.spare_parts} meds:${s.medicine} $${(s.money / 100).toFixed(2)} oxen:${s.oxen}`);
   lines.push(`Pace: ${state.settings.pace}, Rations: ${state.settings.rations}`);
 
   return truncateToTokenBudget(lines.join('\n'), 200);

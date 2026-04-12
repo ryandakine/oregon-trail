@@ -71,9 +71,13 @@ export function advanceDays(
     const weatherProfile = getWeather(ctx, month, segment.region);
     const paceModifier = weatherProfile?.pace_modifier ?? 1;
 
-    // 1. Advance miles
+    // 1. Advance miles (oxen required for movement)
     const baseMiles = PACE_MILES[next.settings.pace];
-    const milesGained = Math.round(baseMiles * paceModifier);
+    const oxenModifier = next.supplies.oxen >= 6 ? 1.0
+      : next.supplies.oxen >= 4 ? 0.7
+      : next.supplies.oxen >= 2 ? 0.4
+      : 0; // no oxen = no movement
+    const milesGained = Math.round(baseMiles * paceModifier * oxenModifier);
     next.position.miles_traveled += milesGained;
 
     // 2. Consume food

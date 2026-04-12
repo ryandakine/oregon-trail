@@ -33,9 +33,9 @@
   <script src="ui.js"></script>
   <script src="newspaper.js"></script>
   <script>
-    const engine = new GameEngine();
-    const ui = new GameUI(engine);
-    engine.init();
+    window.engine = new GameEngine();
+    window.ui = new GameUI(window.engine);
+    window.engine.init();
   </script>
 </body>
 </html>

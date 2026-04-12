@@ -70,9 +70,16 @@ export function parseEventResponse(raw: string): EventResponse {
     if (typeof choice.consequences !== "object" || choice.consequences === null) {
       throw new Error("choice missing consequences object");
     }
-    for (const key of Object.keys(choice.consequences)) {
+    for (const [key, val] of Object.entries(choice.consequences)) {
       if (!ALLOWED_CONSEQUENCE_KEYS.has(key)) {
         throw new Error(`invalid consequence key: ${key}`);
+      }
+      if (typeof val !== "number" || !Number.isFinite(val)) {
+        throw new Error(`consequence ${key} must be a finite number, got ${typeof val}`);
+      }
+      // Clamp to reasonable bounds
+      if (Math.abs(val as number) > 10000) {
+        (choice.consequences as Record<string, number>)[key] = Math.sign(val as number) * 10000;
       }
     }
   }
@@ -80,6 +87,14 @@ export function parseEventResponse(raw: string): EventResponse {
   // Validate personality_effects: Record<string, { sanity?: number; morale?: number }>
   if (typeof parsed.personality_effects !== "object" || parsed.personality_effects === null) {
     throw new Error("missing/invalid personality_effects");
+  }
+  for (const [, effects] of Object.entries(parsed.personality_effects)) {
+    const eff = effects as Record<string, unknown>;
+    for (const [k, v] of Object.entries(eff)) {
+      if (k !== "sanity" && k !== "morale") throw new Error(`invalid personality key: ${k}`);
+      if (typeof v !== "number" || !Number.isFinite(v)) throw new Error(`personality ${k} must be number`);
+      if (Math.abs(v as number) > 100) (eff as Record<string, number>)[k] = Math.sign(v as number) * 100;
+    }
   }
 
   return parsed as EventResponse;
