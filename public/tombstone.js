@@ -93,13 +93,37 @@ function renderTombstone(container, deathData, engine) {
         logging: false,
       });
 
-      const link = document.createElement('a');
-      link.download = `tombstone-${(deathData.name || 'unknown').toLowerCase().replace(/\s+/g, '-')}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      // Try native share first (Android share sheet), fall back to download
+      const shareText = `${deathData.name} died of ${deathData.cause || 'the trail'} on the Oregon Trail. "${deathData.epitaph || 'Gone too soon.'}" — trail.osi-cyber.com`;
 
-      btn.textContent = 'Downloaded!';
-      setTimeout(() => { btn.textContent = 'Download Image'; btn.disabled = false; }, 2000);
+      canvas.toBlob(async (blob) => {
+        if (blob && navigator.canShare?.({ files: [new File([blob], 'tombstone.png', { type: 'image/png' })] })) {
+          try {
+            await navigator.share({
+              title: 'Oregon Trail — AI Edition',
+              text: shareText,
+              files: [new File([blob], 'tombstone.png', { type: 'image/png' })],
+            });
+            btn.textContent = 'Shared!';
+          } catch (e) {
+            if (e.name !== 'AbortError') {
+              // Share cancelled or failed, fall back to download
+              const link = document.createElement('a');
+              link.download = `tombstone-${(deathData.name || 'unknown').toLowerCase().replace(/\s+/g, '-')}.png`;
+              link.href = canvas.toDataURL('image/png');
+              link.click();
+              btn.textContent = 'Downloaded!';
+            }
+          }
+        } else {
+          const link = document.createElement('a');
+          link.download = `tombstone-${(deathData.name || 'unknown').toLowerCase().replace(/\s+/g, '-')}.png`;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+          btn.textContent = 'Downloaded!';
+        }
+        setTimeout(() => { btn.textContent = 'Download Image'; btn.disabled = false; }, 2000);
+      }, 'image/png');
     } catch (e) {
       btn.textContent = 'Download failed';
       btn.disabled = false;

@@ -476,6 +476,10 @@ class GameUI {
       html += `<div class="day-miles">+${summary.miles} miles  |  -${summary.food_consumed}lb food</div>`;
       for (const evt of (summary.events || [])) {
         html += `<div class="day-event">${this._esc(evt)}</div>`;
+        // Haptic feedback for critical events
+        if (evt.includes('died') || evt.includes('dead')) navigator.vibrate?.([200]);
+        else if (evt.includes('ill') || evt.includes('cholera') || evt.includes('dysentery')) navigator.vibrate?.([100, 50, 100]);
+        else if (evt.includes('Starvation')) navigator.vibrate?.([50, 30, 50, 30, 50]);
       }
       el.innerHTML = html;
       this.$narrative.appendChild(el);
@@ -1444,6 +1448,7 @@ class GameUI {
     this._clearLoading();
     this.$actionBar.innerHTML = '';
     this._updateRoster();
+    navigator.vibrate?.([200]); // death haptic
     this.$narrative.innerHTML = '';
 
     if (!data) {
@@ -1614,6 +1619,7 @@ class GameUI {
     this._clearLoading();
     this.$actionBar.innerHTML = '';
     this._updateRoster();
+    navigator.vibrate?.([300, 100, 300]); // wipe haptic
 
     const gs = this.engine.gameState;
     const leader = gs?.party?.leader_name || 'Unknown';

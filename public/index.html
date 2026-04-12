@@ -8,17 +8,20 @@
   <meta property="og:title" content="The Oregon Trail — AI Edition">
   <meta property="og:description" content="Every run is a different story. An AI dungeon master generates unique events, dialogue, and endings grounded in real 1848 history.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="/og-image.png">
+  <meta property="og:image" content="/icons/icon-512.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="The Oregon Trail — AI Edition">
   <meta name="twitter:description" content="AI-native Oregon Trail. No two runs are the same.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <meta name="theme-color" content="#111111">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="terminal">
+  <div id="boot-screen">
+    <pre id="boot-text" style="color:#ffc832;font-family:'IBM Plex Mono',monospace;font-size:16px;padding:2ch;"></pre>
+  </div>
+  <div id="terminal" style="display:none;">
     <div id="top-bar"></div>
     <div id="game-area">
       <aside id="roster"></aside>
@@ -30,15 +33,43 @@
   <div id="pause-overlay" class="hidden"></div>
   <div id="tombstone-overlay" class="hidden"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="html2canvas.min.js"></script>
   <script src="game.js"></script>
   <script src="ui.js"></script>
   <script src="newspaper.js"></script>
   <script src="tombstone.js"></script>
   <script>
-    window.engine = new GameEngine();
-    window.ui = new GameUI(window.engine);
-    window.engine.init();
+    // Boot sequence animation
+    (async function boot() {
+      const el = document.getElementById('boot-text');
+      const lines = [
+        '> OREGON TRAIL SIMULATION v1848.04',
+        '> LOADING HISTORICAL CONTEXT...... OK',
+        '> INITIALIZING AI DUNGEON MASTER.. OK',
+        '> CALIBRATING TONE SYSTEM........ OK',
+        '> READY.',
+        ''
+      ];
+      for (const line of lines) {
+        for (let i = 0; i < line.length; i++) {
+          el.textContent += line[i];
+          await new Promise(r => setTimeout(r, 12));
+        }
+        el.textContent += '\n';
+        await new Promise(r => setTimeout(r, 150));
+      }
+      await new Promise(r => setTimeout(r, 400));
+      document.getElementById('boot-screen').style.display = 'none';
+      document.getElementById('terminal').style.display = '';
+      window.engine = new GameEngine();
+      window.ui = new GameUI(window.engine);
+      window.engine.init();
+    })();
+
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js');
+    }
   </script>
 </body>
 </html>

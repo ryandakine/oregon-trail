@@ -120,17 +120,36 @@ function renderNewspaper(container, data, engine) {
       if (actions) actions.style.display = '';
       if (closeBtn) closeBtn.style.display = '';
 
-      // Download
-      const link = document.createElement('a');
-      link.download = `oregon-trail-${leader.toLowerCase().replace(/\s+/g, '-')}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      // Try native share first, fall back to download
+      const shareText = `${data.headline || 'News from the Oregon Trail'} — trail.osi-cyber.com`;
 
-      btn.textContent = 'Downloaded!';
-      setTimeout(() => {
-        btn.textContent = 'Download as Image';
-        btn.disabled = false;
-      }, 2000);
+      canvas.toBlob(async (blob) => {
+        if (blob && navigator.canShare?.({ files: [new File([blob], 'newspaper.png', { type: 'image/png' })] })) {
+          try {
+            await navigator.share({
+              title: 'Oregon Trail — AI Edition',
+              text: shareText,
+              files: [new File([blob], 'newspaper.png', { type: 'image/png' })],
+            });
+            btn.textContent = 'Shared!';
+          } catch (e) {
+            if (e.name !== 'AbortError') {
+              const link = document.createElement('a');
+              link.download = `oregon-trail-${leader.toLowerCase().replace(/\s+/g, '-')}.png`;
+              link.href = canvas.toDataURL('image/png');
+              link.click();
+              btn.textContent = 'Downloaded!';
+            }
+          }
+        } else {
+          const link = document.createElement('a');
+          link.download = `oregon-trail-${leader.toLowerCase().replace(/\s+/g, '-')}.png`;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+          btn.textContent = 'Downloaded!';
+        }
+        setTimeout(() => { btn.textContent = 'Download as Image'; btn.disabled = false; }, 2000);
+      }, 'image/png');
     } catch (e) {
       btn.textContent = 'Download failed';
       btn.disabled = false;

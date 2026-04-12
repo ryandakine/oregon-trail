@@ -2,6 +2,31 @@
    Oregon Trail AI — Terminal Aesthetic
    ═══════════════════════════════════════════════════ */
 
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-400.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-700.ttf') format('truetype');
+}
+
+#boot-screen {
+  background: #111111;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 20vh;
+  justify-content: center;
+}
+
 :root {
   --amber: #ffc832;
   --bg: #111111;
