@@ -1,7 +1,7 @@
 import type { EventResponse, ToneTier } from "./types";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const MODEL = "claude-haiku-4-5-20250415";
+const MODEL = "claude-haiku-4-5-20251001";
 
 const ALLOWED_CONSEQUENCE_KEYS = new Set([
   "health", "food", "ammo", "clothing", "spare_parts",

@@ -9,7 +9,7 @@ if (!ANTHROPIC_API_KEY) {
 }
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-haiku-4-5-20250415';
+const MODEL = 'claude-haiku-4-5-20251001';
 const TIERS = ['low', 'medium', 'high'];
 const EVENTS_PER_TIER = 50;
 
