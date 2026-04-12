@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1920, height=1080">
+  <title>Screenshot: Title</title>
+  <link rel="stylesheet" href="../public/style.css">
+  <style>
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 400;
+      src: url('../public/fonts/ibm-plex-mono-400.ttf') format('truetype');
+    }
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 700;
+      src: url('../public/fonts/ibm-plex-mono-700.ttf') format('truetype');
+    }
+    html, body { width: 1920px; height: 1080px; overflow: hidden; margin: 0; padding: 0; }
+    .screenshot-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
+      padding: 2rem 2rem 4rem;
+      z-index: 200;
+      text-align: center;
+    }
+    .screenshot-tagline {
+      font-size: 2.5rem;
+      color: #ffc832;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 700;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.9);
+    }
+    #terminal { display: flex; max-width: 80ch; margin: 0 auto; min-height: 100vh; }
+    .title-prompt { animation: blink 1.2s step-end infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div class="screenshot-overlay">
+    <div class="screenshot-tagline">No two journeys are the same</div>
+  </div>
+
+  <div id="terminal" style="padding-top: 5rem;">
+    <div id="top-bar"></div>
+    <div id="game-area">
+      <aside id="roster"></aside>
+      <main id="narrative">
+        <div class="title-screen">
+<pre class="title-ascii"> _____ _            ___                           _____          _ _
+|_   _| |__   ___  / _ \ _ __ ___  __ _  ___  _ _|_   _| __ __ _(_) |
+  | | | '_ \ / _ \| | | | '__/ _ \/ _` |/ _ \| '_ \| || '__/ _` | | |
+  | | | | | |  __/| |_| | | |  __/ (_| | (_) | | | | || | | (_| | | |
+  |_| |_| |_|\___| \___/|_|  \___|\__, |\___/|_| |_|_||_|  \__,_|_|_|
+                                   |___/
+                        &#9472;&#9472; AI Edition &#9472;&#9472;</pre>
+          <div class="title-subtitle">Every playthrough is unique. An AI dungeon master generates<br>every event, grounded in real 1848 history.</div>
+
+          <div class="box" style="max-width:60ch;margin:1.5em auto;">
+            <div class="box-top"><span class="box-rule"></span></div>
+            <div class="box-mid">
+              <div class="box-content" style="text-align:center;padding:0.5em 1ch;">
+                <div style="color:#ffc832;font-weight:700;margin-bottom:0.5em;">CHALLENGE OF THE DAY</div>
+                <div class="narrative-dim" style="font-size:0.9em;">Reach Oregon City with all 5 party members alive on Unflinching difficulty. No medicine purchases allowed.</div>
+              </div>
+            </div>
+            <div class="box-bot"><span class="box-rule"></span></div>
+          </div>
+
+          <div class="title-rumor" style="max-width:60ch;margin:1em auto;font-style:italic;color:#887733;">"A man in Council Bluffs says the Shoshone will trade fresh horses for gunpowder near South Pass. Whether you can trust a man from Council Bluffs is another matter."</div>
+          <div class="title-prompt">[ Press ENTER to embark ]</div>
+        </div>
+        <div class="title-footer">Built by On-Site Intelligence &mdash; Denver, Colorado</div>
+      </main>
+    </div>
+    <div id="action-bar"></div>
+  </div>
+</body>
+</html>

@@ -73,6 +73,9 @@ function renderTombstone(container, deathData, engine) {
         <button class="share-btn" id="tombstone-copy">Copy Text</button>
         <button class="share-btn" id="tombstone-close">Close</button>
       </div>
+      <div class="tip-jar-subtle">
+        <a href="https://buymeacoffee.com/osicyber" target="_blank" rel="noopener" class="tip-jar-link">Support the Trail</a>
+      </div>
     </div>
   `;
 

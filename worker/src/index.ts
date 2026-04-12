@@ -1,4 +1,4 @@
-import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign } from "./state";
+import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES } from "./state";
 import { assembleEventPrompt } from "./prompt-assembly";
 import { callAnthropic, parseEventResponse, FALLBACK_EVENTS } from "./anthropic";
 import { advanceDays } from "./simulation";
@@ -49,7 +49,7 @@ function checkRateLimit(ip: string): boolean {
 function corsHeaders(origin: string): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
   };
@@ -117,6 +117,12 @@ export default {
           return await handleLandmark(request, env, origin);
         case "/api/hunt":
           return await handleHunt(request, env, origin);
+        case "/api/challenge":
+          if (request.method === "GET") {
+            const current = getCurrentChallenge();
+            return jsonResponse({ current, all: WEEKLY_CHALLENGES }, 200, origin);
+          }
+          return jsonResponse({ error: "method_not_allowed" }, 405, origin);
         default:
           return jsonResponse({ error: "not_found" }, 404, origin);
       }
@@ -161,6 +167,7 @@ async function handleStart(
     body.profession,
     body.tone_tier,
     env.HMAC_SECRET,
+    body.challenge_id,
   );
 
   // Static rumor pool (no LLM call — negative ROI for one line of flavor text)
@@ -200,6 +207,24 @@ async function handleStore(
     return jsonResponse({ error: "store_closed: already departed" }, 400, origin);
   }
 
+  // Challenge constraints: block restricted items
+  const storeChallenge = verified.state.settings.challenge_id
+    ? getChallengeById(verified.state.settings.challenge_id)
+    : undefined;
+  if (storeChallenge) {
+    for (const purchase of body.purchases) {
+      if (storeChallenge.no_ammo && purchase.item === "ammo") {
+        return jsonResponse({ error: "challenge_restricted: ammo" }, 400, origin);
+      }
+      if (storeChallenge.no_medicine && purchase.item === "medicine") {
+        return jsonResponse({ error: "challenge_restricted: medicine" }, 400, origin);
+      }
+      if (storeChallenge.no_spare_parts && purchase.item === "spare_parts") {
+        return jsonResponse({ error: "challenge_restricted: spare_parts" }, 400, origin);
+      }
+    }
+  }
+
   try {
     const signed_state = await applyStoreAndSign(
       verified.state,
@@ -228,10 +253,18 @@ async function handleAdvance(
   // Apply pace/rations changes from client before simulation
   const stateToAdvance = structuredClone(verified.state);
   const bodyAny = body as Record<string, unknown>;
-  if (bodyAny.pace && ["steady", "strenuous", "grueling"].includes(bodyAny.pace as string)) {
+  const advanceChallenge = stateToAdvance.settings.challenge_id
+    ? getChallengeById(stateToAdvance.settings.challenge_id)
+    : undefined;
+
+  if (advanceChallenge?.force_pace) {
+    stateToAdvance.settings.pace = advanceChallenge.force_pace;
+  } else if (bodyAny.pace && ["steady", "strenuous", "grueling"].includes(bodyAny.pace as string)) {
     stateToAdvance.settings.pace = bodyAny.pace as GameState["settings"]["pace"];
   }
-  if (bodyAny.rations && ["filling", "meager", "bare_bones"].includes(bodyAny.rations as string)) {
+  if (advanceChallenge?.force_rations) {
+    stateToAdvance.settings.rations = advanceChallenge.force_rations;
+  } else if (bodyAny.rations && ["filling", "meager", "bare_bones"].includes(bodyAny.rations as string)) {
     stateToAdvance.settings.rations = bodyAny.rations as GameState["settings"]["rations"];
   }
 
@@ -704,6 +737,14 @@ async function handleHunt(
   const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
   if (!verified.valid) {
     return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  // Challenge constraint: no hunting
+  const huntChallenge = verified.state.settings.challenge_id
+    ? getChallengeById(verified.state.settings.challenge_id)
+    : undefined;
+  if (huntChallenge?.no_hunting) {
+    return jsonResponse({ error: "hunting_not_allowed" }, 400, origin);
   }
 
   const ammoSpent = body.ammo_spent;

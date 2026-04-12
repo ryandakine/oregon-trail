@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1920, height=1080">
+  <title>Screenshot: Newspaper</title>
+  <link rel="stylesheet" href="../public/style.css">
+  <style>
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 400;
+      src: url('../public/fonts/ibm-plex-mono-400.ttf') format('truetype');
+    }
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 700;
+      src: url('../public/fonts/ibm-plex-mono-700.ttf') format('truetype');
+    }
+    html, body { width: 1920px; height: 1080px; overflow: hidden; margin: 0; padding: 0; }
+    .screenshot-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
+      padding: 2rem 2rem 4rem;
+      z-index: 200;
+      text-align: center;
+    }
+    .screenshot-tagline {
+      font-size: 2.5rem;
+      color: #ffc832;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 700;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.9);
+    }
+    /* Override newspaper positioning for screenshot */
+    #newspaper-overlay {
+      display: flex !important;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 2rem;
+    }
+    .newspaper { max-width: 1200px; width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="screenshot-overlay">
+    <div class="screenshot-tagline">AI writes your story</div>
+  </div>
+
+  <div id="newspaper-overlay">
+    <div class="newspaper">
+      <div class="newspaper-masthead">
+        <div class="newspaper-name">The Independence Gazette</div>
+        <div class="newspaper-dateline">
+          <span>October 14, 1848</span>
+          <span class="newspaper-powered">Powered by OSI</span>
+          <span>Vol. XII, No. 147</span>
+        </div>
+      </div>
+
+      <div class="newspaper-headline">WHITFIELD ARRIVES WITH 3 OF 5 AFTER HARROWING JOURNEY</div>
+      <div class="newspaper-byline">From our correspondent on the Oregon Trail</div>
+
+      <div class="newspaper-body">
+        <div class="newspaper-columns">
+          <p>The wagon of James Whitfield rolled into Oregon City on the morning of October 12th, bearing three weary survivors of what began as a party of five. The journey from Independence, Missouri had taken nearly six months and covered some 1,764 miles of unforgiving terrain.</p>
+          <p>Whitfield, a carpenter by trade, departed Independence on April 15th with high spirits and a well-provisioned wagon. His party included his wife Mary, their eldest son Thomas, daughter Sarah, and hired hand William Burke. The first weeks passed without serious incident, though the spring rains turned the prairie into a morass that slowed progress to a crawl.</p>
+          <p>Tragedy first struck near Ash Hollow, where William contracted cholera from contaminated water. Despite Mary's careful nursing and what medicine they carried, the young man succumbed within four days. They buried him beneath a cottonwood tree and pressed on.</p>
+          <p>The second blow came in the high desert beyond South Pass. Sarah, weakened by short rations and the relentless dust, developed a fever that worsened over three days. She passed quietly in her mother's arms on the morning of September 2nd, within sight of the Snake River.</p>
+          <p>The remaining Whitfields pushed through the Blue Mountains with grim determination, arriving in the Willamette Valley with barely twenty pounds of flour and two exhausted oxen. "We made it," Whitfield told this reporter. "That's all I can say. We made it."</p>
+        </div>
+
+        <div class="newspaper-sidebar">
+          <div class="newspaper-sidebar-title">Death Toll</div>
+          <div class="newspaper-death-entry">
+            <div class="newspaper-death-name">William Burke</div>
+            <div class="newspaper-death-detail">
+              Cholera<br>Mile 542 &mdash; June 18, 1848
+            </div>
+          </div>
+          <div class="newspaper-death-entry">
+            <div class="newspaper-death-name">Sarah Whitfield</div>
+            <div class="newspaper-death-detail">
+              Fever &amp; exhaustion<br>Mile 1,280 &mdash; September 2, 1848
+            </div>
+          </div>
+
+          <div class="newspaper-trail-map">
+            <div class="newspaper-sidebar-title">The Oregon Trail</div>
+<pre style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;line-height:1.3;color:#5a4a3a;">  Independence          Oregon City
+  o----+------+--+---+-X-----+--+--o
+  |                                |
+  0 mi                      1,764 mi
+                              X = Last known position
+                              (Mile 1764)</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="newspaper-footer">
+        Built by <strong>On-Site Intelligence</strong> &mdash; Denver, Colorado
+        &bull; Every playthrough is unique
+      </div>
+    </div>
+  </div>
+</body>
+</html>

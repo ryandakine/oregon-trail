@@ -247,6 +247,19 @@ export interface Settings {
   pace: Pace;
   rations: Rations;
   tone_tier: ToneTier;
+  challenge_id: string | null;
+}
+
+export interface ChallengeConstraints {
+  id: string;
+  money_multiplier: number;
+  force_pace: Pace | null;
+  force_rations: Rations | null;
+  force_tone: ToneTier | null;
+  no_ammo: boolean;
+  no_medicine: boolean;
+  no_spare_parts: boolean;
+  no_hunting: boolean;
 }
 
 export interface SimulationState {
@@ -313,6 +326,7 @@ export interface StartRequest {
   member_names: string[];
   profession: Profession;
   tone_tier: ToneTier;
+  challenge_id?: string | null;
 }
 
 export interface EventRequest {

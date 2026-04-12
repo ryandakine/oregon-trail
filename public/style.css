@@ -547,6 +547,19 @@ html, body {
   text-align: right;
 }
 
+.store-row.disabled {
+  opacity: 0.4;
+}
+
+.store-row.disabled .store-qty-btn {
+  cursor: not-allowed;
+}
+
+.store-row.disabled .store-qty-btn:hover {
+  background: none;
+  color: var(--amber);
+}
+
 .store-total {
   display: flex;
   justify-content: space-between;
@@ -1223,4 +1236,83 @@ html, body {
     padding-top: 1rem;
     margin-top: 1rem;
   }
+}
+
+/* ── Tip Jar ───────────────────────────────────── */
+
+.tip-jar {
+  text-align: center;
+  margin-top: 2em;
+  padding-top: 1em;
+  border-top: 1px solid #333;
+  color: var(--dim);
+  font-size: 0.85em;
+}
+.tip-jar-link {
+  color: var(--amber);
+  text-decoration: none;
+  border-bottom: 1px solid var(--dim);
+  transition: border-color 0.15s;
+}
+.tip-jar-link:hover {
+  border-bottom-color: var(--amber);
+}
+.tip-jar-subtle {
+  text-align: center;
+  margin-top: 1em;
+  font-size: 0.75em;
+  color: var(--dim);
+}
+
+/* ── Weekly Challenge ──────────────────────────── */
+
+.challenge-box {
+  border: 1px solid var(--amber);
+  padding: 1ch 2ch;
+  margin: 1.5em auto;
+  max-width: 50ch;
+  text-align: center;
+}
+.challenge-label {
+  color: var(--dim);
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  margin-bottom: 0.3em;
+}
+.challenge-name {
+  font-weight: 700;
+  font-size: 1.1em;
+  margin-bottom: 0.3em;
+}
+.challenge-desc {
+  color: var(--dim);
+  font-size: 0.9em;
+}
+.challenge-locked {
+  color: var(--dim);
+  font-style: italic;
+  font-size: 0.8em;
+}
+
+/* ── Resume Box ────────────────────────────────── */
+
+.resume-box {
+  border: 1px solid var(--amber);
+  padding: 1ch 2ch;
+  margin: 1em auto;
+  max-width: 50ch;
+  text-align: center;
+  background: rgba(255, 200, 50, 0.05);
+}
+.resume-label {
+  color: var(--amber);
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+.resume-info {
+  color: var(--dim);
+  font-size: 0.9em;
+  margin-top: 0.3em;
 }

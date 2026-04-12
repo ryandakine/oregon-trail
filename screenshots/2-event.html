@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1920, height=1080">
+  <title>Screenshot: Event</title>
+  <link rel="stylesheet" href="../public/style.css">
+  <style>
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 400;
+      src: url('../public/fonts/ibm-plex-mono-400.ttf') format('truetype');
+    }
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 700;
+      src: url('../public/fonts/ibm-plex-mono-700.ttf') format('truetype');
+    }
+    html, body { width: 1920px; height: 1080px; overflow: hidden; margin: 0; padding: 0; }
+    .screenshot-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
+      padding: 2rem 2rem 4rem;
+      z-index: 200;
+      text-align: center;
+    }
+    .screenshot-tagline {
+      font-size: 2.5rem;
+      color: #ffc832;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 700;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.9);
+    }
+    #terminal { display: flex; max-width: 80ch; margin: 0 auto; min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div class="screenshot-overlay">
+    <div class="screenshot-tagline">Every choice costs something</div>
+  </div>
+
+  <div id="terminal" style="padding-top: 6rem;">
+    <div id="top-bar">
+      <div class="top-bar-stats">
+        <span class="top-bar-item"><span class="top-bar-label">Date:</span> June 22, 1848</span>
+        <span class="top-bar-item"><span class="top-bar-label">Miles:</span> 612/1764</span>
+        <span class="top-bar-item"><span class="top-bar-label">Food:</span> 74lb</span>
+        <span class="top-bar-item"><span class="top-bar-label">Oxen:</span> 5</span>
+      </div>
+      <div class="trail-map">
+        <span class="map-label">Independence</span>
+        <span class="map-line">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;K&#9472;&#9472;&#9472;&#9472;&#9472;&#9608;&#9472;L&#9472;&#9472;&#9472;&#9472;&#9472;S&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;B&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;O</span>
+        <span class="map-label">Oregon City</span>
+      </div>
+      <div class="trail-map-pct">35% complete</div>
+    </div>
+
+    <div id="game-area">
+      <aside id="roster">
+        <div class="roster-header">Party</div>
+        <div class="roster-member">
+          <span class="roster-name">James</span>
+          <div class="health-bar"><span class="health-fill" style="width:78%"></span></div>
+        </div>
+        <div class="roster-member">
+          <span class="roster-name">Mary</span>
+          <div class="health-bar"><span class="health-fill" style="width:65%"></span></div>
+          <span class="roster-stats">cholera</span>
+        </div>
+        <div class="roster-member">
+          <span class="roster-name">Thomas</span>
+          <div class="health-bar"><span class="health-fill" style="width:82%"></span></div>
+        </div>
+        <div class="roster-member">
+          <span class="roster-name">Sarah</span>
+          <div class="health-bar"><span class="health-fill" style="width:71%"></span></div>
+        </div>
+        <div class="roster-member">
+          <span class="roster-name">William</span>
+          <div class="health-bar"><span class="health-fill low" style="width:44%"></span></div>
+        </div>
+
+        <div class="roster-header" style="margin-top:1em">Supplies</div>
+        <div class="roster-stats" style="display:block">
+          <div>Food: 74 lbs</div>
+          <div>Ammo: 140</div>
+          <div>Clothes: 4</div>
+          <div>Parts: 2</div>
+          <div>Medicine: 3</div>
+          <div>Money: $312.40</div>
+          <div>Oxen: 5</div>
+        </div>
+      </aside>
+
+      <main id="narrative">
+        <div class="narrative-separator">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</div>
+
+        <div class="narrative-block">
+          <div class="narrative-title">The Stranger's Bargain</div>
+        </div>
+
+        <div class="narrative-block narrative-text">
+A man sits beside the trail with a lame mule and a wagon full of medicine. He calls himself a doctor, though his hands shake and his coat is stained with something darker than mud. Mary's cholera is worsening — she hasn't kept water down since yesterday. The doctor says he can treat her, but his price is steep: sixty pounds of food, or all your remaining medicine and $200 cash. He nods toward William. "Your man there doesn't look well either. I'd act before the river crossing."
+        </div>
+
+        <div class="choices">
+          <button class="choice"><span class="choice-number">[1]</span> Pay the food — 60 lbs for his treatment of Mary</button>
+          <button class="choice"><span class="choice-number">[2]</span> Pay medicine + cash — hand over 3 doses and $200</button>
+          <button class="choice"><span class="choice-number">[3]</span> Refuse and nurse Mary yourself — save supplies, risk her life</button>
+        </div>
+      </main>
+    </div>
+
+    <div id="action-bar"></div>
+  </div>
+</body>
+</html>

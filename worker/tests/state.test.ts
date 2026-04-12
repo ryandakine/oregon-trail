@@ -4,6 +4,9 @@ import {
   verifyIncomingState,
   applyEventAndSign,
   applyStoreAndSign,
+  getChallengeById,
+  getCurrentChallenge,
+  WEEKLY_CHALLENGES,
 } from "../src/state";
 import type { EventResponse, SignedGameState } from "../src/types";
 
@@ -52,6 +55,7 @@ describe("createInitialState", () => {
     expect(state.settings.pace).toBe("steady");
     expect(state.settings.rations).toBe("filling");
     expect(state.settings.tone_tier).toBe("high");
+    expect(state.settings.challenge_id).toBeNull();
     expect(state.journal).toEqual([]);
     expect(state.deaths).toEqual([]);
     expect(state.simulation.starvation_days).toBe(0);
@@ -270,5 +274,79 @@ describe("full round-trip", () => {
 
     const carl = v2.state.party.members.find((m) => m.name === "Carl")!;
     expect(carl.sanity).toBe(95);
+  });
+});
+
+describe("weekly challenges", () => {
+  it("getChallengeById returns correct challenge", () => {
+    const c = getChallengeById("pacifist");
+    expect(c).toBeDefined();
+    expect(c!.no_hunting).toBe(true);
+    expect(c!.no_ammo).toBe(true);
+  });
+
+  it("getChallengeById returns undefined for unknown id", () => {
+    expect(getChallengeById("nonexistent")).toBeUndefined();
+  });
+
+  it("getCurrentChallenge returns a valid challenge", () => {
+    const c = getCurrentChallenge();
+    expect(c).toBeDefined();
+    expect(c.id).toBeTruthy();
+    expect(WEEKLY_CHALLENGES).toContain(c);
+  });
+
+  it("half_rations challenge halves starting money", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "banker", "medium", SECRET, "half_rations");
+    expect(state.supplies.money).toBe(Math.floor(1600_00 * 0.5));
+    expect(state.settings.challenge_id).toBe("half_rations");
+  });
+
+  it("penny_pinch challenge quarters starting money", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET, "penny_pinch");
+    expect(state.supplies.money).toBe(Math.floor(400_00 * 0.25));
+    expect(state.settings.challenge_id).toBe("penny_pinch");
+  });
+
+  it("speed_run forces grueling pace", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET, "speed_run");
+    expect(state.settings.pace).toBe("grueling");
+    expect(state.settings.challenge_id).toBe("speed_run");
+  });
+
+  it("bare_bones forces bare_bones rations", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET, "bare_bones");
+    expect(state.settings.rations).toBe("bare_bones");
+  });
+
+  it("nightmare forces high tone", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "low", SECRET, "nightmare");
+    expect(state.settings.tone_tier).toBe("high");
+  });
+
+  it("starvation_march forces pace + rations + reduces money", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "carpenter", "medium", SECRET, "starvation_march");
+    expect(state.settings.pace).toBe("grueling");
+    expect(state.settings.rations).toBe("meager");
+    expect(state.supplies.money).toBe(Math.floor(800_00 * 0.75));
+  });
+
+  it("null challengeId produces normal game", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET, null);
+    expect(state.settings.challenge_id).toBeNull();
+    expect(state.supplies.money).toBe(400_00);
+    expect(state.settings.pace).toBe("steady");
+  });
+
+  it("undefined challengeId produces normal game", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET);
+    expect(state.settings.challenge_id).toBeNull();
+    expect(state.supplies.money).toBe(400_00);
+  });
+
+  it("unknown challengeId produces normal game (no crash)", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET, "fake_challenge");
+    expect(state.settings.challenge_id).toBe("fake_challenge");
+    expect(state.supplies.money).toBe(400_00);
   });
 });

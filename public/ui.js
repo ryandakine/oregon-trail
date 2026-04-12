@@ -549,6 +549,8 @@ class GameUI {
 
     // Hunt (H key)
     if ((e.key === 'h' || e.key === 'H') && this.engine.state === 'TRAVEL') {
+      const challengeId = this.engine.gameState?.settings?.challenge_id;
+      if (challengeId === 'pacifist') return;
       const ammo = this.engine.supplies?.ammo || 0;
       if (ammo > 0) {
         this.engine.startHunt();
@@ -653,16 +655,89 @@ class GameUI {
                                    |___/
                         ── AI Edition ──`.trim();
 
-    const html = `
+    // Check for saved run
+    if (this.engine._savedRunData) {
+      const saved = this.engine._savedRunData;
+      const gs = saved.signedState?.state;
+      const miles = gs?.position?.miles_traveled || 0;
+      const date = gs?.position?.date || '1848-04-15';
+      const leader = saved.leaderName || 'Unknown';
+
+      this.$narrative.innerHTML = `
+        <div class="title-screen">
+          <pre class="title-ascii">${this._esc(ascii)}</pre>
+          <div class="title-subtitle">Every playthrough is unique. An AI dungeon master generates<br>every event, grounded in real 1848 history.</div>
+          <div class="resume-box">
+            <div class="resume-label">SAVED JOURNEY FOUND</div>
+            <div class="resume-info">${this._esc(leader)}'s party &mdash; Mile ${miles}, ${this.engine.formatDate(date)}</div>
+          </div>
+          <div class="choices">
+            <button class="choice" data-idx="0"><span class="choice-number">[1]</span> Continue saved journey</button>
+            <button class="choice" data-idx="1"><span class="choice-number">[2]</span> Start new journey</button>
+          </div>
+        </div>
+        <div class="title-footer">Built by On-Site Intelligence &mdash; Denver, Colorado</div>
+      `;
+
+      this._pendingChoices = ['resume', 'new'];
+      this._choiceHandler = (idx) => {
+        if (idx === 0) {
+          // Resume saved journey
+          const s = this.engine._savedRunData;
+          this.engine.signedState = s.signedState;
+          this.engine.profession = s.profession;
+          this.engine.leaderName = s.leaderName;
+          this.engine.memberNames = s.memberNames;
+          this.engine.fullJournal = s.fullJournal || [];
+          this.engine.activeChallenge = s.activeChallenge || null;
+          this.engine.currentEvent = s.currentEvent || null;
+          this.engine.currentRiver = s.currentRiver || null;
+          this.engine.currentLandmark = s.currentLandmark || null;
+          this.engine._savedRunData = null;
+          this.engine.transition('TRAVEL');
+        } else {
+          // New game — clear saved run and show challenge/normal choice
+          this.engine._clearSavedRun();
+          this.engine._savedRunData = null;
+          this._showTitleChallengeChoice(ascii);
+        }
+      };
+
+      this.$narrative.querySelectorAll('.choice').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.idx);
+          this._selectChoice(idx);
+        });
+      });
+      return;
+    }
+
+    // No saved run — show challenge/normal choice
+    this._showTitleChallengeChoice(ascii);
+  }
+
+  _showTitleChallengeChoice(ascii) {
+    const challengeKeys = Object.keys(CHALLENGE_INFO);
+    const challengeId = challengeKeys[Math.floor(Date.now() / 604800000) % challengeKeys.length];
+    const challenge = CHALLENGE_INFO[challengeId];
+
+    this.$narrative.innerHTML = `
       <div class="title-screen">
         <pre class="title-ascii">${this._esc(ascii)}</pre>
         <div class="title-subtitle">Every playthrough is unique. An AI dungeon master generates<br>every event, grounded in real 1848 history.</div>
         <div class="title-rumor" id="title-rumor"></div>
-        <div class="title-prompt">[ Press ENTER to embark ]</div>
+        <div class="challenge-box">
+          <div class="challenge-label">THIS WEEK'S CHALLENGE</div>
+          <div class="challenge-name">${this._esc(challenge.name)}</div>
+          <div class="challenge-desc">${this._esc(challenge.desc)}</div>
+        </div>
+        <div class="choices">
+          <button class="choice" data-idx="0"><span class="choice-number">[1]</span> Play this week's challenge</button>
+          <button class="choice" data-idx="1"><span class="choice-number">[2]</span> Play normal</button>
+        </div>
       </div>
       <div class="title-footer">Built by On-Site Intelligence &mdash; Denver, Colorado</div>
     `;
-    this.$narrative.innerHTML = html;
 
     // Type the rumor if we have one from a previous session
     const rumorEl = document.getElementById('title-rumor');
@@ -670,9 +745,22 @@ class GameUI {
       this.typeText(rumorEl, '"' + this.engine.rumor + '"', 15);
     }
 
-    this._pendingEnter = () => {
+    this._pendingChoices = ['challenge', 'normal'];
+    this._choiceHandler = (idx) => {
+      if (idx === 0) {
+        this.engine.activateChallenge(challengeId);
+      } else {
+        this.engine.activeChallenge = null;
+      }
       this.engine.transition('PROFESSION');
     };
+
+    this.$narrative.querySelectorAll('.choice').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        this._selectChoice(idx);
+      });
+    });
   }
 
   // PROFESSION
@@ -841,6 +929,13 @@ class GameUI {
       return total;
     };
 
+    // Challenge item restrictions
+    const challengeId = this.engine.activeChallenge;
+    const bannedItems = new Set();
+    if (challengeId === 'pacifist') bannedItems.add('ammo');
+    if (challengeId === 'iron_man') bannedItems.add('medicine');
+    if (challengeId === 'minimalist') bannedItems.add('spare_parts');
+
     const render = () => {
       const spent = calcTotal();
       const remaining = money - spent;
@@ -849,14 +944,16 @@ class GameUI {
       items.forEach(item => {
         const p = STORE_PRICES[item];
         const cost = quantities[item] * p.price_cents;
+        const banned = bannedItems.has(item);
+        if (banned) quantities[item] = 0;
         rowsHtml += `
-          <div class="store-row" data-item="${item}">
+          <div class="store-row${banned ? ' disabled' : ''}" data-item="${item}">
             <span class="store-item-name">${this._esc(item.replace('_', ' '))}</span>
-            <span class="store-item-price">${p.unit_label} @ ${this.engine.formatMoney(p.price_cents)}</span>
+            <span class="store-item-price">${banned ? '<span class="challenge-locked">NOT ALLOWED</span>' : `${p.unit_label} @ ${this.engine.formatMoney(p.price_cents)}`}</span>
             <div class="store-qty-controls">
-              <button class="store-qty-btn" data-item="${item}" data-dir="-1">&minus;</button>
+              <button class="store-qty-btn" data-item="${item}" data-dir="-1"${banned ? ' disabled' : ''}>&minus;</button>
               <span class="store-qty" id="qty-${item}">${quantities[item]}</span>
-              <button class="store-qty-btn" data-item="${item}" data-dir="1">+</button>
+              <button class="store-qty-btn" data-item="${item}" data-dir="1"${banned ? ' disabled' : ''}>+</button>
             </div>
             <span class="store-item-cost">${cost > 0 ? this.engine.formatMoney(cost) : ''}</span>
             <span class="store-tooltip">${this._esc(p.tooltip)}</span>
@@ -887,6 +984,7 @@ class GameUI {
       this.$narrative.querySelectorAll('.store-qty-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const item = btn.dataset.item;
+          if (bannedItems.has(item)) return;
           const dir = parseInt(btn.dataset.dir);
           const newQty = quantities[item] + dir;
           if (newQty < 0) return;
@@ -906,7 +1004,9 @@ class GameUI {
       const recBtn = document.getElementById('store-recommended');
       if (recBtn) {
         recBtn.addEventListener('click', () => {
-          const rec = RECOMMENDED_PURCHASES[this.engine.profession] || RECOMMENDED_PURCHASES.farmer;
+          const rec = { ...(RECOMMENDED_PURCHASES[this.engine.profession] || RECOMMENDED_PURCHASES.farmer) };
+          // Zero out banned items
+          for (const banned of bannedItems) rec[banned] = 0;
           Object.assign(quantities, rec);
           // Validate can afford
           if (calcTotal() > money) {
@@ -1605,6 +1705,12 @@ class GameUI {
     });
     choicesDiv.appendChild(newsBtn);
     this.$narrative.appendChild(choicesDiv);
+
+    // Tip jar
+    const tipDiv = document.createElement('div');
+    tipDiv.className = 'tip-jar';
+    tipDiv.innerHTML = 'Enjoyed the trail? <a href="https://buymeacoffee.com/osicyber" target="_blank" rel="noopener" class="tip-jar-link">Support the dev &rarr;</a>';
+    this.$narrative.appendChild(tipDiv);
     this._scrollNarrative();
 
     this._pendingChoices = ['newspaper'];
@@ -1651,6 +1757,12 @@ class GameUI {
     });
     choicesDiv.appendChild(newsBtn);
     this.$narrative.appendChild(choicesDiv);
+
+    // Tip jar
+    const tipDiv = document.createElement('div');
+    tipDiv.className = 'tip-jar';
+    tipDiv.innerHTML = 'Enjoyed the trail? <a href="https://buymeacoffee.com/osicyber" target="_blank" rel="noopener" class="tip-jar-link">Support the dev &rarr;</a>';
+    this.$narrative.appendChild(tipDiv);
     this._scrollNarrative();
 
     this._pendingChoices = ['newspaper'];
@@ -1692,6 +1804,10 @@ class GameUI {
           <button class="share-btn" id="share-reddit">Share on Reddit</button>
           <button class="share-btn" id="share-copy">Copy link</button>
           <button class="share-btn" id="share-replay">Play again</button>
+        </div>
+        <div class="tip-jar">
+          Enjoyed the trail?
+          <a href="https://buymeacoffee.com/osicyber" target="_blank" rel="noopener" class="tip-jar-link">Support the dev &rarr;</a>
         </div>
       </div>
     `;
@@ -2142,20 +2258,38 @@ class GameUI {
       return;
     }
 
+    const challengeId = gs.settings?.challenge_id || null;
     const currentPace = this.engine.pendingPace || gs.settings.pace;
     const currentRations = this.engine.pendingRations || gs.settings.rations;
 
     const paces = ['steady', 'strenuous', 'grueling'];
     const rations = ['filling', 'meager', 'bare_bones'];
 
-    let paceHtml = paces.map(p =>
-      `<button class="action-btn${p === currentPace ? ' active' : ''}" data-pace="${p}">${p}</button>`
-    ).join('');
+    // Challenge constraints for pace
+    const forcePace = challengeId === 'speed_run' || challengeId === 'starvation_march';
+    let paceHtml;
+    if (forcePace) {
+      paceHtml = `<span class="action-btn active">grueling</span><span class="challenge-locked">[LOCKED]</span>`;
+    } else {
+      paceHtml = paces.map(p =>
+        `<button class="action-btn${p === currentPace ? ' active' : ''}" data-pace="${p}">${p}</button>`
+      ).join('');
+    }
 
-    let rationHtml = rations.map(r =>
-      `<button class="action-btn${r === currentRations ? ' active' : ''}" data-ration="${r}">${r.replace('_', ' ')}</button>`
-    ).join('');
+    // Challenge constraints for rations
+    const forceRations = challengeId === 'bare_bones' ? 'bare_bones'
+      : challengeId === 'starvation_march' ? 'meager' : null;
+    let rationHtml;
+    if (forceRations) {
+      rationHtml = `<span class="action-btn active">${forceRations.replace('_', ' ')}</span><span class="challenge-locked">[LOCKED]</span>`;
+    } else {
+      rationHtml = rations.map(r =>
+        `<button class="action-btn${r === currentRations ? ' active' : ''}" data-ration="${r}">${r.replace('_', ' ')}</button>`
+      ).join('');
+    }
 
+    // Challenge constraint for hunting
+    const noHunting = challengeId === 'pacifist';
     const ammo = gs.supplies?.ammo || 0;
 
     this.$actionBar.innerHTML = `
@@ -2169,25 +2303,29 @@ class GameUI {
           ${rationHtml}
         </div>
         <div class="action-group">
-          ${ammo > 0 ? '<button class="action-btn" id="action-hunt">[H]unt</button>' : ''}
+          ${!noHunting && ammo > 0 ? '<button class="action-btn" id="action-hunt">[H]unt</button>' : ''}
           <button class="action-btn" id="action-pause">[P]ause</button>
         </div>
       </div>
     `;
 
-    this.$actionBar.querySelectorAll('[data-pace]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.engine.changePace(btn.dataset.pace);
-        this._updateActionBar();
+    if (!forcePace) {
+      this.$actionBar.querySelectorAll('[data-pace]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this.engine.changePace(btn.dataset.pace);
+          this._updateActionBar();
+        });
       });
-    });
+    }
 
-    this.$actionBar.querySelectorAll('[data-ration]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.engine.changeRations(btn.dataset.ration);
-        this._updateActionBar();
+    if (!forceRations) {
+      this.$actionBar.querySelectorAll('[data-ration]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this.engine.changeRations(btn.dataset.ration);
+          this._updateActionBar();
+        });
       });
-    });
+    }
 
     document.getElementById('action-hunt')?.addEventListener('click', () => {
       this.engine.startHunt();

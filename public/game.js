@@ -26,6 +26,20 @@ const RECOMMENDED_PURCHASES = {
   banker:    { food: 40, oxen: 3, clothing: 5, ammo: 10, spare_parts: 4, medicine: 5 },
 };
 
+// ── Weekly Challenge Info (mirrors server) ───────
+const CHALLENGE_INFO = {
+  half_rations: { name: 'Half Rations', desc: 'Start with 50% less money. Budget wisely.' },
+  speed_run: { name: 'Speed Run', desc: 'Grueling pace only. No slowing down.' },
+  pacifist: { name: 'Pacifist Run', desc: 'No ammunition. No hunting. Live off the land.' },
+  bare_bones: { name: 'Bare Bones', desc: 'Bare bones rations only. Every pound counts.' },
+  nightmare: { name: 'Nightmare Trail', desc: 'Psychological horror tier forced. The trail shows no mercy.' },
+  penny_pinch: { name: 'Penny Pincher', desc: 'Start with only 25% of normal funds.' },
+  starvation_march: { name: 'Starvation March', desc: 'Grueling pace, meager rations. Pure survival.' },
+  iron_man: { name: 'Iron Man', desc: 'No medicine allowed. Pray you stay healthy.' },
+  rich_fool: { name: 'Rich Fool', desc: 'Banker funds, but horror tier forced.' },
+  minimalist: { name: 'Minimalist', desc: '60% money, no spare parts.' },
+};
+
 // ── Micro-flavor text pools ──────────────────────
 
 const TRAIL_FLAVOR = {
@@ -103,6 +117,48 @@ class GameEngine {
     this.pendingPace = null;
     this.pendingRations = null;
     this._advancePaused = false;
+    this.activeChallenge = null;
+  }
+
+  // ── Challenge ───────────────────────────────
+
+  activateChallenge(challengeId) {
+    this.activeChallenge = challengeId;
+  }
+
+  static getCurrentChallengeId() {
+    const idx = Math.floor(Date.now() / 604800000) % Object.keys(CHALLENGE_INFO).length;
+    return Object.keys(CHALLENGE_INFO)[idx];
+  }
+
+  // ── Run Save/Restore (localStorage) ────────
+
+  _saveRun() {
+    if (!this.signedState) return;
+    try {
+      localStorage.setItem('ot_saved_run', JSON.stringify({
+        signedState: this.signedState,
+        profession: this.profession,
+        leaderName: this.leaderName,
+        memberNames: this.memberNames,
+        fullJournal: this.fullJournal,
+        activeChallenge: this.activeChallenge,
+        currentEvent: this.currentEvent,
+        currentRiver: this.currentRiver,
+        currentLandmark: this.currentLandmark,
+      }));
+    } catch (_) {}
+  }
+
+  _clearSavedRun() {
+    localStorage.removeItem('ot_saved_run');
+  }
+
+  _loadSavedRun() {
+    try {
+      const raw = localStorage.getItem('ot_saved_run');
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) { return null; }
   }
 
   // ── Event Emitter ────────────────────────────
@@ -123,6 +179,8 @@ class GameEngine {
       const saved = localStorage.getItem('ot_journal');
       if (saved) this.fullJournal = JSON.parse(saved);
     } catch (_) { /* ignore */ }
+
+    this._savedRunData = this._loadSavedRun();
     this.transition('TITLE');
   }
 
@@ -216,16 +274,20 @@ class GameEngine {
   async selectTone(tier) {
     this.emit('loading', true);
     try {
-      const res = await this.api('/api/start', {
+      const body = {
         leader_name: this.leaderName,
         member_names: this.memberNames,
         profession: this.profession,
         tone_tier: tier,
-      });
+      };
+      if (this.activeChallenge) body.challenge_id = this.activeChallenge;
+
+      const res = await this.api('/api/start', body);
       this.signedState = res.signed_state;
       this.rumor = res.rumor || null;
       this.fullJournal = [];
       localStorage.removeItem('ot_journal');
+      this._saveRun();
       this.emit('loading', false);
       this.transition('STORE', { rumor: this.rumor });
     } catch (e) {
@@ -242,6 +304,7 @@ class GameEngine {
         purchases,
       });
       this.signedState = res.signed_state;
+      this._saveRun();
       this.emit('loading', false);
       this.transition('TRAVEL');
     } catch (e) {
@@ -263,6 +326,7 @@ class GameEngine {
       this.signedState = res.signed_state;
       this.pendingPace = null;
       this.pendingRations = null;
+      this._saveRun();
 
       // Save journal entries to local backup
       if (res.summaries) {
@@ -298,9 +362,11 @@ class GameEngine {
           this.transition('DEATH', res.trigger_data);
           break;
         case 'arrival':
+          this._clearSavedRun();
           this.transition('ARRIVAL');
           break;
         case 'wipe':
+          this._clearSavedRun();
           this.transition('WIPE');
           break;
         default:
@@ -333,6 +399,7 @@ class GameEngine {
       });
       this.signedState = res.signed_state;
       this.currentEvent = null;
+      this._saveRun();
       this.emit('loading', false);
       this.transition('TRAVEL');
     } catch (e) {
@@ -355,6 +422,7 @@ class GameEngine {
       });
       this.signedState = res.signed_state;
       this.currentRiver = null;
+      this._saveRun();
       this.emit('loading', false);
       this.emit('riverResolved', { narrative: res.narrative, choice });
       this.transition('TRAVEL');
@@ -384,6 +452,7 @@ class GameEngine {
 
       const res = await this.api('/api/landmark', body);
       this.signedState = res.signed_state;
+      this._saveRun();
       this.emit('loading', false);
       // Re-render landmark with updated state and message
       this.emit('landmarkActionResult', { action, message: res.message });
@@ -449,6 +518,7 @@ class GameEngine {
         ammo_spent: ammoSpent,
       });
       this.signedState = res.signed_state;
+      this._saveRun();
       this.emit('loading', false);
       this.emit('huntResults', res.results);
     } catch (e) {
@@ -500,7 +570,9 @@ class GameEngine {
     this.pendingPace = null;
     this.pendingRations = null;
     this._advancePaused = false;
+    this.activeChallenge = null;
     localStorage.removeItem('ot_journal');
+    this._clearSavedRun();
     this.transition('TITLE');
   }
 }

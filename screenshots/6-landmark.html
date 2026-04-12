@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1920, height=1080">
+  <title>Screenshot: Landmark</title>
+  <link rel="stylesheet" href="../public/style.css">
+  <style>
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 400;
+      src: url('../public/fonts/ibm-plex-mono-400.ttf') format('truetype');
+    }
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-weight: 700;
+      src: url('../public/fonts/ibm-plex-mono-700.ttf') format('truetype');
+    }
+    html, body { width: 1920px; height: 1080px; overflow: hidden; margin: 0; padding: 0; }
+    .screenshot-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
+      padding: 2rem 2rem 4rem;
+      z-index: 200;
+      text-align: center;
+    }
+    .screenshot-tagline {
+      font-size: 2.5rem;
+      color: #ffc832;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 700;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.9);
+    }
+    #terminal { display: flex; max-width: 80ch; margin: 0 auto; min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div class="screenshot-overlay">
+    <div class="screenshot-tagline">Trade at real 1848 landmarks</div>
+  </div>
+
+  <div id="terminal" style="padding-top: 6rem;">
+    <div id="top-bar">
+      <div class="top-bar-stats">
+        <span class="top-bar-item"><span class="top-bar-label">Date:</span> May 18, 1848</span>
+        <span class="top-bar-item"><span class="top-bar-label">Miles:</span> 319/1764</span>
+        <span class="top-bar-item"><span class="top-bar-label">Food:</span> 142lb</span>
+        <span class="top-bar-item"><span class="top-bar-label">Oxen:</span> 6</span>
+      </div>
+      <div class="trail-map">
+        <span class="map-label">Independence</span>
+        <span class="map-line">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9608;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;L&#9472;&#9472;&#9472;&#9472;&#9472;S&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;B&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;O</span>
+        <span class="map-label">Oregon City</span>
+      </div>
+      <div class="trail-map-pct">18% complete</div>
+    </div>
+
+    <div id="game-area">
+      <aside id="roster">
+        <div class="roster-header">Party</div>
+        <div class="roster-member">
+          <span class="roster-name">James</span>
+          <div class="health-bar"><span class="health-fill" style="width:88%"></span></div>
+        </div>
+        <div class="roster-member">
+          <span class="roster-name">Mary</span>
+          <div class="health-bar"><span class="health-fill" style="width:85%"></span></div>
+        </div>
+        <div class="roster-member">
+          <span class="roster-name">Thomas</span>
+          <div class="health-bar"><span class="health-fill" style="width:92%"></span></div>
+        </div>
+        <div class="roster-member">
+          <span class="roster-name">Sarah</span>
+          <div class="health-bar"><span class="health-fill" style="width:80%"></span></div>
+        </div>
+        <div class="roster-member">
+          <span class="roster-name">William</span>
+          <div class="health-bar"><span class="health-fill" style="width:75%"></span></div>
+        </div>
+
+        <div class="roster-header" style="margin-top:1em">Supplies</div>
+        <div class="roster-stats" style="display:block">
+          <div>Food: 142 lbs</div>
+          <div>Ammo: 180</div>
+          <div>Clothes: 5</div>
+          <div>Parts: 3</div>
+          <div>Medicine: 5</div>
+          <div>Money: $524.60</div>
+          <div>Oxen: 6</div>
+        </div>
+      </aside>
+
+      <main id="narrative">
+        <div class="terrain-art">
+<pre>  &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+  &#9474;  &#9556;&#9552;&#9552;&#9559;     &#9556;&#9552;&#9552;&#9559;       &#9474;
+  &#9474;  &#9553;&#9619;&#9619;&#9553;     &#9553;&#9619;&#9619;&#9553;  FORT &#9474;
+  &#9474;  &#9553;&#9619;&#9619;&#9553;     &#9553;&#9619;&#9619;&#9553;       &#9474;
+  &#9474;  &#9568;&#9552;&#9552;&#9580;&#9552;&#9552;&#9552;&#9552;&#9552;&#9580;&#9552;&#9552;&#9571;       &#9474;
+  &#9474;  &#9553;  &#9553; &#9619;&#9619;&#9619; &#9553;  &#9553;       &#9474;
+  &#9492;&#9472;&#9472;&#9576;&#9472;&#9472;&#9576;&#9472;&#9472;&#9472;&#9472;&#9472;&#9576;&#9472;&#9472;&#9576;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;</pre>
+        </div>
+
+        <div class="narrative-block">
+          <div class="narrative-title">Fort Kearney</div>
+          <div class="narrative-text">A military outpost on the south bank of the Platte River, established just last year to protect emigrants on the Oregon Trail. The parade ground is busy with soldiers and travelers. A blacksmith works steadily at his forge, and a sutler's store offers supplies at frontier prices.</div>
+          <div class="narrative-italic">"The post is but one year old, and already it bears the look of a place that has seen too many pass through and too few remain."</div>
+          <div class="narrative-dim" style="font-size:0.8em">&mdash; Lt. Daniel Woodbury, 1848</div>
+        </div>
+
+        <div class="choices">
+          <button class="choice"><span class="choice-number">[1]</span> Rest here (+health, 1 day)</button>
+          <button class="choice"><span class="choice-number">[2]</span> Trade supplies</button>
+          <button class="choice"><span class="choice-number">[3]</span> Talk to someone</button>
+          <button class="choice"><span class="choice-number">[4]</span> Continue on the trail</button>
+        </div>
+      </main>
+    </div>
+
+    <div id="action-bar"></div>
+  </div>
+</body>
+</html>

@@ -6,6 +6,9 @@ import type {
   Supplies,
   EventResponse,
   StoreItem,
+  ChallengeConstraints,
+  Pace,
+  Rations,
 } from "./types";
 import { signState, verifyState } from "./hmac";
 
@@ -25,13 +28,42 @@ const STARTING_MONEY: Record<Profession, number> = {
   banker: 1600_00,
 };
 
+// ── Weekly Challenge Definitions ────────────────
+export const WEEKLY_CHALLENGES: ChallengeConstraints[] = [
+  { id: 'half_rations', money_multiplier: 0.5, force_pace: null, force_rations: null, force_tone: null, no_ammo: false, no_medicine: false, no_spare_parts: false, no_hunting: false },
+  { id: 'speed_run', money_multiplier: 1, force_pace: 'grueling', force_rations: null, force_tone: null, no_ammo: false, no_medicine: false, no_spare_parts: false, no_hunting: false },
+  { id: 'pacifist', money_multiplier: 1, force_pace: null, force_rations: null, force_tone: null, no_ammo: true, no_medicine: false, no_spare_parts: false, no_hunting: true },
+  { id: 'bare_bones', money_multiplier: 1, force_pace: null, force_rations: 'bare_bones', force_tone: null, no_ammo: false, no_medicine: false, no_spare_parts: false, no_hunting: false },
+  { id: 'nightmare', money_multiplier: 1, force_pace: null, force_rations: null, force_tone: 'high', no_ammo: false, no_medicine: false, no_spare_parts: false, no_hunting: false },
+  { id: 'penny_pinch', money_multiplier: 0.25, force_pace: null, force_rations: null, force_tone: null, no_ammo: false, no_medicine: false, no_spare_parts: false, no_hunting: false },
+  { id: 'starvation_march', money_multiplier: 0.75, force_pace: 'grueling', force_rations: 'meager', force_tone: null, no_ammo: false, no_medicine: false, no_spare_parts: false, no_hunting: false },
+  { id: 'iron_man', money_multiplier: 1, force_pace: null, force_rations: null, force_tone: null, no_ammo: false, no_medicine: true, no_spare_parts: false, no_hunting: false },
+  { id: 'rich_fool', money_multiplier: 1, force_pace: null, force_rations: null, force_tone: 'high', no_ammo: false, no_medicine: false, no_spare_parts: false, no_hunting: false },
+  { id: 'minimalist', money_multiplier: 0.6, force_pace: null, force_rations: null, force_tone: null, no_ammo: false, no_medicine: false, no_spare_parts: true, no_hunting: false },
+];
+
+export function getChallengeById(id: string): ChallengeConstraints | undefined {
+  return WEEKLY_CHALLENGES.find(c => c.id === id);
+}
+
+export function getCurrentChallenge(): ChallengeConstraints {
+  const weekNum = Math.floor(Date.now() / 604800000);
+  return WEEKLY_CHALLENGES[weekNum % WEEKLY_CHALLENGES.length];
+}
+
 export async function createInitialState(
   leaderName: string,
   memberNames: [string, string, string, string],
   profession: Profession,
   toneTier: ToneTier,
   secret: string,
+  challengeId?: string | null,
 ): Promise<SignedGameState> {
+  const challenge = challengeId ? getChallengeById(challengeId) : undefined;
+  const startingMoney = challenge
+    ? Math.floor(STARTING_MONEY[profession] * challenge.money_multiplier)
+    : STARTING_MONEY[profession];
+
   const state: GameState = {
     party: {
       leader_name: leaderName,
@@ -50,7 +82,7 @@ export async function createInitialState(
       clothing: 0,
       spare_parts: 0,
       medicine: 0,
-      money: STARTING_MONEY[profession],
+      money: startingMoney,
       oxen: 0,
     },
     position: {
@@ -59,9 +91,10 @@ export async function createInitialState(
       date: "1848-04-15",
     },
     settings: {
-      pace: "steady",
-      rations: "filling",
-      tone_tier: toneTier,
+      pace: challenge?.force_pace ?? "steady",
+      rations: challenge?.force_rations ?? "filling",
+      tone_tier: challenge?.force_tone ?? toneTier,
+      challenge_id: challengeId ?? null,
     },
     journal: [],
     deaths: [],
