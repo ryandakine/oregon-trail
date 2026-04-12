@@ -78,7 +78,12 @@ async function hashEvent(event: EventResponse): Promise<string> {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const origin = env.ALLOWED_ORIGIN || "*";
+    // Support multiple allowed origins
+    const requestOrigin = request.headers.get("Origin") || "";
+    const allowedOrigins = (env.ALLOWED_ORIGIN || "*").split(",").map(s => s.trim());
+    const origin = allowedOrigins.includes(requestOrigin) ? requestOrigin
+      : allowedOrigins.includes("*") ? "*"
+      : allowedOrigins[0];
     const url = new URL(request.url);
 
     // CORS preflight
