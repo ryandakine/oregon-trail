@@ -3,6 +3,152 @@
    DOM manipulation + rendering. Subscribes to engine.
    ═══════════════════════════════════════════════════ */
 
+// ── ASCII Art ──────────────────────────────────────
+
+const WAGON_ART = `
+     _____________________
+    |   ___         ___   |
+    |  |   |       |   |  |
+    |__|___|_______|___|__|
+       o               o
+      /|\\             /|\\
+`;
+
+const TERRAIN_ART = {
+  prairie: `
+    ~  ~     ~  ~     ~  ~     ~  ~
+  ~    ~  ~    ~  ~    ~  ~    ~
+    _____         ___
+   /     \\~  ~  /   \\~  ~   ~  ~
+  / grass \\    / hay  \\
+ /~~~~~~~~~\\  /~~~~~~~\\  ~  ~   ~
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`,
+  river_valley: `
+   \\\\    //    \\\\    //
+    \\\\  //      \\\\  //
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ ~  ~  ~  ~  ~  RIVER  ~  ~  ~  ~  ~
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    //  \\\\      //  \\\\
+   //    \\\\    //    \\\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`,
+  bluffs: `
+        /\\
+       /  \\      /\\
+      / .. \\    /  \\       /\\
+     /  ..  \\  / .  \\     / .\\
+    /  ....  \\/  ..  \\   / .. \\
+   /_________ \\______.\\ /_____.\\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`,
+  high_plains: `
+                                  .
+  .                          .
+         .        .                   .
+    .         .        .
+                  .          .     .
+  .       .            .
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  nothing but sky and dust
+`,
+  mountains: `
+         /\\
+        /  \\   /\\
+       / /\\ \\ /  \\      /\\
+      / /  \\ / /\\ \\    /  \\
+     / /    / /  \\ \\  / /\\ \\
+    /_/    /_/    \\_\\/_/  \\_\\
+   /  ROCKY  MOUNTAINS  \\
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`,
+  desert: `
+           .  *         .  *
+     *          .   *
+  .      *  .           *     .
+       .          *  .
+  *       .   *          .  *
+              ~alkali~
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  bones bleach beside the trail
+`,
+  forest: `
+    |  |     |  |     |  |
+   /|  |\\   /|  |\\   /|  |\\
+  / |  | \\ / |  | \\ / |  | \\
+ /  |  |  /  |  |  /  |  |  \\
+/   |  | /   |  | /   |  |   \\
+    |  |     |  |     |  |
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`,
+  canyon: `
+  \\                          /
+   \\    SNAKE RIVER         /
+    \\    CANYON            /
+     \\                   /
+      \\  ~~~~~~~~~~~~  /
+       \\ ~~~~~~~~~~~~ /
+        \\~~~~~~~~~~~~/
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`,
+};
+
+const GRAVE_ART = `
+        _____
+       |     |
+       | R   |
+       | I   |
+       | P   |
+       |_____|
+      /       \\
+     /  ~   ~  \\
+━━━━━━━━━━━━━━━━━━
+`;
+
+const LANDMARK_ART = {
+  fort: `
+  ┌──────────────────────┐
+  │  ╔══╗     ╔══╗       │
+  │  ║▓▓║     ║▓▓║  FORT │
+  │  ║▓▓║     ║▓▓║       │
+  │  ╠══╬═════╬══╣       │
+  │  ║  ║ ▓▓▓ ║  ║       │
+  └──╨──╨─────╨──╨───────┘
+`,
+  natural: `
+     *  .  Chimney Rock  .  *
+        __|__
+       |     |
+       |  .  |
+       | . . |
+      /| . . |\\
+     / |_____|  \\
+    /     ||     \\
+━━━━━━━━━━━━━━━━━━━━━━━━━
+`,
+  river_crossing: `
+  ~~~~~ RIVER CROSSING ~~~~~
+  ===========================
+  ~~ ~  ~~ ~ ~~ ~ ~~ ~  ~~ ~
+  ~ ~~ ~ ~~ ~~ ~ ~ ~~ ~ ~~ ~
+  ===========================
+  [FORD]  [CAULK]  [FERRY]
+`,
+  destination: `
+      \\   OREGON CITY   /
+       \\    ___   ___  /
+        \\  | W | | I |/
+         \\ | E | | L |
+          \\| L | | L |
+           | C | | A |
+           | O | | M |
+           | M | | E |
+           |___|_|___|
+━━━━━━━━━━━━━━━━━━━━━━━━━
+`,
+};
+
 class GameUI {
   constructor(engine) {
     this.engine = engine;
@@ -105,31 +251,54 @@ class GameUI {
   async onDaysAdvanced({ summaries, days }) {
     this._clearLoading();
 
+    // Wipe narrative clean for each advance batch
+    this.$narrative.innerHTML = '';
+
+    const gs = this.engine.gameState;
+    const miles = gs?.position?.miles_traveled || 0;
+    const terrain = this._getTerrain(miles);
+
+    // Show terrain ASCII art at top
+    const artEl = document.createElement('div');
+    artEl.className = 'terrain-art';
+    artEl.innerHTML = `<pre>${TERRAIN_ART[terrain] || TERRAIN_ART.prairie}</pre>`;
+    this.$narrative.appendChild(artEl);
+
+    // Show day summaries
     for (const summary of summaries) {
       const hasEvents = summary.events && summary.events.length > 0;
       const el = document.createElement('div');
       el.className = 'day-summary' + (hasEvents ? ' event-day' : '');
 
-      let html = `<div class="day-date">${this._esc(this.engine.formatDate(summary.date))} - ${summary.miles} mi</div>`;
+      let html = `<div class="day-date">${this._esc(this.engine.formatDate(summary.date))}</div>`;
+      html += `<div class="day-miles">+${summary.miles} miles  |  -${summary.food_consumed}lb food</div>`;
       for (const evt of (summary.events || [])) {
         html += `<div class="day-event">${this._esc(evt)}</div>`;
       }
       el.innerHTML = html;
       this.$narrative.appendChild(el);
-      this._scrollNarrative();
 
-      // Tick delay: 400ms for event days, 200ms for quiet
       await this._delay(hasEvents ? 400 : 200);
+    }
+
+    // Add flavor text
+    if (summaries.length > 0 && Math.random() < 0.4) {
+      this._addFlavorText();
     }
 
     // Update top bar and roster
     this._updateTopBar();
     this._updateRoster();
+  }
 
-    // Add occasional flavor text between advances
-    if (summaries.length > 0 && Math.random() < 0.3) {
-      this._addFlavorText();
-    }
+  _getTerrain(miles) {
+    if (miles > 1500) return 'forest';
+    if (miles > 1200) return 'mountains';
+    if (miles > 900) return 'canyon';
+    if (miles > 600) return 'high_plains';
+    if (miles > 400) return 'bluffs';
+    if (miles > 100) return 'river_valley';
+    return 'prairie';
   }
 
   _addFlavorText() {
@@ -563,18 +732,16 @@ class GameUI {
     }
 
     this._clearLoading();
+    this.$narrative.innerHTML = '';
     this._updateTopBar();
     this._updateRoster();
     this._updateActionBar();
 
-    // Don't clear narrative — let day summaries accumulate
-    // But limit scroll history
-    const blocks = this.$narrative.querySelectorAll('.narrative-block, .day-summary');
-    if (blocks.length > 50) {
-      for (let i = 0; i < blocks.length - 30; i++) {
-        blocks[i].remove();
-      }
-    }
+    // Show wagon art while loading
+    const waitEl = document.createElement('div');
+    waitEl.className = 'terrain-art';
+    waitEl.innerHTML = `<pre>${WAGON_ART}</pre>`;
+    this.$narrative.appendChild(waitEl);
 
     // Auto-advance
     setTimeout(() => this.engine.advance(), 100);
@@ -690,16 +857,20 @@ class GameUI {
     this._updateTopBar();
     this._updateRoster();
     this.$actionBar.innerHTML = '';
+    this.$narrative.innerHTML = '';
 
     if (!data) {
       this.engine.resolveLandmark('continue');
       return;
     }
 
-    const sep = document.createElement('div');
-    sep.className = 'narrative-separator';
-    sep.textContent = '\u2500'.repeat(40);
-    this.$narrative.appendChild(sep);
+    // ASCII art for landmark type
+    const lmType = data.type || 'natural';
+    const art = LANDMARK_ART[lmType] || LANDMARK_ART.natural;
+    const artEl = document.createElement('div');
+    artEl.className = 'terrain-art';
+    artEl.innerHTML = `<pre>${art}</pre>`;
+    this.$narrative.appendChild(artEl);
 
     let html = `
       <div class="narrative-block">
@@ -756,16 +927,18 @@ class GameUI {
     this._updateTopBar();
     this._updateRoster();
     this.$actionBar.innerHTML = '';
+    this.$narrative.innerHTML = '';
 
     if (!data) {
       this.engine.resolveRiver('ford');
       return;
     }
 
-    const sep = document.createElement('div');
-    sep.className = 'narrative-separator';
-    sep.textContent = '\u2500'.repeat(40);
-    this.$narrative.appendChild(sep);
+    // River ASCII art
+    const artEl = document.createElement('div');
+    artEl.className = 'terrain-art';
+    artEl.innerHTML = `<pre>${TERRAIN_ART.river_valley}</pre>`;
+    this.$narrative.appendChild(artEl);
 
     const difficulty = data.ford_difficulty || 3;
     const difficultyText = ['Easy', 'Manageable', 'Moderate', 'Dangerous', 'Extremely dangerous'][difficulty - 1] || 'Unknown';
@@ -845,16 +1018,18 @@ class GameUI {
     this._clearLoading();
     this.$actionBar.innerHTML = '';
     this._updateRoster();
+    this.$narrative.innerHTML = '';
 
     if (!data) {
       this._pendingEnter = () => this.engine.transition('TRAVEL');
       return;
     }
 
-    const sep = document.createElement('div');
-    sep.className = 'narrative-separator';
-    sep.textContent = '\u2500'.repeat(40);
-    this.$narrative.appendChild(sep);
+    // Grave ASCII art
+    const artEl = document.createElement('div');
+    artEl.className = 'terrain-art';
+    artEl.innerHTML = `<pre>${GRAVE_ART}</pre>`;
+    this.$narrative.appendChild(artEl);
 
     const block = document.createElement('div');
     block.className = 'death-screen';
@@ -1094,10 +1269,48 @@ class GameUI {
       return;
     }
 
+    const miles = gs.position.miles_traveled;
+    const totalMiles = 1764;
+    const pct = Math.min(100, Math.round((miles / totalMiles) * 100));
+
+    // Stats row
     let html = `
-      <span class="top-bar-item"><span class="top-bar-label">Date:</span> ${this._esc(this.engine.formatDate(gs.position.date))}</span>
-      <span class="top-bar-item"><span class="top-bar-label">Miles:</span> ${gs.position.miles_traveled}</span>
-      <span class="top-bar-item"><span class="top-bar-label">Food:</span> ${gs.supplies.food} lbs</span>
+      <div class="top-bar-stats">
+        <span class="top-bar-item"><span class="top-bar-label">Date:</span> ${this._esc(this.engine.formatDate(gs.position.date))}</span>
+        <span class="top-bar-item"><span class="top-bar-label">Miles:</span> ${miles}/${totalMiles}</span>
+        <span class="top-bar-item"><span class="top-bar-label">Food:</span> ${gs.supplies.food}lb</span>
+        <span class="top-bar-item"><span class="top-bar-label">Oxen:</span> ${gs.supplies.oxen}</span>
+      </div>
+    `;
+
+    // Trail map — ASCII progress bar with landmarks
+    const mapWidth = 40;
+    const wagonPos = Math.round((miles / totalMiles) * mapWidth);
+    const landmarks = [
+      { name: 'Kearney', mile: 320, char: 'K' },
+      { name: 'Laramie', mile: 640, char: 'L' },
+      { name: 'S.Pass', mile: 914, char: 'S' },
+      { name: 'Boise', mile: 1364, char: 'B' },
+      { name: 'Oregon', mile: 1764, char: 'O' },
+    ];
+
+    let mapLine = '';
+    for (let i = 0; i <= mapWidth; i++) {
+      if (i === wagonPos) {
+        mapLine += '█';
+      } else {
+        const lm = landmarks.find(l => Math.round((l.mile / totalMiles) * mapWidth) === i);
+        mapLine += lm ? lm.char : '─';
+      }
+    }
+
+    html += `
+      <div class="trail-map">
+        <span class="map-label">Independence</span>
+        <span class="map-line">${mapLine}</span>
+        <span class="map-label">Oregon City</span>
+      </div>
+      <div class="trail-map-pct">${pct}% complete</div>
     `;
 
     // Mobile compact roster
