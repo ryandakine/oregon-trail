@@ -95,7 +95,7 @@ class GameEngine {
     this.currentEvent = null;
     this.rumor = null;
     this.listeners = {};
-    this.apiBase = '';
+    this.apiBase = 'https://oregon-trail-api.trails710.workers.dev';
     this.fullJournal = [];
     this.profession = null;
     this.leaderName = null;

@@ -1,9 +1,10 @@
 name = "oregon-trail-api"
 main = "worker/src/index.ts"
 compatibility_date = "2026-04-01"
+workers_dev = true
 
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 
 # HMAC_SECRET set via `wrangler secret put HMAC_SECRET`
 # ANTHROPIC_API_KEY set via `wrangler secret put ANTHROPIC_API_KEY`
