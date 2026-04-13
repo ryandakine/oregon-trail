@@ -75,6 +75,7 @@ function renderNewspaper(container, data, engine) {
       <div class="newspaper-footer">
         Built by <strong>On-Site Intelligence</strong> &mdash; Denver, Colorado
         &nbsp;&bull;&nbsp; Every playthrough is unique
+        &nbsp;&bull;&nbsp; <span style="color:#8b7355;font-size:10px">trail.osi-cyber.com</span>
       </div>
 
       <div class="newspaper-actions">

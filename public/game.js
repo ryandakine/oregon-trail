@@ -100,6 +100,43 @@ const WEATHER_FLAVOR = {
   dust: ['Dust fills the air thick enough to taste.', 'Handkerchiefs over mouths.'],
 };
 
+// ── Daily Trail (Wordle-style daily seed) ────────
+
+const DAILY_EPOCH = new Date('2026-04-13T00:00:00Z');
+
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function getDailyTrailNumber() {
+  return Math.floor((Date.now() - DAILY_EPOCH.getTime()) / 86400000) + 1;
+}
+
+function getDailySeed() {
+  // Use UTC to match getDailyTrailNumber's UTC epoch math
+  const now = new Date();
+  return now.getUTCFullYear() * 10000 + (now.getUTCMonth() + 1) * 100 + now.getUTCDate();
+}
+
+function getDailyCompletion() {
+  const num = getDailyTrailNumber();
+  try {
+    const raw = localStorage.getItem('ot_daily_' + num);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) { return null; }
+}
+
+function saveDailyCompletion(trailNumber, result) {
+  try {
+    localStorage.setItem('ot_daily_' + trailNumber, JSON.stringify(result));
+  } catch (_) {}
+}
+
 // ── GameEngine Class ─────────────────────────────
 
 class GameEngine {
@@ -118,6 +155,9 @@ class GameEngine {
     this.pendingRations = null;
     this._advancePaused = false;
     this.activeChallenge = null;
+    this.dailyMode = false;
+    this.dailyTrailNumber = 0;
+    this.dailyRng = null;
   }
 
   // ── Challenge ───────────────────────────────
@@ -129,6 +169,51 @@ class GameEngine {
   static getCurrentChallengeId() {
     const idx = Math.floor(Date.now() / 604800000) % Object.keys(CHALLENGE_INFO).length;
     return Object.keys(CHALLENGE_INFO)[idx];
+  }
+
+  // ── Daily Trail ───────────────────────────
+
+  startDailyTrail() {
+    this.dailyMode = true;
+    this.dailyTrailNumber = getDailyTrailNumber();
+    this.dailyRng = mulberry32(getDailySeed());
+  }
+
+  completeDailyTrail() {
+    if (!this.dailyMode) return;
+    const gs = this.gameState;
+    const alive = gs?.party?.members?.filter(m => m.alive)?.length || 0;
+    const total = gs?.party?.members?.length || 5;
+    const miles = this.milesTraveled || 0;
+    const survived = alive > 0;
+    const result = { completed: true, survived, alive, total, miles, date: new Date().toISOString() };
+    saveDailyCompletion(this.dailyTrailNumber, result);
+    return result;
+  }
+
+  getDailyShareText() {
+    const num = this.dailyTrailNumber || getDailyTrailNumber();
+    const gs = this.gameState;
+    const alive = gs?.party?.members?.filter(m => m.alive)?.length || 0;
+    const total = gs?.party?.members?.length || 5;
+    const miles = this.milesTraveled || 0;
+    const days = gs?.position?.days_elapsed || 0;
+
+    if (alive === 0) {
+      return `Daily Trail #${num} \u2014 Party wiped \u{1F480}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
+    }
+    if (alive === total) {
+      return `Daily Trail #${num} \u2014 All survived! \u{1F389}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
+    }
+    return `Daily Trail #${num} \u2014 ${alive}/${total} survived \u{1FAA6}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
+  }
+
+  static getDailyCompletion() {
+    return getDailyCompletion();
+  }
+
+  static getDailyTrailNumber() {
+    return getDailyTrailNumber();
   }
 
   // ── Run Save/Restore (localStorage) ────────
@@ -146,6 +231,8 @@ class GameEngine {
         currentEvent: this.currentEvent,
         currentRiver: this.currentRiver,
         currentLandmark: this.currentLandmark,
+        dailyMode: this.dailyMode,
+        dailyTrailNumber: this.dailyTrailNumber,
       }));
     } catch (_) {}
   }
@@ -363,10 +450,12 @@ class GameEngine {
           break;
         case 'arrival':
           this._clearSavedRun();
+          if (this.dailyMode) this.completeDailyTrail();
           this.transition('ARRIVAL');
           break;
         case 'wipe':
           this._clearSavedRun();
+          if (this.dailyMode) this.completeDailyTrail();
           this.transition('WIPE');
           break;
         default:
