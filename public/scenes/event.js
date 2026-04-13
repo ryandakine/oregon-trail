@@ -37,7 +37,7 @@ export default function register(k, engine) {
     html += `<p id="event-typewriter"></p>`;
     html += `<div id="event-choices" style="margin-top: 20px;"></div>`;
     content.innerHTML = html;
-    overlay.style.display = "flex";
+    overlay.classList.add("active");
 
     // Typewriter effect
     const typewriterEl = document.getElementById("event-typewriter");
@@ -133,7 +133,7 @@ export default function register(k, engine) {
         clearInterval(autoTimer);
         autoTimer = null;
       }
-      overlay.style.display = "none";
+      overlay.classList.remove("active");
       content.innerHTML = "";
     }
 

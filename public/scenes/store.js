@@ -13,7 +13,7 @@ export default function register(k, engine) {
     const content = document.getElementById('overlay-content');
     overlay.classList.add('active');
 
-    const budget = STARTING_MONEY[engine.profession] || 80000;
+    const budget = engine.supplies?.money ?? STARTING_MONEY[engine.profession] ?? 80000;
     const quantities = {};
     const itemKeys = Object.keys(STORE_PRICES);
     itemKeys.forEach((key) => { quantities[key] = 0; });

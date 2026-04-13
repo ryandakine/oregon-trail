@@ -95,6 +95,12 @@ export default function register(k, engine) {
       }
     }
     document.addEventListener('keydown', onGlobalKey);
+    k.onSceneLeave(() => document.removeEventListener('keydown', onGlobalKey));
+
+    content.addEventListener('click', () => {
+      const input = content.querySelector('input');
+      if (input) input.focus();
+    });
 
     renderStep();
   });

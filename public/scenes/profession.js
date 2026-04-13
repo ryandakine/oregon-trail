@@ -72,5 +72,6 @@ export default function register(k, engine) {
       else if (e.key === '3') choose('banker');
     }
     document.addEventListener('keydown', onKey);
+    k.onSceneLeave(() => document.removeEventListener('keydown', onKey));
   });
 }

@@ -40,14 +40,14 @@ export default function register(k, engine) {
 
     const tones = [
       {
-        key: 'safe',
+        key: 'low',
         label: 'Classroom Safe',
         color: '#6aad6a',
         desc: 'Family-friendly. Hardship without horror. Good for younger players.',
         warning: null,
       },
       {
-        key: 'dark',
+        key: 'medium',
         label: 'Dark Frontier',
         color: '#d4a030',
         desc: 'Historically authentic brutality. Disease, starvation, and hard moral choices.',
@@ -55,7 +55,7 @@ export default function register(k, engine) {
         recommended: true,
       },
       {
-        key: 'horror',
+        key: 'high',
         label: 'Psychological Horror',
         color: '#cc3333',
         desc: 'The trail breaks minds as well as bodies. Paranoia, hallucinations, and dread.',
@@ -105,6 +105,19 @@ export default function register(k, engine) {
 
       // selectTone is async — it will transition when done
       engine.selectTone(tier);
+
+      const loadingEl = document.querySelector('#tone-loading');
+      const onError = ({ message }) => {
+        engine.off('error', onError);
+        loadingEl.querySelector('p').textContent = 'Error: ' + message;
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'overlay-choice';
+        retryBtn.textContent = 'Try Again';
+        retryBtn.onclick = () => k.go('tone', data);
+        loadingEl.appendChild(retryBtn);
+      };
+      engine.on('error', onError);
+      k.onSceneLeave(() => engine.off('error', onError));
     }
 
     content.querySelectorAll('.tone-btn').forEach((btn) => {
@@ -112,18 +125,23 @@ export default function register(k, engine) {
     });
 
     function onKey(e) {
-      if (e.key === '1') choose('safe');
-      else if (e.key === '2') choose('dark');
-      else if (e.key === '3') choose('horror');
+      if (e.key === '1') choose('low');
+      else if (e.key === '2') choose('medium');
+      else if (e.key === '3') choose('high');
     }
     document.addEventListener('keydown', onKey);
+    k.onSceneLeave(() => {
+      document.removeEventListener('keydown', onKey);
+    });
 
     // Clean up overlay when engine transitions away
-    engine.on('stateChange', ({ from }) => {
+    const onStateChange = ({ from }) => {
       if (from === 'TONE') {
         overlay.classList.remove('active');
         document.removeEventListener('keydown', onKey);
       }
-    });
+    };
+    engine.on('stateChange', onStateChange);
+    k.onSceneLeave(() => engine.off('stateChange', onStateChange));
   });
 }

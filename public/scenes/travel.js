@@ -168,21 +168,25 @@ export default function register(k, engine) {
     ]);
 
     // Trail progress bar
+    const barX = 420;
+    const barY = 12;
+    const barWidth = 200;
     const progressPct = Math.min(1, (engine.milesTraveled || 0) / 1764);
     k.add([
-      k.rect(200, 8),
-      k.pos(420, 12),
+      k.rect(barWidth, 8),
+      k.pos(barX, barY),
       k.color(40, 40, 40),
       k.z(50),
     ]);
-    k.add([
-      k.rect(Math.max(2, 200 * progressPct), 8),
-      k.pos(420, 12),
+    let progressFill = k.add([
+      k.rect(Math.max(2, barWidth * progressPct), 8),
+      k.pos(barX, barY),
       k.color(80, 200, 80),
       k.z(50),
     ]);
 
     // Party health dots
+    const healthDots = [];
     const members = engine.party?.members || [];
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
@@ -190,13 +194,13 @@ export default function register(k, engine) {
         m.health === "good" ? [80, 200, 80] :
         m.health === "fair" ? [200, 200, 80] :
         m.health === "poor" ? [200, 120, 50] : [200, 50, 50];
-      k.add([
+      healthDots.push(k.add([
         k.circle(5),
         k.pos(430 + i * 18, 35),
         k.color(...dotColor),
         k.anchor("center"),
         k.z(50),
-      ]);
+      ]));
     }
 
     // ── Scrolling animation ──
@@ -304,7 +308,7 @@ export default function register(k, engine) {
 
     // ── Engine event handlers ──
     engineOn("daysAdvanced", ({ summaries, days }) => {
-      // Update HUD
+      // Update HUD text
       dateText.text = engine.formatDate(engine.currentDate);
       milesText.text = `Miles: ${engine.milesTraveled} / 1764`;
       const s = engine.supplies;
@@ -312,6 +316,38 @@ export default function register(k, engine) {
         foodText.text = `Food: ${s.food || 0} lbs`;
         oxenText.text = `Oxen: ${s.oxen || 0}`;
       }
+
+      // Update progress bar
+      if (progressFill) {
+        const newWidth = Math.max(1, Math.round((engine.milesTraveled || 0) / 1764 * barWidth));
+        progressFill.destroy();
+        progressFill = k.add([
+          k.rect(newWidth, 8),
+          k.pos(barX, barY),
+          k.color(80, 200, 80),
+          k.z(50),
+        ]);
+      }
+
+      // Update health dots
+      const currentMembers = engine.party?.members || [];
+      currentMembers.forEach((m, i) => {
+        if (healthDots[i]) {
+          const dotPos = { x: healthDots[i].pos.x, y: healthDots[i].pos.y };
+          healthDots[i].destroy();
+          const dotColor = !m.alive ? [100, 100, 100] :
+            m.health === "good" ? [80, 200, 80] :
+            m.health === "fair" ? [200, 200, 80] :
+            m.health === "poor" ? [200, 120, 50] : [200, 50, 50];
+          healthDots[i] = k.add([
+            k.circle(5),
+            k.pos(dotPos.x, dotPos.y),
+            k.color(...dotColor),
+            k.anchor("center"),
+            k.z(50),
+          ]);
+        }
+      });
 
       // Show event summaries as floating text
       for (const summary of summaries) {
