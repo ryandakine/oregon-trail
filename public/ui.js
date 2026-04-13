@@ -2097,9 +2097,11 @@ class GameUI {
         <div style="border-top:1px solid #333;margin-top:2ch;padding-top:1.5ch">
           <div style="color:#666;font-size:12px;margin-bottom:1ch;letter-spacing:0.1em">MORE FROM ON-SITE INTELLIGENCE</div>
           <div style="display:flex;gap:1ch;justify-content:center;flex-wrap:wrap">
-            <a href="https://practice.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">🎯 Practice Trainer<br><span style="color:#555;font-size:11px">AI interview practice</span></a>
+            <a href="https://bets.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">🎲 Syndicate<br><span style="color:#555;font-size:11px">ML sports predictions</span></a>
             <a href="https://congress.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">📊 Congressional Intel<br><span style="color:#555;font-size:11px">Stock trading data</span></a>
+            <a href="https://trainer.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">🎯 Practice Trainer<br><span style="color:#555;font-size:11px">AI interview practice</span></a>
             <a href="https://poker.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">🃏 Poker Coach Pro<br><span style="color:#555;font-size:11px">Post-session review</span></a>
+            <a href="https://cimco.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">🏭 CIMCO Ops<br><span style="color:#555;font-size:11px">Industrial intelligence</span></a>
           </div>
         </div>
       </div>
