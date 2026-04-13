@@ -832,18 +832,13 @@ class GameUI {
   }
 
   _selectChoice(idx) {
-    if (this._choiceCooldown) return;
-    this._choiceCooldown = true;
-    setTimeout(() => { this._choiceCooldown = false; }, 300);
-
-    if (this._choiceHandler) {
-      const handler = this._choiceHandler;
-      // Clear BEFORE calling handler — handler may set new choices (e.g. title → profession)
-      this._choiceHandler = null;
-      this._pendingChoices = null;
-      this._zeroChoiceHandler = null;
-      handler(idx);
-    }
+    if (!this._choiceHandler) return;
+    const handler = this._choiceHandler;
+    // Clear BEFORE calling handler — handler may set new choices (e.g. title → profession)
+    this._choiceHandler = null;
+    this._pendingChoices = null;
+    this._zeroChoiceHandler = null;
+    handler(idx);
   }
 
   // ── Typing Animation ────────────────────────
