@@ -18,7 +18,7 @@
   <meta name="twitter:description" content="AI-native Oregon Trail. No two runs are the same. Play free.">
   <meta name="twitter:image" content="https://trail.osi-cyber.com/og-image.png">
   <meta name="theme-color" content="#1a1a2e">
-  <script defer data-domain="trail.osi-cyber.com" src="https://plausible.io/js/script.js"></script>
+  <script defer data-domain="trail.osi-cyber.com" src="https://analytics.osi-cyber.com/js/script.js"></script>
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <style>
@@ -102,5 +102,6 @@
   <script src="html2canvas.min.js"></script>
   <script src="engine.js"></script>
   <script type="module" src="main.js"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
 </body>
 </html>

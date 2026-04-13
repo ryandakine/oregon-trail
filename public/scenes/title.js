@@ -120,20 +120,9 @@ export default function register(k, engine) {
     ]);
 
     // ── Challenge of the week ──
+    // Use CHALLENGE_INFO from engine.js (single source of truth)
     const challengeId = GameEngine.getCurrentChallengeId();
-    const challengeInfo = {
-      half_rations: { name: "Half Rations", desc: "Start with 50% less money." },
-      speed_run: { name: "Speed Run", desc: "Grueling pace only." },
-      pacifist: { name: "Pacifist Run", desc: "No ammunition. No hunting." },
-      bare_bones: { name: "Bare Bones", desc: "Bare bones rations only." },
-      nightmare: { name: "Nightmare Trail", desc: "Horror tier forced." },
-      penny_pinch: { name: "Penny Pincher", desc: "Start with 25% funds." },
-      starvation_march: { name: "Starvation March", desc: "Grueling + meager." },
-      iron_man: { name: "Iron Man", desc: "No medicine allowed." },
-      rich_fool: { name: "Rich Fool", desc: "Banker funds, horror tier." },
-      minimalist: { name: "Minimalist", desc: "60% money, no spare parts." },
-    };
-    const challenge = challengeInfo[challengeId];
+    const challenge = window.CHALLENGE_INFO?.[challengeId];
     if (challenge) {
       // Challenge box
       k.add([
@@ -157,12 +146,38 @@ export default function register(k, engine) {
       ]);
     }
 
+    // ── Daily Trail ──
+    const dailyNum = GameEngine.getDailyTrailNumber();
+    const dailyDone = GameEngine.getDailyCompletion();
+    if (dailyDone) {
+      k.add([
+        k.text(`Daily Trail #${dailyNum} — ${dailyDone.survived ? 'Completed!' : 'Failed'}`, { size: 11 }),
+        k.pos(320, 200),
+        k.anchor("center"),
+        k.color(120, 160, 120),
+      ]);
+    } else {
+      k.add([
+        k.rect(220, 36),
+        k.pos(320, 200),
+        k.anchor("center"),
+        k.color(25, 50, 25),
+        k.outline(1, k.Color.fromHex("#4a8a4a")),
+      ]);
+      k.add([
+        k.text(`[ D ] Daily Trail #${dailyNum}`, { size: 13 }),
+        k.pos(320, 200),
+        k.anchor("center"),
+        k.color(100, 220, 100),
+      ]);
+    }
+
     // ── Resume option ──
     const savedRun = engine._savedRunData;
     if (savedRun) {
       k.add([
         k.text("[ R ] Resume saved journey", { size: 14 }),
-        k.pos(320, 210),
+        k.pos(320, 240),
         k.anchor("center"),
         k.color(150, 200, 150),
       ]);
@@ -202,6 +217,14 @@ export default function register(k, engine) {
       engine.transition("PROFESSION");
     });
 
+    // Daily trail handler
+    if (!dailyDone) {
+      k.onKeyPress("d", () => {
+        engine.startDailyTrail();
+        engine.transition("PROFESSION");
+      });
+    }
+
     if (savedRun) {
       k.onKeyPress("r", () => {
         // Restore saved run
@@ -214,7 +237,14 @@ export default function register(k, engine) {
         engine.currentEvent = savedRun.currentEvent;
         engine.currentRiver = savedRun.currentRiver;
         engine.currentLandmark = savedRun.currentLandmark;
-        engine.transition("TRAVEL");
+        engine.dailyMode = savedRun.dailyMode || false;
+        engine.dailyTrailNumber = savedRun.dailyTrailNumber || 0;
+        if (engine.dailyMode) engine.dailyRng = mulberry32(getDailySeed());
+        // Resume to correct scene based on pending state
+        const resumeScene = engine.currentEvent ? "EVENT" :
+          engine.currentRiver ? "RIVER" :
+          engine.currentLandmark ? "LANDMARK" : "TRAVEL";
+        engine.transition(resumeScene);
       });
     }
   });

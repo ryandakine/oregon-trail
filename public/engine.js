@@ -197,7 +197,9 @@ class GameEngine {
     const alive = gs?.party?.members?.filter(m => m.alive)?.length || 0;
     const total = gs?.party?.members?.length || 5;
     const miles = this.milesTraveled || 0;
-    const days = gs?.position?.days_elapsed || 0;
+    const startDate = new Date('1848-04-15');
+    const curDate = gs?.position?.date ? new Date(gs.position.date) : startDate;
+    const days = Math.max(0, Math.round((curDate - startDate) / 86400000));
 
     if (alive === 0) {
       return `Daily Trail #${num} \u2014 Party wiped \u{1F480}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
@@ -685,3 +687,5 @@ class GameEngine {
 
 window.GameEngine = GameEngine;
 window.engine = new GameEngine();
+window.CHALLENGE_INFO = CHALLENGE_INFO;
+window.GameEngine = GameEngine;

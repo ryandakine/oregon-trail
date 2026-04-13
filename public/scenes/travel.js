@@ -191,9 +191,9 @@ export default function register(k, engine) {
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
       const dotColor = !m.alive ? [100, 100, 100] :
-        m.health === "good" ? [80, 200, 80] :
-        m.health === "fair" ? [200, 200, 80] :
-        m.health === "poor" ? [200, 120, 50] : [200, 50, 50];
+        m.health > 70 ? [80, 200, 80] :
+        m.health > 40 ? [200, 200, 80] :
+        m.health > 20 ? [200, 120, 50] : [200, 50, 50];
       healthDots.push(k.add([
         k.circle(5),
         k.pos(430 + i * 18, 35),
@@ -405,7 +405,7 @@ export default function register(k, engine) {
           "",
           "Party:",
           ...(party?.members || []).map(m =>
-            `  ${m.name}: ${m.alive ? m.health || "good" : "DEAD"}`
+            `  ${m.name}: ${m.alive ? m.health + '/100' : "DEAD"}`
           ),
           "",
           "Press P to resume",

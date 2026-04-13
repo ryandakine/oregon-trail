@@ -382,6 +382,14 @@ async function handleNewspaper(
   }
 
   const state = verified.state;
+
+  // Phase gate: newspaper only valid at arrival or wipe (miles >= 1700 or all dead)
+  const allDead = state.party.members.every((m) => !m.alive);
+  const arrived = state.position.miles_traveled >= 1700;
+  if (!allDead && !arrived) {
+    return jsonResponse({ error: "newspaper_not_available" }, 400, origin);
+  }
+
   const journalText = state.journal.length > 0
     ? state.journal.map((e, i) => `${i + 1}. ${e}`).join("\n")
     : "No notable events recorded yet.";
@@ -758,6 +766,11 @@ async function handleHunt(
   const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
   if (!verified.valid) {
     return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  // Phase gate: hunting only allowed during travel (miles > 0, not at arrival)
+  if (verified.state.position.miles_traveled === 0) {
+    return jsonResponse({ error: "hunt_not_available" }, 400, origin);
   }
 
   // Challenge constraint: no hunting
