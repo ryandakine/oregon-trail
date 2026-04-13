@@ -15,6 +15,23 @@ const EVENTS_PER_TIER = 50;
 
 // ── System Prompts (copied from worker/src/prompt-templates.ts) ──
 
+const JSON_FORMAT_BLOCK = `
+
+OUTPUT FORMAT — CRITICAL:
+You must respond with EXACTLY one JSON object. No text before it. No text after it. No markdown fences. No explanation.
+The JSON must have this exact structure:
+{"title":"...","description":"...","choices":[{"label":"...","consequences":{"health":0,"food":0}}],"personality_effects":{},"journal_entry":"..."}
+
+- "title": short event name (3-6 words)
+- "description": 2-4 sentences of narrative
+- "choices": array of 2-3 options, each with "label" (string) and "consequences" (object with stat keys)
+- "personality_effects": object mapping member names to {"sanity":N,"morale":N} deltas, or empty {}
+- "journal_entry": one sentence summary
+
+Valid stat keys for consequences: health, food, ammo, clothing, spare_parts, medicine, money, oxen, morale, miles, days
+All consequence values must be integers.
+Food in pounds, ammo in rounds, money in cents (100 cents = $1, so $5 = 500).`;
+
 const SYSTEM_PROMPTS = {
   low: `You are the narrator of an Oregon Trail journey, spring 1848. Your voice is clear, factual, and educational — a well-written history textbook that respects the reader's intelligence. Light humor where it fits naturally.
 
@@ -23,11 +40,8 @@ Deaths are matter-of-fact. People died on this trail; state it plainly. No melod
 RULES:
 - Year is 1848. No anachronisms. No words, tools, medicine, or ideas that didn't exist yet.
 - Name specific nations (Pawnee, Shoshone, Lakota) — never "Indians" or "natives" generically.
-- Consequences must use exact stat keys: health, food, ammo, clothing, spare_parts, medicine, money, oxen, morale, miles, days.
 - personality_effects keys must match party member names exactly.
-- Return ONLY valid JSON. No markdown, no commentary outside the JSON object.
-- Choices should have meaningful trade-offs. No obviously correct answer.
-- Food measured in pounds, ammo in rounds, money in cents (100 cents = $1, so $5 = 500).`,
+- Choices should have meaningful trade-offs. No obviously correct answer.` + JSON_FORMAT_BLOCK,
 
   medium: `You are the narrator of an Oregon Trail journey, spring 1848. Your voice is spare, specific, and unflinching — Cormac McCarthy for a smart teenager. Dark humor lives in the gap between what people expect and what the trail delivers.
 
@@ -38,11 +52,8 @@ Supernatural elements exist only as ambiguity: was it fever-dream or something e
 RULES:
 - Year is 1848. No anachronisms. Period-accurate language, tools, medicine, beliefs.
 - Name specific nations (Pawnee, Shoshone, Lakota) — never "Indians" or "natives" generically.
-- Consequences must use exact stat keys: health, food, ammo, clothing, spare_parts, medicine, money, oxen, morale, miles, days.
 - personality_effects keys must match party member names exactly.
-- Return ONLY valid JSON. No markdown, no commentary outside the JSON object.
-- Choices should have meaningful trade-offs. Every option costs something.
-- Food measured in pounds, ammo in rounds, money in cents (100 cents = $1, so $5 = 500).`,
+- Choices should have meaningful trade-offs. Every option costs something.` + JSON_FORMAT_BLOCK,
 
   high: `You are the narrator of an Oregon Trail journey, spring 1848. Your voice channels Blood Meridian — psychological horror through specificity. Horror comes from what ordinary people do when the trail strips them down.
 
@@ -53,11 +64,8 @@ Characters unravel visibly. Track who's fraying and how. Sanity and morale decay
 RULES:
 - Year is 1848. No anachronisms. Period-accurate language, tools, medicine, beliefs.
 - Name specific nations (Pawnee, Shoshone, Lakota) — never "Indians" or "natives" generically.
-- Consequences must use exact stat keys: health, food, ammo, clothing, spare_parts, medicine, money, oxen, morale, miles, days.
 - personality_effects keys must match party member names exactly.
-- Return ONLY valid JSON. No markdown, no commentary outside the JSON object.
-- Choices must wound. Every option costs something the player cares about.
-- Food measured in pounds, ammo in rounds, money in cents (100 cents = $1, so $5 = 500).`,
+- Choices must wound. Every option costs something the player cares about.` + JSON_FORMAT_BLOCK,
 };
 
 // ── Sample Game States ──
@@ -181,8 +189,15 @@ async function callAnthropic(system, user, retries = 5) {
 function parseEventJSON(raw) {
   let cleaned = raw.trim();
   // Strip markdown code fences
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+  cleaned = cleaned.replace(/```(?:json)?\s*([\s\S]*?)```/g, '$1').trim();
+  // Extract JSON object if model added text before/after
+  if (!cleaned.startsWith('{')) {
+    const firstBrace = cleaned.indexOf('{');
+    if (firstBrace >= 0) cleaned = cleaned.slice(firstBrace);
+  }
+  if (!cleaned.endsWith('}')) {
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (lastBrace >= 0) cleaned = cleaned.slice(0, lastBrace + 1);
   }
   return JSON.parse(cleaned);
 }

@@ -53,7 +53,18 @@ export async function callAnthropic(
 
 export function parseEventResponse(raw: string): EventResponse {
   // Strip markdown fences if present
-  const stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
+  let stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
+
+  // If model added text before/after JSON, extract the JSON object
+  if (!stripped.startsWith("{")) {
+    const firstBrace = stripped.indexOf("{");
+    if (firstBrace >= 0) stripped = stripped.slice(firstBrace);
+  }
+  if (!stripped.endsWith("}")) {
+    const lastBrace = stripped.lastIndexOf("}");
+    if (lastBrace >= 0) stripped = stripped.slice(0, lastBrace + 1);
+  }
+
   const parsed = JSON.parse(stripped);
 
   // Validate top-level shape
