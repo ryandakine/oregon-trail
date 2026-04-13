@@ -2103,6 +2103,7 @@ class GameUI {
             <a href="https://poker.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">🃏 Poker Coach Pro<br><span style="color:#555;font-size:11px">Post-session review</span></a>
             <a href="https://cimco.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">🏭 CIMCO Ops<br><span style="color:#555;font-size:11px">Industrial intelligence</span></a>
           </div>
+          <a href="https://osi-cyber.com" target="_blank" rel="noopener" style="color:#666;text-decoration:none;font-size:11px;margin-top:1ch;display:inline-block">See full portfolio &rarr; osi-cyber.com</a>
         </div>
       </div>
     `;
