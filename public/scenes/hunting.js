@@ -150,5 +150,16 @@ export default function register(k, engine) {
       engine.resumeAdvance();
       engine.transition("TRAVEL");
     });
+
+    // Error recovery
+    const onError = ({ message }) => {
+      hunting = false; // Re-enable options
+      instructObj.text = message || 'Hunt failed. Try again.';
+      for (const b of btnObjs) {
+        b.bg.opacity = 0.85;
+      }
+    };
+    engine.on('error', onError);
+    k.onSceneLeave(() => engine.off('error', onError));
   });
 }

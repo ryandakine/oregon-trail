@@ -24,7 +24,7 @@ export default function register(k, engine) {
     setTimeout(() => {
       if (k.getSceneName && k.getSceneName() === "loading") {
         // Engine init should have fired by now; if still loading, go to title
-        k.go("title", { engine });
+        k.go("title", {});
       }
     }, 2000);
   });

@@ -189,11 +189,17 @@ export default function register(k, engine) {
 
     // ── Input handling ──
     k.onKeyPress("enter", () => {
-      engine.selectProfession("banker"); // default for POC
+      if (challenge) {
+        engine.activateChallenge(challengeId);
+      }
+      engine.transition("PROFESSION");
     });
 
     k.onClick(() => {
-      engine.selectProfession("banker");
+      if (challenge) {
+        engine.activateChallenge(challengeId);
+      }
+      engine.transition("PROFESSION");
     });
 
     if (savedRun) {

@@ -80,23 +80,25 @@ export default function register(k, engine) {
     const btnY = H - 48;
 
     let acted = false;
+    const btnObjs = [];
 
     actions.forEach((btn, i) => {
       const bx = startX + i * (btnW + btnGap);
       const btnColor = btn.action === "continue" ? [85, 107, 47] : [46, 139, 87];
 
-      k.add([
+      const bg = k.add([
         k.rect(btnW, btnH, { radius: 4 }),
         k.pos(bx, btnY),
         k.color(btnColor[0], btnColor[1], btnColor[2]),
         k.opacity(0.85),
       ]);
-      k.add([
+      const txt = k.add([
         k.text(btn.label, { size: 13 }),
         k.pos(bx + btnW / 2, btnY + btnH / 2),
         k.anchor("center"),
         k.color(255, 255, 255),
       ]);
+      btnObjs.push({ bg, txt });
 
       k.onKeyPress(btn.key, () => {
         if (btn.action === "continue") {
@@ -108,16 +110,103 @@ export default function register(k, engine) {
           return;
         }
         if (btn.action === "trade") {
-          // Show HTML overlay for trading
-          engine.emit("showTradeOverlay", { landmarkId: id });
+          showTradeOverlay(landmark, engine);
           return;
         }
         if (btn.action === "talk") {
-          engine.emit("showTalkOverlay", { landmarkId: id });
+          showTalkOverlay(landmark, engine);
           return;
         }
       });
     });
+
+    // Error recovery
+    const onError = ({ message }) => {
+      // Re-enable buttons
+      for (const b of btnObjs) {
+        b.bg.opacity = 0.85;
+      }
+      msgObj.text = message || 'Something went wrong. Try again.';
+    };
+    engine.on('error', onError);
+    k.onSceneLeave(() => engine.off('error', onError));
+  });
+}
+
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+const NPC_DIALOGUE = [
+  "Watch out for cholera at the river crossings. Boil your water.",
+  "I heard the Platte River is running high this season.",
+  "My neighbor lost three oxen to a rattlesnake. Keep your eyes open.",
+  "If you're headed to Oregon City, stock up on spare parts here.",
+  "The trail gets rough past Chimney Rock. Rest your party while you can.",
+  "A good hunter can feed a whole party. Don't skimp on ammunition.",
+  "I traded with some friendly Shoshone last week. Good people.",
+  "The Blue Mountains are no joke. Make sure your wagon's in good shape.",
+  "My advice? Keep a steady pace. Rushing gets people killed.",
+  "Weather's been unpredictable this year. Pack extra clothing.",
+];
+
+function showTradeOverlay(landmark, engine) {
+  const overlay = document.getElementById('html-overlay');
+  const content = overlay.querySelector('.overlay-content') || overlay;
+  const items = landmark.trade_inventory || [];
+
+  let html = `<h2>${escHtml(landmark.name || 'Trading Post')}</h2>`;
+  if (items.length === 0) {
+    html += `<p>No goods available for trade at this time.</p>`;
+  } else {
+    html += `<div style="margin:1rem 0;">`;
+    items.forEach((item, i) => {
+      const name = escHtml(item.name || item.item || 'Unknown');
+      const cost = item.cost || item.price || 0;
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;margin-bottom:0.4rem;background:rgba(30,20,10,0.5);border:1px solid #5a3510;border-radius:4px;">
+        <span>${name}</span>
+        <button class="trade-buy-btn overlay-choice" data-idx="${i}" style="padding:0.4rem 0.8rem;">Buy ($${(cost / 100).toFixed(2)})</button>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  html += `<button id="trade-close" class="overlay-choice" style="margin-top:1rem;padding:0.6rem 1.2rem;">Close</button>`;
+  content.innerHTML = html;
+  overlay.classList.add('active');
+
+  content.querySelectorAll('.trade-buy-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      const item = items[idx];
+      if (item && engine.purchaseSupplies) {
+        engine.purchaseSupplies([{ item: item.item || item.name, quantity: 1 }]);
+        btn.textContent = 'Bought!';
+        btn.disabled = true;
+      }
+    });
+  });
+
+  document.getElementById('trade-close').addEventListener('click', () => {
+    overlay.classList.remove('active');
+  });
+}
+
+function showTalkOverlay(landmark, engine) {
+  const overlay = document.getElementById('html-overlay');
+  const content = overlay.querySelector('.overlay-content') || overlay;
+  const dialogue = NPC_DIALOGUE[Math.floor(Math.random() * NPC_DIALOGUE.length)];
+
+  let html = `<h2>${escHtml(landmark.name || 'Conversation')}</h2>`;
+  html += `<p style="font-style:italic;margin:1rem 0;">"${escHtml(dialogue)}"</p>`;
+  html += `<p style="font-size:0.85em;opacity:0.7;">— A fellow traveler</p>`;
+  html += `<button id="talk-close" class="overlay-choice" style="margin-top:1rem;padding:0.6rem 1.2rem;">Continue</button>`;
+  content.innerHTML = html;
+  overlay.classList.add('active');
+
+  document.getElementById('talk-close').addEventListener('click', () => {
+    overlay.classList.remove('active');
   });
 }
 

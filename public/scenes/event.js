@@ -1,6 +1,6 @@
 export default function register(k, engine) {
   k.scene("event", (sceneData) => {
-    const eventData = sceneData?.data || engine.currentEvent;
+    const eventData = sceneData || engine.currentEvent;
     const overlay = document.getElementById("html-overlay");
     const content = overlay.querySelector(".overlay-content");
     let autoTimer = null;
@@ -137,9 +137,25 @@ export default function register(k, engine) {
       content.innerHTML = "";
     }
 
+    // Error recovery
+    const onError = ({ message }) => {
+      // Re-show overlay with choices and error message
+      overlay.classList.add('active');
+      const choicesEl = document.getElementById('event-choices');
+      if (choicesEl) {
+        const errP = document.createElement('p');
+        errP.style.color = '#cc4444';
+        errP.style.marginTop = '12px';
+        errP.textContent = message || 'Something went wrong. Try again.';
+        choicesEl.appendChild(errP);
+      }
+    };
+    engine.on('error', onError);
+
     // Cleanup on scene leave
     k.onSceneLeave(() => {
       cleanup();
+      engine.off('error', onError);
     });
   });
 }

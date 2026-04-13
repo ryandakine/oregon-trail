@@ -27,7 +27,7 @@ export interface Env {
   ALLOWED_ORIGIN: string;
 }
 
-// Rate limiter: in-memory Map, 30 calls/min per IP
+// Rate limiter: in-memory Map, 200 calls/min per IP
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(ip: string): boolean {
@@ -43,7 +43,7 @@ function checkRateLimit(ip: string): boolean {
     return true;
   }
   entry.count++;
-  return entry.count <= 30;
+  return entry.count <= 200;
 }
 
 function corsHeaders(origin: string): Record<string, string> {
@@ -248,6 +248,10 @@ async function handleAdvance(
   const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
   if (!verified.valid) {
     return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  if (verified.state.simulation.pending_event_hash !== null) {
+    return jsonResponse({ error: "resolve_pending_event" }, 400, origin);
   }
 
   // Apply pace/rations changes from client before simulation
@@ -638,6 +642,13 @@ async function handleLandmark(
   const historical = ctx as unknown as HistoricalContext;
 
   if (body.action === "rest") {
+    const restUsed = next.simulation.landmark_rest_used ?? [];
+    const restCount = restUsed.filter(id => id === body.landmark_id).length;
+    if (restCount >= 3) {
+      return jsonResponse({ error: "rest_limit_reached" }, 400, origin);
+    }
+    next.simulation.landmark_rest_used = [...restUsed, body.landmark_id];
+
     // Advance date +1 day
     const d = new Date(next.position.date + "T12:00:00Z");
     d.setUTCDate(d.getUTCDate() + 1);
@@ -673,6 +684,16 @@ async function handleLandmark(
 
   if (!Array.isArray(body.trade_items) || body.trade_items.length === 0) {
     return jsonResponse({ error: "no_items_specified" }, 400, origin);
+  }
+
+  const tradeChallenge = next.settings.challenge_id ? getChallengeById(next.settings.challenge_id) : undefined;
+  if (tradeChallenge) {
+    for (const tradeReq of body.trade_items) {
+      const supplyKey = mapTradeItemToSupplyKey(tradeReq.item);
+      if (tradeChallenge.no_ammo && supplyKey === "ammo") return jsonResponse({ error: "challenge_restricted: ammo" }, 400, origin);
+      if (tradeChallenge.no_medicine && supplyKey === "medicine") return jsonResponse({ error: "challenge_restricted: medicine" }, 400, origin);
+      if (tradeChallenge.no_spare_parts && supplyKey === "spare_parts") return jsonResponse({ error: "challenge_restricted: spare_parts" }, 400, origin);
+    }
   }
 
   let totalCost = 0;

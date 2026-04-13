@@ -4,7 +4,7 @@ export default function register(k, engine) {
     k.add([k.rect(640, 480), k.pos(0, 0), k.color(10, 10, 15), k.opacity(0.95)]);
 
     const overlay = document.getElementById('newspaper-overlay');
-    overlay.classList.remove('hidden');
+    overlay.classList.add('active');
 
     const np = newsData || {};
     const headline = np.headline || 'TRAIL PARTY REACHES END OF JOURNEY';
@@ -17,10 +17,16 @@ export default function register(k, engine) {
 
     const formattedDate = engine.formatDate(dateStr);
 
+    function esc(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
     // Build death sidebar
     const deathEntries = deaths.map((d) => {
-      const name = d.name || 'Unknown';
-      const cause = d.cause || 'unknown causes';
+      const name = esc(d.name || 'Unknown');
+      const cause = esc(d.cause || 'unknown causes');
       return `<div style="margin-bottom:0.4rem;"><strong>${name}</strong><br><span style="font-size:0.85em;font-style:italic;">${cause}</span></div>`;
     }).join('');
 
@@ -34,7 +40,7 @@ export default function register(k, engine) {
       : '';
 
     const survivorList = survivors.length > 0
-      ? `<p style="font-style:italic;margin-top:1rem;">Survivors: ${survivors.join(', ')}</p>`
+      ? `<p style="font-style:italic;margin-top:1rem;">Survivors: ${survivors.map(s => esc(s)).join(', ')}</p>`
       : '';
 
     overlay.innerHTML = `
@@ -46,20 +52,20 @@ export default function register(k, engine) {
       ">
         <div style="text-align:center;border-bottom:3px double #3a2510;padding-bottom:0.8rem;margin-bottom:1rem;">
           <h1 style="font-size:1.6rem;margin:0;letter-spacing:0.15em;text-transform:uppercase;color:#2a1a0a;">
-            ${paperName}
+            ${esc(paperName)}
           </h1>
-          <p style="font-size:0.85em;margin:0.3rem 0 0 0;opacity:0.7;">${formattedDate}</p>
+          <p style="font-size:0.85em;margin:0.3rem 0 0 0;opacity:0.7;">${esc(formattedDate)}</p>
         </div>
 
         <h2 style="font-size:1.4rem;text-align:center;margin:1rem 0 0.5rem 0;line-height:1.3;color:#2a1a0a;">
-          ${headline}
+          ${esc(headline)}
         </h2>
         <p style="text-align:center;font-style:italic;font-size:0.9em;margin-bottom:1.2rem;opacity:0.7;">
-          ${byline}
+          ${esc(byline)}
         </p>
 
         <div style="column-count:2;column-gap:1.5rem;column-rule:1px solid #3a2510;">
-          ${paragraphs.map((p) => `<p style="text-indent:1.5em;margin:0 0 0.8rem 0;font-size:0.95rem;line-height:1.5;text-align:justify;">${p}</p>`).join('')}
+          ${paragraphs.map((p) => `<p style="text-indent:1.5em;margin:0 0 0.8rem 0;font-size:0.95rem;line-height:1.5;text-align:justify;">${esc(p)}</p>`).join('')}
           ${survivorList}
         </div>
 
@@ -125,7 +131,7 @@ export default function register(k, engine) {
 
     // Close → SHARE scene
     document.getElementById('np-close').addEventListener('click', () => {
-      overlay.classList.add('hidden');
+      overlay.classList.remove('active');
       overlay.innerHTML = '';
       engine.transition('SHARE');
     });

@@ -189,15 +189,27 @@ export default function register(k, engine) {
           return;
         }
         overlay.classList.remove('active');
-        // Build purchases object with unit amounts
-        const purchases = {};
-        for (const key of itemKeys) {
-          purchases[key] = quantities[key] * STORE_PRICES[key].unit_amount;
+        // Build purchases as StoreItem array
+        const purchases = [];
+        for (const [key, qty] of Object.entries(quantities)) {
+          if (qty > 0) purchases.push({ item: key, quantity: qty });
         }
         engine.purchaseSupplies(purchases);
       });
     }
 
     render();
+
+    // Error recovery
+    const onError = ({ message }) => {
+      overlay.classList.add('active');
+      const errEl = document.getElementById('store-error');
+      if (errEl) {
+        errEl.textContent = message || 'Something went wrong. Try again.';
+        errEl.style.display = 'block';
+      }
+    };
+    engine.on('error', onError);
+    k.onSceneLeave(() => engine.off('error', onError));
   });
 }

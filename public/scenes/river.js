@@ -4,10 +4,10 @@ export default function register(k, engine) {
     const H = 480;
     const river = data || {};
     const name = river.name || "Unknown River";
-    const width = river.width || "medium";
-    const depth = river.depth || "medium";
-    const difficulty = river.difficulty || "moderate";
-    const ferryCost = river.ferry_cost || 500;
+    const width = river.width_ft || river.width || "medium";
+    const depth = river.depth_ft_summer || river.depth_ft_spring || river.depth || "medium";
+    const difficulty = river.ford_difficulty || river.difficulty || "moderate";
+    const ferryCost = river.ferry_cost_1848_dollars || river.ferry_cost || 500;
 
     // Sky
     k.add([k.rect(W, 180), k.pos(0, 0), k.color(22, 33, 62)]);
@@ -148,5 +148,21 @@ export default function register(k, engine) {
       k.anchor("center"),
       k.color(222, 184, 135),
     ]);
+
+    // Error message display
+    const errorObj = k.add([
+      k.text("", { size: 14, width: W - 80 }),
+      k.pos(W / 2, panelY + 60),
+      k.anchor("center"),
+      k.color(204, 68, 68),
+    ]);
+
+    // Error recovery
+    const onError = ({ message }) => {
+      selected = false; // Re-enable buttons
+      errorObj.text = message || 'Crossing failed. Try again.';
+    };
+    engine.on('error', onError);
+    k.onSceneLeave(() => engine.off('error', onError));
   });
 }

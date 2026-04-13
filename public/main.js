@@ -38,7 +38,7 @@ engine.on("stateChange", ({ from, to, data }) => {
     // Hide HTML overlay on scene switch
     const overlay = document.getElementById("html-overlay");
     if (overlay) overlay.classList.remove("active");
-    k.go(sceneName, { from, to, data, engine });
+    k.go(sceneName, data || {});
   }
 });
 
@@ -67,5 +67,5 @@ for (const mod of sceneModules) {
 }
 
 // Start at loading scene, then init engine
-k.go("loading", { engine });
+k.go("loading", {});
 setTimeout(() => engine.init(), 100);

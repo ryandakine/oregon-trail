@@ -246,6 +246,13 @@ class GameEngine {
     } catch (_) { return null; }
   }
 
+  getResumeScene() {
+    if (this.currentEvent) return 'EVENT';
+    if (this.currentRiver) return 'RIVER';
+    if (this.currentLandmark) return 'LANDMARK';
+    return 'TRAVEL';
+  }
+
   // ── Event Emitter ────────────────────────────
 
   on(event, fn) {
@@ -420,7 +427,6 @@ class GameEngine {
       this.signedState = res.signed_state;
       this.pendingPace = null;
       this.pendingRations = null;
-      this._saveRun();
 
       // Save journal entries to local backup
       if (res.summaries) {
@@ -438,21 +444,25 @@ class GameEngine {
         days: res.days_advanced || 0,
       });
 
-      // Handle trigger
+      // Handle trigger — _saveRun() after trigger data assigned
       switch (res.trigger) {
         case 'event':
           this.currentEvent = res.trigger_data;
+          this._saveRun();
           this.transition('EVENT', res.trigger_data);
           break;
         case 'landmark':
           this.currentLandmark = res.trigger_data;
+          this._saveRun();
           this.transition('LANDMARK', res.trigger_data);
           break;
         case 'river':
           this.currentRiver = res.trigger_data;
+          this._saveRun();
           this.transition('RIVER', res.trigger_data);
           break;
         case 'death':
+          this._saveRun();
           this.transition('DEATH', res.trigger_data);
           break;
         case 'arrival':
@@ -466,7 +476,7 @@ class GameEngine {
           this.transition('WIPE');
           break;
         default:
-          // No trigger — auto-advance after display delay
+          this._saveRun();
           this._scheduleNextAdvance(res.summaries);
           break;
       }
