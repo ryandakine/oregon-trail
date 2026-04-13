@@ -132,8 +132,10 @@ html, body {
 
 .terrain-art pre {
   font-family: inherit;
-  font-size: 0.85em;
+  font-size: 0.8em;
   margin: 0;
+  text-align: left;
+  display: inline-block;
 }
 
 .day-miles {
@@ -409,10 +411,11 @@ html, body {
 
 .title-ascii {
   white-space: pre;
-  font-size: 0.85em;
-  line-height: 1.2;
-  margin-bottom: 2em;
+  font-size: 0.75em;
+  line-height: 1.15;
+  margin-bottom: 1.5em;
   color: var(--amber);
+  text-shadow: 0 0 10px rgba(255, 200, 50, 0.15);
 }
 
 .title-subtitle {
@@ -1018,7 +1021,7 @@ html, body {
 
 .travel-display {
   position: relative;
-  min-height: 15ch;
+  min-height: 18ch;
 }
 
 .terrain-frame {
