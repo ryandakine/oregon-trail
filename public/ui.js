@@ -941,7 +941,7 @@ class GameUI {
             <button class="choice" data-idx="1"><span class="choice-number">[2]</span> Start new journey</button>
           </div>
         </div>
-        <div class="title-footer">Built by On-Site Intelligence &mdash; Denver, Colorado</div>
+        <div class="title-footer">Built by <a href="https://osi-cyber.com" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">On-Site Intelligence</a> &mdash; Denver, Colorado</div>
       `;
 
       this._pendingChoices = ['resume', 'new'];
@@ -958,6 +958,9 @@ class GameUI {
           this.engine.currentEvent = s.currentEvent || null;
           this.engine.currentRiver = s.currentRiver || null;
           this.engine.currentLandmark = s.currentLandmark || null;
+          this.engine.dailyMode = s.dailyMode || false;
+          this.engine.dailyTrailNumber = s.dailyTrailNumber || 0;
+          if (this.engine.dailyMode) this.engine.dailyRng = mulberry32(getDailySeed());
           this.engine._savedRunData = null;
           this.engine.transition('TRAVEL');
         } else {
@@ -1001,7 +1004,7 @@ class GameUI {
           <button class="choice" data-idx="1"><span class="choice-number">[2]</span> Play normal</button>
         </div>
       </div>
-      <div class="title-footer">Built by On-Site Intelligence &mdash; Denver, Colorado</div>
+      <div class="title-footer">Built by <a href="https://osi-cyber.com" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">On-Site Intelligence</a> &mdash; Denver, Colorado</div>
     `;
 
     // Type the rumor if we have one from a previous session
@@ -2093,6 +2096,14 @@ class GameUI {
         <div class="tip-jar">
           Enjoyed the trail?
           <a href="https://buymeacoffee.com/osicyber" target="_blank" rel="noopener" class="tip-jar-link">Support the dev &rarr;</a>
+        </div>
+        <div style="border-top:1px solid #333;margin-top:2ch;padding-top:1.5ch">
+          <div style="color:#666;font-size:12px;margin-bottom:1ch;letter-spacing:0.1em">MORE FROM ON-SITE INTELLIGENCE</div>
+          <div style="display:flex;gap:1ch;justify-content:center;flex-wrap:wrap">
+            <a href="https://practice.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">🎯 Practice Trainer<br><span style="color:#555;font-size:11px">AI interview practice</span></a>
+            <a href="https://congress.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">📊 Congressional Intel<br><span style="color:#555;font-size:11px">Stock trading data</span></a>
+            <a href="https://poker.osi-cyber.com" target="_blank" rel="noopener" style="color:#8b8b6b;text-decoration:none;padding:0.5ch 1ch;border:1px solid #333;border-radius:4px;font-size:13px">🃏 Poker Coach Pro<br><span style="color:#555;font-size:11px">Post-session review</span></a>
+          </div>
         </div>
       </div>
     `;

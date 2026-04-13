@@ -13,7 +13,7 @@ function renderTombstone(container, deathData, engine) {
   const deathDate = deathData.date || engine?.currentDate || '';
   const miles = deathData.mile || engine?.milesTraveled || 0;
   const territory = _guessTerritoryFromMiles(miles);
-  const siteUrl = 'oregon-trail.pages.dev';
+  const siteUrl = 'trail.osi-cyber.com';
 
   // Format dates for display
   const fmtStart = _fmtTombstoneDate(startDate);
