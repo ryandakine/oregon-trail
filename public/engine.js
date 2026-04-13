@@ -3,9 +3,9 @@
    Display layer only. Server handles all simulation.
    ═══════════════════════════════════════════════════ */
 
-// ── Store Prices (mirrors worker/src/state.ts) ───
+// ── Store Prices (hardcoded fallback, server is source of truth) ───
 
-const STORE_PRICES = {
+let STORE_PRICES = {
   food:        { price_cents: 30,   unit_amount: 10, unit_label: '10 lbs',    tooltip: '200 lbs per person for the full journey' },
   oxen:        { price_cents: 5000, unit_amount: 2,  unit_label: '1 yoke (2)', tooltip: '6 minimum (3 yoke) to pull a loaded wagon' },
   clothing:    { price_cents: 300,  unit_amount: 1,  unit_label: '1 set',     tooltip: 'Essential for mountain crossings' },
@@ -13,6 +13,7 @@ const STORE_PRICES = {
   spare_parts: { price_cents: 200,  unit_amount: 1,  unit_label: '1 part',    tooltip: 'Broken axles and tongues can strand you' },
   medicine:    { price_cents: 100,  unit_amount: 3,  unit_label: '3 doses',   tooltip: 'Reduces disease mortality by half' },
 };
+let _pricesFetched = false;
 
 const STARTING_MONEY = {
   farmer: 400_00,
@@ -220,6 +221,18 @@ class GameEngine {
 
   // ── Run Save/Restore (localStorage) ────────
 
+  // Lazy-fetch prices from server before store scene (hardcoded fallback if fails)
+  async _fetchPrices() {
+    if (_pricesFetched) return;
+    try {
+      const res = await fetch(this.apiBase + '/api/prices');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.prices) { STORE_PRICES = data.prices; _pricesFetched = true; }
+      }
+    } catch (_) { /* use hardcoded fallback */ }
+  }
+
   _saveRun() {
     if (!this.signedState) return;
     try {
@@ -392,6 +405,7 @@ class GameEngine {
       localStorage.removeItem('ot_journal');
       this._saveRun();
       this.emit('loading', false);
+      await this._fetchPrices();
       this.transition('STORE', { rumor: this.rumor });
     } catch (e) {
       this.emit('loading', false);

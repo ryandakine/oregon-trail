@@ -29,17 +29,22 @@ export interface Env {
 
 // Rate limiter: in-memory Map, 200 calls/min per IP
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+let rateLimitRequestCount = 0;
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
+  rateLimitRequestCount++;
+
+  // Periodic cleanup every 100 requests (regardless of IP)
+  if (rateLimitRequestCount % 100 === 0 || rateLimitMap.size > 10_000) {
+    for (const [key, val] of rateLimitMap) {
+      if (now > val.resetAt) rateLimitMap.delete(key);
+    }
+  }
+
   const entry = rateLimitMap.get(ip);
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
-    if (rateLimitMap.size > 10_000) {
-      for (const [key, val] of rateLimitMap) {
-        if (now > val.resetAt) rateLimitMap.delete(key);
-      }
-    }
     return true;
   }
   entry.count++;
@@ -117,6 +122,11 @@ export default {
           return await handleLandmark(request, env, origin);
         case "/api/hunt":
           return await handleHunt(request, env, origin);
+        case "/api/prices":
+          if (request.method === "GET") {
+            return jsonResponse({ prices: STORE_PRICES }, 200, origin);
+          }
+          return jsonResponse({ error: "method_not_allowed" }, 405, origin);
         case "/api/challenge":
           if (request.method === "GET") {
             const current = getCurrentChallenge();

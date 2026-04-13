@@ -167,24 +167,23 @@ If `state.simulation.pending_event_hash !== null`, `/api/advance` returns error 
 
 ## 4. Current Technical Debt
 
-Biggest risks, in priority order. Know these. Don't make them worse.
+Remaining risks. Know these. Don't make them worse.
 
-1. **Health dots in travel.js compare health to strings.** `m.health === "good"` but health is a number (0-100). The dots always show as red. Fix: threshold-based coloring (>70 green, >40 yellow, >20 orange, else red).
-2. **Dead code from ASCII era.** `public/game.js`, `public/ui.js`, `public/style.css` contain ~4,500 lines from the pre-Kaplay terminal UI. These files still exist on disk but are NOT loaded by current `index.html`. They should be deleted.
-3. **No retry/backoff on Anthropic calls.** `anthropic.ts` has a single 8s timeout. On 429/529, it falls through to fallback events instead of retrying. Acceptable for now but lossy under load.
-4. **Newspaper trusts unsigned journal.** `generateNewspaper()` sends `full_journal` from localStorage. This is cosmetic-only (newspaper text), not game state, so it's accepted but noted.
-5. **Rate limiter is in-memory.** Per-isolate, not per-worker. Cloudflare Workers can spawn multiple isolates, so the 200/min limit is approximate. Acceptable for a free game.
-6. **No TypeScript in frontend.** `public/` is vanilla JS. All type safety is in the worker. Scene files have no type checking.
-7. **Plausible script tag points to plausible.io not self-hosted instance.** Should point to analytics.osi-cyber.com if self-hosted Plausible is intended.
+1. ~~Health dots~~ — **FIXED** (ff81b62). Numeric thresholds >70/40/20.
+2. ~~Dead ASCII code~~ — **FIXED** (ff81b62). game.js, ui.js, style.css deleted.
+3. ~~No retry on Anthropic~~ — **FIXED**. Retry with shrinking timeouts (8s→4s→2s), 429/529 only, fresh AbortController per attempt, honors Retry-After.
+4. ~~Newspaper trusts journal~~ — **RESOLVED**. Already reads from HMAC-verified `state.journal`, not client-submitted data. Journal capped to 5 entries.
+5. **Rate limiter is in-memory.** Per-isolate, not per-worker. Now cleans up every 100th request. Approximate but acceptable for a free game.
+6. **No TypeScript in frontend.** By design. Adding TS would require a build system, which is explicitly forbidden. All type safety lives in the worker.
+7. ~~Plausible~~ — **FIXED** (ff81b62). Points to analytics.osi-cyber.com.
+8. ~~Challenge dedup~~ — **FIXED** (ff81b62). title.js reads from engine's window.CHALLENGE_INFO.
+9. ~~Store prices duplicated~~ — **FIXED**. Server is source of truth (state.ts with full UI fields). Client lazy-fetches via GET /api/prices before store, falls back to hardcoded.
+10. ~~Resume scene~~ — **FIXED** (ff81b62). Navigates to EVENT/RIVER/LANDMARK if pending.
+11. ~~Daily share days_elapsed~~ — **FIXED** (ff81b62). Calculates from date diff.
+12. ~~Phase gates~~ — **FIXED** (ff81b62). /api/newspaper gated to arrival/wipe, /api/hunt gated to travel.
+13. ~~PWA registration~~ — **FIXED** (ff81b62). SW registered in index.html.
 
-8. **Weekly challenge data duplicated in 3 places.** `state.ts`, `engine.js`, and `title.js` all contain weekly challenge seed/computation logic. Changes must be synced across all three.
-9. **Store prices duplicated client/server.** `state.ts` (server) and `engine.js` (client) both define store item prices. These can drift silently.
-10. **Resume always jumps to TRAVEL regardless of actual scene.** Known bug — if you quit during an event, landmark, or river crossing, resume drops you into TRAVEL and the pending state may be lost.
-11. **Daily share reads nonexistent `position.days_elapsed`.** Known bug — the share feature references a field that doesn't exist on the position object.
-12. **`handleNewspaper` and `handleHunt` not phase-gated.** These handlers in `index.ts` don't verify the game is in an appropriate phase before executing. A client could call `/api/hunt` at any time.
-13. **PWA registration missing.** `sw.js` exists but no `navigator.serviceWorker.register()` call in current `index.html`. PWA install is broken.
-
-**Rule:** when about to pick up new feature work, check this list first. If any of 1-13 would be made worse, surface it before writing code.
+**Rule:** When adding new features, check items 5 and 6 above. These are accepted tradeoffs, not bugs.
 
 ---
 
