@@ -1104,26 +1104,35 @@ class GameUI {
       block.className = 'terminal-input-line active-input';
       block.innerHTML = `
         <span class="terminal-prompt">${this._esc(labels[step])}</span>
-        <input class="terminal-input" type="text" maxlength="20" autofocus>
+        <div style="display:flex;gap:0.5ch;align-items:center">
+          <input class="terminal-input" type="text" maxlength="20" autofocus style="flex:1">
+          <button class="choice" style="margin:0;padding:0.5ch 1.5ch;min-height:44px;white-space:nowrap;flex:none">OK</button>
+        </div>
       `;
       this.$narrative.appendChild(block);
 
       const input = block.querySelector('.terminal-input');
+      const okBtn = block.querySelector('.choice');
       input.focus();
+
+      const submitName = () => {
+        const val = input.value.trim();
+        if (!val) return;
+        const clean = val.replace(/[^a-zA-Z\s]/g, '').slice(0, 20);
+        if (!clean) return;
+        names.push(clean);
+        step++;
+        promptNext();
+      };
 
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          const val = input.value.trim();
-          if (!val) return;
-          // Sanitize: alpha + space only
-          const clean = val.replace(/[^a-zA-Z\s]/g, '').slice(0, 20);
-          if (!clean) return;
-          names.push(clean);
-          step++;
-          promptNext();
+          submitName();
         }
       });
+
+      okBtn.addEventListener('click', submitName);
 
       this._scrollNarrative();
     };
