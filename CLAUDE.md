@@ -76,9 +76,13 @@ oregon-trail/
 │       ├── prompt-assembly.test.ts
 │       └── context-loader.test.ts
 ├── public/                       # Static files — Cloudflare Pages serves this directory
-│   ├── index.html                # Shell: canvas + 3 overlay divs + OG meta tags
-│   ├── engine.js                 # GameEngine class: state machine, API client, event emitter
-│   ├── main.js                   # Kaplay init (640x480), scene registration, stateChange bridge
+│   ├── index.html                # Shell: canvas + 3 overlay divs + OG meta tags + #a11y-status live region + <noscript> fallback
+│   ├── engine.js                 # GameEngine class: state machine, API client, event emitter (exposes engine.tone from simulation.tone_tier)
+│   ├── main.js                   # Kaplay init (640x480), scene registration, stateChange bridge, window.__ERRORS capture, unpkg→jsDelivr CDN fallback, canvas aria-label
+│   ├── lib/                      # Shared ES modules imported by scenes (v3 primitive renderer)
+│   │   ├── draw.mjs              # PALETTE + primitive helpers: drawSky/Cloud/Hills/Mountains/Ground/Trail/Wagon/Ox/Pioneer/Tree/Rock/GrassTuft/Crow/DeadTree/HealthIcon, addHighlights (seeded). No runtime scale params — ported verbatim from mockups/primitive-mockup.html.
+│   │   ├── hud.mjs               # addTopHud + addBottomHud + updateHud + attachResizeRebuild. UI_SCALE 1.4× <500px. Landmark ticks with K/C/L/S/F/B monograms (gold when passed). hpState thresholds (70/40/20). Tag-based destroyAll for health icon redraw.
+│   │   └── tone.mjs              # applyToneOverlay: Low warm / Medium neutral / High cool+vignette+pulse+scanlines. Z=45-48 below HUD z=50+.
 │   ├── scenes/                   # 16 Kaplay scenes (one file each)
 │   │   ├── title.js              # Title screen, resume option, weekly challenge display
 │   │   ├── profession.js         # Farmer/Carpenter/Banker selection
@@ -104,7 +108,8 @@ oregon-trail/
 ├── scripts/
 │   ├── calibrate.js              # Prompt calibration runner
 │   ├── generate-cache.js         # Pre-generate fallback events
-│   └── fallback-events.json      # Cached fallback events
+│   ├── fallback-events.json      # Cached fallback events
+│   └── smoke-travel.sh           # 40+ GameObj + 0-JS-error gate for travel scene (uses ~/.claude/skills/gstack/browse/dist/browse). Run: npx serve public -p 8765 & bash scripts/smoke-travel.sh
 ├── assets/                       # Source art assets (not served directly)
 ├── wrangler.toml                 # Worker config: main = worker/src/index.ts
 ├── package.json                  # Only devDeps: wrangler, vitest, @cloudflare/workers-types, typescript
@@ -116,6 +121,7 @@ oregon-trail/
 - New game logic goes in `worker/src/simulation.ts` or `worker/src/state.ts`, never in the frontend.
 - New types go in `worker/src/types.ts` — it's the single source of truth.
 - New Kaplay scenes go in `public/scenes/<name>.js`, export a `register(k, engine)` function, and get imported in `main.js`.
+- New primitive draw helpers go in `public/lib/draw.mjs`. Port mechanically from `mockups/primitive-mockup.html` with three substitutions: `P.x` → `...PALETTE.x`, `k.__rectEllipse(w,h)` → `ellipseRect(k,w,h)`, module-level add calls become `export function drawX(k, ...)`. No runtime scale params.
 - Frontend API calls go through `engine.api()` in `engine.js`, never raw `fetch` in scene files.
 - Historical data changes go in `worker/src/historical-context.json`.
 
@@ -276,7 +282,7 @@ Total input target: ~1,500 tokens. Output: max 800 tokens (events), 600 tokens (
 ## 9. Operational Rules
 
 - **Secrets:** `HMAC_SECRET` and `ANTHROPIC_API_KEY` set via `wrangler secret put`. Never in code, never in `.dev.vars` committed. `.dev.vars` is in `.gitignore`.
-- **Deploy frontend:** Push to GitHub, Cloudflare Pages auto-deploys from `public/` directory.
+- **Deploy frontend:** CF Pages project has NO git provider — deploys are manual via `npx wrangler pages deploy public --project-name=oregon-trail --branch=master --commit-dirty=true`. The `--branch` flag must match CF Pages `production_branch` (which is `master`, NOT `production`) to hit trail.osi-cyber.com. Deploying with `--branch=production` creates a preview only; trail.osi-cyber.com will keep serving old code.
 - **Deploy worker:** `npx wrangler deploy` from repo root.
 - **Tests:** `npx vitest run` — must see 119 tests pass before committing worker changes.
 - **Local dev:** `npx wrangler dev` starts worker locally. Frontend needs a local HTTP server for `public/` (e.g., `npx serve public`). **Note:** `engine.js` hardcodes the production worker URL — you must manually override it to `http://localhost:8787` for local development.
@@ -334,3 +340,6 @@ Priority:
 ---
 
 **Bottom line:** free marketing asset, near-zero ops cost, AI-generated events are the product, horror tier is the hook, server owns all game logic, client is mostly a display layer. Respect the HMAC chain, validate LLM output, keep the frontend zero-dependency, and run the 119 tests before committing.
+
+## Project Context
+Query `osi-context.get_bundle("oregon-trail")` at session start for project decisions, gotchas, and cross-project rules.
