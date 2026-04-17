@@ -1,3 +1,5 @@
+import { addTopHud, addBottomHud } from "../lib/hud.mjs";
+
 export default function register(k, engine) {
   k.scene("event", (sceneData) => {
     const eventData = sceneData || engine.currentEvent;
@@ -13,13 +15,18 @@ export default function register(k, engine) {
       k.opacity(0.6),
     ]);
 
+    // Decorative label — sits between HUD and HTML overlay; a whisper not a shout
     k.add([
-      k.text("EVENT", { size: 16 }),
-      k.pos(320, 460),
+      k.text("EVENT", { size: 12 }),
+      k.pos(320, 420),
       k.anchor("center"),
       k.color(150, 130, 100),
-      k.opacity(0.5),
+      k.opacity(0.35),
+      k.z(49),
     ]);
+
+    addTopHud(k, engine);
+    addBottomHud(k, engine);
 
     // ── Show HTML overlay ──
     if (!eventData) {

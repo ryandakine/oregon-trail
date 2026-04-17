@@ -1,3 +1,5 @@
+import { addTopHud, addBottomHud } from "../lib/hud.mjs";
+
 export default function register(k, engine) {
   k.scene("landmark", (data) => {
     const W = 640;
@@ -11,19 +13,22 @@ export default function register(k, engine) {
     // Draw background based on type
     drawBackground(k, type, W, H);
 
-    // Landmark name at top
+    // Landmark name — pushed down to make room for top HUD (36px band)
     k.add([
-      k.rect(W, 44, { radius: 0 }),
-      k.pos(0, 0),
+      k.rect(W, 38, { radius: 0 }),
+      k.pos(0, 36),
       k.color(26, 26, 46),
       k.opacity(0.7),
     ]);
     k.add([
       k.text(name, { size: 26 }),
-      k.pos(W / 2, 22),
+      k.pos(W / 2, 36 + 19),
       k.anchor("center"),
       k.color(252, 227, 138),
     ]);
+
+    addTopHud(k, engine);
+    addBottomHud(k, engine);
 
     // Description panel at bottom
     const panelH = 90;
@@ -77,7 +82,7 @@ export default function register(k, engine) {
     const btnGap = 10;
     const totalBtnW = actions.length * btnW + (actions.length - 1) * btnGap;
     const startX = (W - totalBtnW) / 2;
-    const btnY = H - 48;
+    const btnY = H - 88;   // cleared bottom HUD panel at y=440
 
     let acted = false;
     const btnObjs = [];
