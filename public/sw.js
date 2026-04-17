@@ -1,4 +1,4 @@
-const CACHE_NAME = 'oregon-trail-kaplay-v1';
+const CACHE_NAME = 'oregon-trail-kaplay-v3-primitive';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -27,11 +27,20 @@ const STATIC_ASSETS = [
   '/scenes/newspaper.js',
   '/scenes/share.js',
 ];
+const OPTIONAL_ASSETS = [
+  '/lib/draw.mjs',
+  '/lib/hud.mjs',
+  '/lib/tone.mjs',
+];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then(async (cache) => {
+        await cache.addAll(STATIC_ASSETS);
+        // Optional assets may 404 between commit landings; allSettled tolerates it.
+        await Promise.allSettled(OPTIONAL_ASSETS.map((a) => cache.add(a)));
+      })
       .then(() => self.skipWaiting())
   );
 });
