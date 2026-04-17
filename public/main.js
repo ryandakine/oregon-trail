@@ -1,4 +1,16 @@
-import kaplay from "https://unpkg.com/kaplay@3001/dist/kaplay.mjs";
+// Error capture — must run before kaplay loads so early errors are caught.
+window.__ERRORS = [];
+window.addEventListener("error", (e) => window.__ERRORS.push({ msg: e.message, src: e.filename, line: e.lineno }));
+window.addEventListener("unhandledrejection", (e) => window.__ERRORS.push({ msg: "rejection: " + String(e.reason) }));
+
+// Kaplay CDN with jsDelivr fallback so the game loads if unpkg is down.
+let kaplay;
+try {
+  kaplay = (await import("https://unpkg.com/kaplay@3001/dist/kaplay.mjs")).default;
+} catch (err) {
+  console.warn("unpkg unreachable, falling back to jsDelivr:", err?.message);
+  kaplay = (await import("https://cdn.jsdelivr.net/npm/kaplay@3001/dist/kaplay.mjs")).default;
+}
 
 const k = kaplay({
   width: 640,
@@ -10,6 +22,15 @@ const k = kaplay({
 });
 
 window.k = k;
+
+// A11y: describe the canvas for assistive tech since its content is dynamic.
+const canvas = document.querySelector("canvas");
+if (canvas) {
+  canvas.setAttribute("role", "img");
+  canvas.setAttribute("aria-label", "Oregon Trail — AI edition. Press P to pause. Keyboard navigation supported in event dialogs.");
+  canvas.setAttribute("tabindex", "0");
+}
+
 const engine = window.engine;
 
 // Register stateChange bridge BEFORE engine.init() — critical:
@@ -35,7 +56,6 @@ engine.on("stateChange", ({ from, to, data }) => {
   };
   const sceneName = sceneMap[to];
   if (sceneName) {
-    // Hide HTML overlay on scene switch
     const overlay = document.getElementById("html-overlay");
     if (overlay) overlay.classList.remove("active");
     k.go(sceneName, data || {});
