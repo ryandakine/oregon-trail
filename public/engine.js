@@ -363,6 +363,11 @@ class GameEngine {
     return this.position?.miles_traveled || 0;
   }
 
+  get tone() {
+    // State field is tone_tier (worker/src/types.ts:249); default medium when state absent.
+    return this.gameState?.simulation?.tone_tier ?? 'medium';
+  }
+
   formatDate(dateStr) {
     const d = new Date(dateStr + 'T00:00:00');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
