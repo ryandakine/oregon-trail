@@ -172,7 +172,7 @@ export default function register(k, engine) {
       k.opacity(0.85),
     ]);
     k.add([
-      k.text("[N] Read Newspaper", { size: 14 }),
+      k.text("(N) Read Newspaper", { size: 14 }),
       k.pos(W / 2 - 110, btnY + 16),
       k.anchor("center"),
       k.color(255, 255, 255),
@@ -191,7 +191,7 @@ export default function register(k, engine) {
         k.opacity(0.85),
       ]);
       k.add([
-        k.text("[S] Share Result", { size: 14 }),
+        k.text("(S) Share Result", { size: 14 }),
         k.pos(W / 2 + 100, btnY + 16),
         k.anchor("center"),
         k.color(255, 255, 255),

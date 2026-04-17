@@ -120,7 +120,7 @@ export default function register(k, engine) {
 
     // "Download Tombstone" prompt
     const dlText = k.add([
-      k.text("[D] Download Tombstone", { size: 12 }),
+      k.text("(D) Download Tombstone", { size: 12 }),
       k.pos(W / 2, 420),
       k.anchor("center"),
       k.color(100, 100, 100),
