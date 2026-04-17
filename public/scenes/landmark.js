@@ -67,15 +67,15 @@ export default function register(k, engine) {
 
     const actions = [];
     if (isFortOrSettlement) {
-      actions.push({ label: "[1] Rest", key: "1", action: "rest" });
+      actions.push({ label: "(1) Rest", key: "1", action: "rest" });
     }
     if (hasSupplies) {
-      actions.push({ label: "[2] Trade", key: "2", action: "trade" });
+      actions.push({ label: "(2) Trade", key: "2", action: "trade" });
     }
     if (isFortOrSettlement) {
-      actions.push({ label: "[3] Talk", key: "3", action: "talk" });
+      actions.push({ label: "(3) Talk", key: "3", action: "talk" });
     }
-    actions.push({ label: "[4] Continue", key: "4", action: "continue" });
+    actions.push({ label: "(4) Continue", key: "4", action: "continue" });
 
     const btnW = 130;
     const btnH = 32;
