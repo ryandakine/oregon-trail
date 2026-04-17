@@ -171,15 +171,18 @@ export async function applyEventAndSign(
     }
   }
 
-  // Apply personality_effects to specific members by name
+  // Apply personality_effects to specific members by name.
+  // Clamp per-event delta too — an unclamped "sanity: -200" can zero a member in one event.
   for (const [name, effects] of Object.entries(event.personality_effects)) {
     const member = next.party.members.find((m) => m.name === name);
     if (!member || !member.alive) continue;
     if (effects.sanity !== undefined) {
-      member.sanity = Math.max(0, Math.min(100, member.sanity + effects.sanity));
+      const delta = clampPersonalityEffect("sanity", effects.sanity);
+      member.sanity = Math.max(0, Math.min(100, member.sanity + delta));
     }
     if (effects.morale !== undefined) {
-      member.morale = Math.max(0, Math.min(100, member.morale + effects.morale));
+      const delta = clampPersonalityEffect("morale", effects.morale);
+      member.morale = Math.max(0, Math.min(100, member.morale + delta));
     }
   }
 
@@ -237,8 +240,40 @@ export async function applyStoreAndSign(
   return { state: next, signature };
 }
 
-// Clamp days/miles from LLM to prevent negative values
+// Per-field sane caps on LLM consequences. The ±10000 guard in anthropic.ts keeps
+// the JSON from exploding, but "health: -100" still passes that and wipes the party
+// because it applies to every living member. These bounds reflect game-design intent:
+// a single event bruises; it doesn't end the run. A catastrophic event (High tone
+// tier) costs at most ~40 health — still survivable with medicine and rest.
+const CONSEQUENCE_BOUNDS: Record<string, [number, number]> = {
+  health:       [-40, 25],
+  morale:       [-30, 25],
+  sanity:       [-30, 25],
+  food:         [-150, 150],
+  ammo:         [-50, 60],
+  clothing:     [-3, 3],
+  spare_parts:  [-2, 3],
+  medicine:     [-3, 5],
+  money:        [-5000, 5000],
+  oxen:         [-2, 2],
+  days:         [0, 5],
+  miles:        [0, 50],
+};
+
+function clampToBounds(key: string, val: number): number {
+  const bounds = CONSEQUENCE_BOUNDS[key];
+  if (!bounds) return val;
+  return Math.max(bounds[0], Math.min(bounds[1], val));
+}
+
 export function clampConsequences(c: Record<string, number | undefined>): void {
-  if (c.days !== undefined && c.days < 0) c.days = 0;
-  if (c.miles !== undefined && c.miles < 0) c.miles = 0;
+  for (const key of Object.keys(c)) {
+    if (c[key] === undefined) continue;
+    c[key] = clampToBounds(key, c[key]!);
+  }
+}
+
+// Exported for per-member personality_effects clamping in applyEventAndSign
+export function clampPersonalityEffect(key: "sanity" | "morale", val: number): number {
+  return clampToBounds(key, val);
 }
