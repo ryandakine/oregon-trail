@@ -48,7 +48,7 @@ export default function register(k, engine) {
 
     allDead.forEach((member, i) => {
       const my = listY + 14 + i * 28;
-      const cause = member.cause_of_death || "the trail";
+      const cause = member.cause || member.cause_of_death || "the trail";
 
       // Skull marker
       k.add([

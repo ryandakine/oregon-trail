@@ -124,8 +124,11 @@ describe("applyEventAndSign", () => {
     expect(result.state.supplies.food).toBe(0);
   });
 
-  it("health=0 flips alive to false", async () => {
+  it("health=0 flips alive to false (after clamping, needs accumulated damage)", async () => {
+    // Pre-clamp intent: single -100 event killed everyone. Post-clamp: health delta
+    // is capped at -40/event. To test the zero-flip mechanic, start members at 40.
     const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET);
+    for (const m of state.party.members) m.health = 40;
     const event = makeEvent({
       choices: [{ label: "Deadly", consequences: { health: -100 } }],
     });
@@ -349,5 +352,65 @@ describe("weekly challenges", () => {
     const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET, "fake_challenge");
     expect(state.settings.challenge_id).toBe("fake_challenge");
     expect(state.supplies.money).toBe(400_00);
+  });
+});
+
+describe("consequence clamping — balance guardrails", () => {
+  // Regression: party wipe at mile 20, May 7 1848. Root cause: a single LLM event
+  // with health: -100 killed all 5 members at once because clampConsequences only
+  // guarded days/miles. These tests pin per-field caps.
+
+  it("single event cannot reduce full-health party below 60", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET);
+    const event = makeEvent({
+      choices: [{ label: "Catastrophe", consequences: { health: -100 } }],
+    });
+    const { state: next } = await applyEventAndSign(state, 0, event, SECRET);
+    for (const m of next.party.members) {
+      expect(m.alive).toBe(true);
+      expect(m.health).toBeGreaterThanOrEqual(60);
+    }
+    expect(next.deaths.length).toBe(0);
+  });
+
+  it("single event cannot lose more than 2 oxen", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET);
+    state.supplies.oxen = 6;
+    const event = makeEvent({
+      choices: [{ label: "Stampede", consequences: { oxen: -99 } }],
+    });
+    const { state: next } = await applyEventAndSign(state, 0, event, SECRET);
+    expect(next.supplies.oxen).toBe(4);
+  });
+
+  it("single event cannot drain more than 150 lbs of food", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET);
+    state.supplies.food = 200;
+    const event = makeEvent({
+      choices: [{ label: "Raccoons", consequences: { food: -500 } }],
+    });
+    const { state: next } = await applyEventAndSign(state, 0, event, SECRET);
+    expect(next.supplies.food).toBe(50);
+  });
+
+  it("personality_effects sanity delta clamped per event", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET);
+    const event = makeEvent({
+      choices: [{ label: "Horror", consequences: {} }],
+      personality_effects: { Beth: { sanity: -200 } },
+    });
+    const { state: next } = await applyEventAndSign(state, 0, event, SECRET);
+    const beth = next.party.members.find((m) => m.name === "Beth")!;
+    expect(beth.sanity).toBeGreaterThanOrEqual(70);
+  });
+
+  it("positive consequences capped too", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET);
+    state.supplies.food = 100;
+    const event = makeEvent({
+      choices: [{ label: "Bonanza", consequences: { food: 1000 } }],
+    });
+    const { state: next } = await applyEventAndSign(state, 0, event, SECRET);
+    expect(next.supplies.food).toBe(250);
   });
 });
