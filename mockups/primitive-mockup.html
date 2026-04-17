@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Oregon Trail — Primitive Mockup</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; display: flex; justify-content: center; align-items: center; width: 100vw; height: 100vh; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+  </style>
+</head>
+<body>
+  <script>
+    window.__ERRORS = [];
+    window.addEventListener("error", (e) => { window.__ERRORS.push({msg: e.message, src: e.filename, line: e.lineno}); console.error("GlobalError:", e.message, e.filename, e.lineno); });
+    window.addEventListener("unhandledrejection", (e) => { window.__ERRORS.push({msg: "unhandled rejection: " + String(e.reason)}); console.error("UnhandledRejection:", e.reason); });
+  </script>
+  <script type="module">
+    import kaplay from "https://unpkg.com/kaplay@3001/dist/kaplay.mjs";
+
+    const k = kaplay({
+      width: 640,
+      height: 480,
+      background: [109, 128, 250],  // #6d80fa — warm blue sky
+      crisp: true,
+      stretch: true,
+      letterbox: true,
+      global: false,
+    });
+
+    // Ellipse polyfill — Kaplay 3001 doesn't expose k.ellipse
+    k.__rectEllipse = (w, h) => k.rect(w, h, { radius: Math.min(w, h) / 2 });
+
+    // ─── Palette ──────────────────────────────
+    const P = {
+      sky:          k.rgb(109, 128, 250),  // #6d80fa
+      skyPale:      k.rgb(168, 201, 255),  // #a8c9ff horizon haze
+      hillFar:      k.rgb(106, 138, 140),  // muted blue-green distant
+      hillMid:      k.rgb(90, 138, 63),    // #5a8a3f
+      hillNear:     k.rgb(129, 178, 20),   // #81b214
+      grassLight:   k.rgb(168, 208, 86),   // #a8d056
+      grassMid:     k.rgb(129, 178, 20),   // #81b214
+      grassBorder:  k.rgb(58, 75, 32),     // dark border
+      dirtLight:    k.rgb(196, 154, 108),  // #c49a6c
+      dirtMid:      k.rgb(139, 96, 51),
+      dirtDark:     k.rgb(109, 69, 32),    // chocolate
+      wood:         k.rgb(90, 58, 31),     // #5a3a1f
+      woodLight:    k.rgb(139, 90, 45),
+      canvas:       k.rgb(245, 230, 200),  // #f5e6c8
+      canvasMid:    k.rgb(232, 201, 154),  // #e8c99a
+      oxBrown:      k.rgb(120, 85, 45),
+      oxCream:      k.rgb(220, 195, 155),
+      skin:         k.rgb(235, 200, 160),
+      shirt:        k.rgb(240, 230, 210),
+      vest:         k.rgb(70, 50, 30),
+      trousers:     k.rgb(100, 70, 40),
+      bonnet:       k.rgb(240, 230, 200),
+      dressBlue:    k.rgb(80, 110, 170),
+      hatFelt:      k.rgb(65, 45, 30),
+      outline:      k.rgb(58, 42, 26),     // #3a2a1a warm dark
+      black:        k.rgb(30, 20, 10),
+      white:        k.rgb(255, 255, 255),
+      cloud:        k.rgb(250, 248, 240),
+      parchment:    k.rgb(245, 230, 200),
+      parchmentDark: k.rgb(42, 31, 14),
+      gold:         k.rgb(212, 160, 23),
+      hpGreen:      k.rgb(90, 138, 63),
+    };
+
+    // ─── Sky gradient (bands) ─────────────────
+    k.add([ k.rect(640, 180), k.pos(0, 0), k.color(P.sky) ]);
+    k.add([ k.rect(640, 40), k.pos(0, 180), k.color(P.skyPale), k.opacity(0.7) ]);
+
+    // Clouds — rounded cartoon (overlapping circles)
+    function cloud(cx, cy, s = 1) {
+      const parts = [
+        { x: 0, y: 0, r: 16 * s },
+        { x: 14 * s, y: -4 * s, r: 18 * s },
+        { x: 28 * s, y: 0, r: 14 * s },
+        { x: -12 * s, y: 2 * s, r: 12 * s },
+      ];
+      for (const p of parts) {
+        k.add([ k.circle(p.r + 1), k.pos(cx + p.x, cy + p.y), k.color(P.outline), k.opacity(0.15), k.anchor("center") ]);
+      }
+      for (const p of parts) {
+        k.add([ k.circle(p.r), k.pos(cx + p.x, cy + p.y), k.color(P.cloud), k.anchor("center") ]);
+      }
+    }
+    cloud(80, 60, 1.0);
+    cloud(280, 45, 0.8);
+    cloud(460, 70, 1.1);
+    cloud(580, 35, 0.7);
+
+    // Tiny distant bird silhouettes (two curves)
+    function bird(cx, cy) {
+      k.add([ k.text("⌒", { size: 8 }), k.pos(cx, cy), k.color(P.outline), k.anchor("center") ]);
+    }
+    bird(200, 90);
+    bird(380, 80);
+
+    // ─── Tiered mountains / hills for depth ───
+    // Far mountains (blue-purple silhouette)
+    function mountain(cx, cy, w, h, col) {
+      k.add([
+        k.polygon([
+          k.vec2(-w/2, 0),
+          k.vec2(-w/4, -h * 0.8),
+          k.vec2(-w/8, -h * 0.6),
+          k.vec2(0, -h),
+          k.vec2(w/6, -h * 0.7),
+          k.vec2(w/3, -h * 0.4),
+          k.vec2(w/2, 0),
+        ]),
+        k.pos(cx, cy),
+        k.color(col),
+        k.outline(2, P.outline),
+      ]);
+    }
+    mountain(150, 230, 280, 70, k.rgb(120, 130, 160));
+    mountain(420, 230, 320, 55, k.rgb(130, 140, 170));
+    mountain(320, 230, 180, 90, k.rgb(105, 120, 150));
+    // Near rolling hills
+    function hill(cx, cy, w, h, col) {
+      k.add([
+        k.rect(w, h, { radius: [h, h, 0, 0] }),
+        k.pos(cx - w/2, cy - h),
+        k.color(col),
+        k.outline(2, P.outline),
+      ]);
+    }
+    hill(120, 260, 240, 34, P.hillMid);
+    hill(380, 260, 280, 40, P.hillMid);
+    hill(580, 260, 220, 30, P.hillNear);
+
+    // ─── Tile floor: checkered grass + dirt trail ───
+    const TS = 32;
+    // Ground base
+    k.add([ k.rect(640, 260), k.pos(0, 260), k.color(P.grassMid) ]);
+
+    // Dirt trail — diagonal perspective through center
+    // Implementation: a trapezoid running from mid-top to bottom-full-width
+    k.add([
+      k.polygon([
+        k.vec2(230, 0),
+        k.vec2(410, 0),
+        k.vec2(640, 140),
+        k.vec2(0, 140),
+      ]),
+      k.pos(0, 330),
+      k.color(P.dirtMid),
+      k.outline(2, P.outline),
+    ]);
+    // Trail shadow strip
+    k.add([
+      k.polygon([
+        k.vec2(240, 0),
+        k.vec2(400, 0),
+        k.vec2(600, 120),
+        k.vec2(40, 120),
+      ]),
+      k.pos(0, 340),
+      k.color(P.dirtDark),
+    ]);
+    // Wheel ruts — two parallel faint lines
+    for (let y = 340; y < 470; y += 16) {
+      const w = 40 + (y - 340) * 3;
+      k.add([ k.rect(4, 6), k.pos(320 - w, y), k.color(P.dirtDark), k.opacity(0.6) ]);
+      k.add([ k.rect(4, 6), k.pos(320 + w - 4, y), k.color(P.dirtDark), k.opacity(0.6) ]);
+    }
+
+    // Grass checker tiles on both sides of trail (perspective-aware)
+    function drawGrassTile(tx, ty, base, alt) {
+      const col = ((tx / TS) + (ty / TS)) % 2 === 0 ? base : alt;
+      k.add([ k.rect(TS, TS), k.pos(tx, ty), k.color(col), k.opacity(0.8) ]);
+      // Border hints at edges
+    }
+    for (let y = 264; y < 480; y += TS) {
+      for (let x = 0; x < 640; x += TS) {
+        // Skip tiles that are on the trail
+        const rowProgress = (y - 264) / (480 - 264);
+        const trailLeft = 230 - (230 - 0) * rowProgress;
+        const trailRight = 410 + (640 - 410) * rowProgress;
+        if (x + TS/2 > trailLeft && x + TS/2 < trailRight) continue;
+        drawGrassTile(x, y, P.grassLight, P.grassMid);
+      }
+    }
+
+    // Dark green grass-border tiles along the trail edge
+    for (let y = 264; y < 480; y += 4) {
+      const rowProgress = (y - 264) / (480 - 264);
+      const trailLeft = 230 - (230 - 0) * rowProgress;
+      const trailRight = 410 + (640 - 410) * rowProgress;
+      k.add([ k.rect(3, 4), k.pos(trailLeft - 3, y), k.color(P.grassBorder) ]);
+      k.add([ k.rect(3, 4), k.pos(trailRight, y), k.color(P.grassBorder) ]);
+    }
+
+    // Scattered grass tufts and small detail
+    function grassTuft(cx, cy) {
+      k.add([ k.rect(8, 3), k.pos(cx - 4, cy), k.color(P.grassBorder) ]);
+      for (let i = 0; i < 4; i++) {
+        k.add([ k.rect(2, 5 + i), k.pos(cx - 3 + i * 2, cy - 4 - i), k.color(P.hillMid) ]);
+      }
+    }
+    grassTuft(60, 390);
+    grassTuft(540, 380);
+    grassTuft(90, 430);
+    grassTuft(580, 440);
+
+    // ─── Tree (cartoon, rounded canopy) ───
+    function tree(cx, cy) {
+      // Trunk
+      k.add([ k.rect(16, 36), k.pos(cx - 8, cy - 20), k.color(P.wood), k.outline(2, P.outline) ]);
+      // Canopy — three overlapping circles
+      const canopy = [
+        { x: 0, y: -40, r: 34 },
+        { x: -22, y: -28, r: 26 },
+        { x: 22, y: -28, r: 26 },
+        { x: 0, y: -60, r: 22 },
+      ];
+      for (const c of canopy) {
+        k.add([ k.circle(c.r + 2), k.pos(cx + c.x, cy + c.y), k.color(P.outline), k.anchor("center") ]);
+      }
+      for (const c of canopy) {
+        k.add([ k.circle(c.r), k.pos(cx + c.x, cy + c.y), k.color(P.hillMid), k.anchor("center") ]);
+      }
+      // Highlights
+      for (const c of canopy) {
+        k.add([ k.circle(c.r * 0.4), k.pos(cx + c.x - c.r*0.3, cy + c.y - c.r*0.3), k.color(P.hillNear), k.opacity(0.8), k.anchor("center") ]);
+      }
+    }
+    tree(560, 330);
+
+    // Rock
+    function rock(cx, cy, w = 36, h = 22) {
+      k.add([ k.__rectEllipse(w + 2, h + 2), k.pos(cx, cy), k.color(P.outline), k.anchor("center") ]);
+      k.add([ k.__rectEllipse(w, h), k.pos(cx, cy), k.color(k.rgb(140, 135, 130)), k.anchor("center") ]);
+      k.add([ k.__rectEllipse(w * 0.5, h * 0.3), k.pos(cx - w*0.15, cy - h*0.25), k.color(k.rgb(180, 175, 170)), k.anchor("center") ]);
+    }
+    rock(70, 360);
+    rock(110, 455, 24, 14);
+
+    // ─── HERO: Wagon + oxen + pioneers ───
+    // Wagon centered ~300,370 — big (about 30% of frame width)
+    const wagonX = 300;
+    const wagonY = 360;
+
+    function wagon(cx, cy) {
+      // Wooden body (with outline)
+      k.add([ k.rect(130, 36, { radius: 2 }), k.pos(cx - 65, cy - 5), k.color(P.outline) ]);
+      k.add([ k.rect(126, 32, { radius: 2 }), k.pos(cx - 63, cy - 3), k.color(P.wood) ]);
+      // Body plank lines (highlights)
+      for (let i = -55; i < 65; i += 18) {
+        k.add([ k.rect(2, 28), k.pos(cx + i, cy - 1), k.color(P.outline), k.opacity(0.5) ]);
+      }
+      // Body highlight band
+      k.add([ k.rect(122, 4), k.pos(cx - 61, cy - 1), k.color(P.woodLight), k.opacity(0.7) ]);
+
+      // Canvas top — arched, 5 bows
+      // Draw the canvas as a large ellipse clipped
+      const canvasY = cy - 28;
+      k.add([ k.__rectEllipse(132, 52), k.pos(cx, canvasY), k.color(P.outline), k.anchor("center") ]);
+      k.add([ k.__rectEllipse(126, 46), k.pos(cx, canvasY), k.color(P.canvas), k.anchor("center") ]);
+      // Clip bottom half by drawing body over
+      k.add([ k.rect(140, 30), k.pos(cx - 70, cy - 5), k.color(P.sky), k.opacity(0) ]); // spacer
+      // Canvas shading — a darker arc on bottom-left
+      k.add([ k.__rectEllipse(122, 42), k.pos(cx + 2, canvasY + 2), k.color(P.canvasMid), k.anchor("center"), k.opacity(0.5) ]);
+      // Bows — vertical subtle lines suggesting canvas ribs
+      for (let i = -50; i <= 50; i += 24) {
+        k.add([ k.rect(2, 44), k.pos(cx + i - 1, canvasY - 22), k.color(P.outline), k.opacity(0.25) ]);
+      }
+
+      // Wheels — large spoked
+      function wheel(wx, wy) {
+        const r = 22;
+        k.add([ k.circle(r + 2), k.pos(wx, wy), k.color(P.outline), k.anchor("center") ]);
+        k.add([ k.circle(r), k.pos(wx, wy), k.color(P.woodLight), k.anchor("center") ]);
+        k.add([ k.circle(r - 3), k.pos(wx, wy), k.color(P.wood), k.anchor("center") ]);
+        // Spokes — 6 spokes
+        for (let a = 0; a < 6; a++) {
+          const ang = (a / 6) * Math.PI * 2;
+          k.add([
+            k.rect(3, r * 2 - 6),
+            k.pos(wx, wy),
+            k.color(P.outline),
+            k.rotate((ang * 180) / Math.PI),
+            k.anchor("center"),
+          ]);
+        }
+        // Hub
+        k.add([ k.circle(5), k.pos(wx, wy), k.color(P.outline), k.anchor("center") ]);
+        k.add([ k.circle(3), k.pos(wx, wy), k.color(P.woodLight), k.anchor("center") ]);
+      }
+      wheel(cx - 42, cy + 26);
+      wheel(cx + 42, cy + 26);
+
+      // Tongue (pointing left to oxen)
+      k.add([ k.rect(44, 4), k.pos(cx - 100, cy + 18), k.color(P.outline) ]);
+      k.add([ k.rect(40, 2), k.pos(cx - 98, cy + 19), k.color(P.wood) ]);
+      // Mud splatter
+      for (let i = 0; i < 6; i++) {
+        const mx = cx - 60 + Math.random() * 120;
+        const my = cy + 15 + Math.random() * 8;
+        k.add([ k.circle(2 + Math.random() * 1.5), k.pos(mx, my), k.color(P.dirtDark), k.anchor("center"), k.opacity(0.7) ]);
+      }
+    }
+    wagon(wagonX, wagonY);
+
+    // Oxen pair (left of wagon, pulling)
+    function ox(cx, cy) {
+      // Body
+      k.add([ k.rect(42, 22, { radius: 3 }), k.pos(cx - 21, cy - 11), k.color(P.outline) ]);
+      k.add([ k.rect(38, 18, { radius: 3 }), k.pos(cx - 19, cy - 9), k.color(P.oxBrown) ]);
+      // Cream patch on side
+      k.add([ k.__rectEllipse(18, 10), k.pos(cx + 3, cy - 2), k.color(P.oxCream), k.anchor("center"), k.opacity(0.8) ]);
+      // Head (on left-forward)
+      k.add([ k.circle(9), k.pos(cx - 20, cy - 5), k.color(P.outline), k.anchor("center") ]);
+      k.add([ k.circle(7), k.pos(cx - 20, cy - 5), k.color(P.oxBrown), k.anchor("center") ]);
+      // Horns — two small triangles
+      k.add([ k.polygon([k.vec2(0,0), k.vec2(-4,-6), k.vec2(-2,1)]), k.pos(cx - 24, cy - 11), k.color(P.canvasMid) ]);
+      k.add([ k.polygon([k.vec2(0,0), k.vec2(4,-6), k.vec2(2,1)]), k.pos(cx - 16, cy - 11), k.color(P.canvasMid) ]);
+      // Legs
+      k.add([ k.rect(3, 8), k.pos(cx - 16, cy + 7), k.color(P.outline) ]);
+      k.add([ k.rect(3, 8), k.pos(cx - 8, cy + 7), k.color(P.outline) ]);
+      k.add([ k.rect(3, 8), k.pos(cx + 4, cy + 7), k.color(P.outline) ]);
+      k.add([ k.rect(3, 8), k.pos(cx + 12, cy + 7), k.color(P.outline) ]);
+      // Tail
+      k.add([ k.rect(2, 8), k.pos(cx + 17, cy - 3), k.color(P.outline) ]);
+    }
+    ox(wagonX - 140, wagonY + 15);
+    ox(wagonX - 195, wagonY + 15);
+    // Yoke between oxen and wagon
+    k.add([ k.rect(56, 3), k.pos(wagonX - 210, wagonY - 2), k.color(P.outline) ]);
+    k.add([ k.rect(52, 1), k.pos(wagonX - 208, wagonY - 1), k.color(P.wood) ]);
+
+    // Pioneers walking alongside
+    function pioneer(cx, cy, opts = {}) {
+      const hat = opts.hat || "felt"; // or "bonnet"
+      const bodyCol = opts.body || P.vest;
+      const legCol = opts.legs || P.trousers;
+      // Outline silhouette first
+      k.add([ k.rect(14, 26), k.pos(cx - 7, cy - 22), k.color(P.outline) ]);
+      // Torso
+      k.add([ k.rect(12, 14), k.pos(cx - 6, cy - 20), k.color(bodyCol) ]);
+      // Shirt sleeves
+      k.add([ k.rect(12, 3), k.pos(cx - 6, cy - 18), k.color(P.shirt) ]);
+      // Head
+      k.add([ k.circle(5.5), k.pos(cx, cy - 26), k.color(P.outline), k.anchor("center") ]);
+      k.add([ k.circle(4.5), k.pos(cx, cy - 26), k.color(P.skin), k.anchor("center") ]);
+      // Hat
+      if (hat === "felt") {
+        k.add([ k.rect(16, 2), k.pos(cx - 8, cy - 32), k.color(P.outline) ]);
+        k.add([ k.rect(14, 2), k.pos(cx - 7, cy - 31), k.color(P.hatFelt) ]);
+        k.add([ k.rect(9, 5), k.pos(cx - 4.5, cy - 35), k.color(P.hatFelt), k.outline(1, P.outline) ]);
+      } else {
+        // Bonnet
+        k.add([ k.__rectEllipse(9, 6), k.pos(cx, cy - 31), k.color(P.outline), k.anchor("center") ]);
+        k.add([ k.__rectEllipse(7.5, 5), k.pos(cx, cy - 31), k.color(P.bonnet), k.anchor("center") ]);
+        k.add([ k.rect(5, 3), k.pos(cx - 2.5, cy - 29), k.color(P.bonnet) ]);
+      }
+      // Legs
+      k.add([ k.rect(5, 8), k.pos(cx - 6, cy - 6), k.color(legCol) ]);
+      k.add([ k.rect(5, 8), k.pos(cx + 1, cy - 6), k.color(legCol) ]);
+    }
+    // Man (felt hat) behind wagon
+    pioneer(wagonX + 55, wagonY + 20, { hat: "felt", body: P.vest, legs: P.trousers });
+    // Woman (bonnet) ahead of wagon
+    pioneer(wagonX - 75, wagonY + 22, { hat: "bonnet", body: P.dressBlue, legs: P.dressBlue });
+
+    // ─── Top HUD strip ───
+    function topHud() {
+      // Parchment background
+      k.add([ k.rect(640, 36), k.pos(0, 0), k.color(P.parchmentDark) ]);
+      k.add([ k.rect(632, 28), k.pos(4, 4), k.color(P.parchment), k.outline(2, P.outline) ]);
+
+      const y = 12;
+      k.add([ k.text("MAY 15 1848", { size: 14 }), k.pos(16, y), k.color(P.parchmentDark) ]);
+      k.add([ k.text("FOOD:", { size: 14 }), k.pos(200, y), k.color(P.parchmentDark) ]);
+      k.add([ k.text("150", { size: 14 }), k.pos(252, y), k.color(P.gold) ]);
+      k.add([ k.text("MILES:", { size: 14 }), k.pos(320, y), k.color(P.parchmentDark) ]);
+      k.add([ k.text("240", { size: 14 }), k.pos(384, y), k.color(P.gold) ]);
+      k.add([ k.text("OXEN:", { size: 14 }), k.pos(460, y), k.color(P.parchmentDark) ]);
+      k.add([ k.text("6", { size: 14 }), k.pos(518, y), k.color(P.gold) ]);
+      // Trail progress bar
+      k.add([ k.rect(80, 6), k.pos(548, 14), k.color(P.outline) ]);
+      k.add([ k.rect(28, 4), k.pos(549, 15), k.color(P.gold) ]);
+    }
+    topHud();
+
+    // ─── Bottom HUD: party health ───
+    function bottomHud() {
+      // Panel
+      k.add([ k.rect(220, 36), k.pos(210, 444), k.color(P.outline) ]);
+      k.add([ k.rect(214, 30), k.pos(213, 447), k.color(P.parchment) ]);
+      // 4 health indicators (green circles, "Well" state)
+      const labels = ["EBEN", "ABBY", "JOHN", "RUTH"];
+      for (let i = 0; i < 4; i++) {
+        const x = 240 + i * 48;
+        const y = 462;
+        // Face circle
+        k.add([ k.circle(11), k.pos(x, y), k.color(P.outline), k.anchor("center") ]);
+        k.add([ k.circle(9.5), k.pos(x, y), k.color(P.hpGreen), k.anchor("center") ]);
+        // Label
+        k.add([ k.text(labels[i], { size: 8 }), k.pos(x, y + 14), k.color(P.parchmentDark), k.anchor("center") ]);
+      }
+    }
+    bottomHud();
+
+    // ─── Title "Day 14" pill in corner (optional flavor) ───
+    k.add([ k.rect(72, 22), k.pos(12, 448), k.color(P.outline) ]);
+    k.add([ k.rect(68, 18), k.pos(14, 450), k.color(P.parchment) ]);
+    k.add([ k.text("DAY 14", { size: 10 }), k.pos(48, 459), k.color(P.parchmentDark), k.anchor("center") ]);
+
+    // Signal ready for screenshot
+    setTimeout(() => { document.title = "READY"; }, 300);
+  </script>
+</body>
+</html>
