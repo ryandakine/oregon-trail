@@ -3,9 +3,9 @@
    Display layer only. Server handles all simulation.
    ═══════════════════════════════════════════════════ */
 
-// ── Store Prices (mirrors worker/src/state.ts) ───
+// ── Store Prices (hardcoded fallback, server is source of truth) ───
 
-const STORE_PRICES = {
+let STORE_PRICES = {
   food:        { price_cents: 30,   unit_amount: 10, unit_label: '10 lbs',    tooltip: '200 lbs per person for the full journey' },
   oxen:        { price_cents: 5000, unit_amount: 2,  unit_label: '1 yoke (2)', tooltip: '6 minimum (3 yoke) to pull a loaded wagon' },
   clothing:    { price_cents: 300,  unit_amount: 1,  unit_label: '1 set',     tooltip: 'Essential for mountain crossings' },
@@ -13,6 +13,7 @@ const STORE_PRICES = {
   spare_parts: { price_cents: 200,  unit_amount: 1,  unit_label: '1 part',    tooltip: 'Broken axles and tongues can strand you' },
   medicine:    { price_cents: 100,  unit_amount: 3,  unit_label: '3 doses',   tooltip: 'Reduces disease mortality by half' },
 };
+let _pricesFetched = false;
 
 const STARTING_MONEY = {
   farmer: 400_00,
@@ -118,9 +119,8 @@ function getDailyTrailNumber() {
 }
 
 function getDailySeed() {
-  // Use UTC to match getDailyTrailNumber's UTC epoch math
   const now = new Date();
-  return now.getUTCFullYear() * 10000 + (now.getUTCMonth() + 1) * 100 + now.getUTCDate();
+  return now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
 }
 
 function getDailyCompletion() {
@@ -131,9 +131,10 @@ function getDailyCompletion() {
   } catch (_) { return null; }
 }
 
-function saveDailyCompletion(trailNumber, result) {
+function saveDailyCompletion(result) {
+  const num = getDailyTrailNumber();
   try {
-    localStorage.setItem('ot_daily_' + trailNumber, JSON.stringify(result));
+    localStorage.setItem('ot_daily_' + num, JSON.stringify(result));
   } catch (_) {}
 }
 
@@ -187,7 +188,7 @@ class GameEngine {
     const miles = this.milesTraveled || 0;
     const survived = alive > 0;
     const result = { completed: true, survived, alive, total, miles, date: new Date().toISOString() };
-    saveDailyCompletion(this.dailyTrailNumber, result);
+    saveDailyCompletion(result);
     return result;
   }
 
@@ -197,7 +198,9 @@ class GameEngine {
     const alive = gs?.party?.members?.filter(m => m.alive)?.length || 0;
     const total = gs?.party?.members?.length || 5;
     const miles = this.milesTraveled || 0;
-    const days = gs?.position?.days_elapsed || 0;
+    const startDate = new Date('1848-04-15');
+    const curDate = gs?.position?.date ? new Date(gs.position.date) : startDate;
+    const days = Math.max(0, Math.round((curDate - startDate) / 86400000));
 
     if (alive === 0) {
       return `Daily Trail #${num} \u2014 Party wiped \u{1F480}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
@@ -217,6 +220,18 @@ class GameEngine {
   }
 
   // ── Run Save/Restore (localStorage) ────────
+
+  // Lazy-fetch prices from server before store scene (hardcoded fallback if fails)
+  async _fetchPrices() {
+    if (_pricesFetched) return;
+    try {
+      const res = await fetch(this.apiBase + '/api/prices');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.prices) { STORE_PRICES = data.prices; _pricesFetched = true; }
+      }
+    } catch (_) { /* use hardcoded fallback */ }
+  }
 
   _saveRun() {
     if (!this.signedState) return;
@@ -248,6 +263,13 @@ class GameEngine {
     } catch (_) { return null; }
   }
 
+  getResumeScene() {
+    if (this.currentEvent) return 'EVENT';
+    if (this.currentRiver) return 'RIVER';
+    if (this.currentLandmark) return 'LANDMARK';
+    return 'TRAVEL';
+  }
+
   // ── Event Emitter ────────────────────────────
 
   on(event, fn) {
@@ -256,6 +278,15 @@ class GameEngine {
 
   emit(event, data) {
     (this.listeners[event] || []).forEach(fn => fn(data));
+  }
+
+  off(event, fn) {
+    if (!this.listeners[event]) return;
+    this.listeners[event] = this.listeners[event].filter(f => f !== fn);
+  }
+
+  offAll(event) {
+    delete this.listeners[event];
   }
 
   // ── State Machine ────────────────────────────
@@ -334,6 +365,11 @@ class GameEngine {
     return this.position?.miles_traveled || 0;
   }
 
+  get tone() {
+    // State field is tone_tier (worker/src/types.ts:249); default medium when state absent.
+    return this.gameState?.simulation?.tone_tier ?? 'medium';
+  }
+
   formatDate(dateStr) {
     const d = new Date(dateStr + 'T00:00:00');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -376,6 +412,7 @@ class GameEngine {
       localStorage.removeItem('ot_journal');
       this._saveRun();
       this.emit('loading', false);
+      await this._fetchPrices();
       this.transition('STORE', { rumor: this.rumor });
     } catch (e) {
       this.emit('loading', false);
@@ -413,7 +450,6 @@ class GameEngine {
       this.signedState = res.signed_state;
       this.pendingPace = null;
       this.pendingRations = null;
-      this._saveRun();
 
       // Save journal entries to local backup
       if (res.summaries) {
@@ -431,21 +467,25 @@ class GameEngine {
         days: res.days_advanced || 0,
       });
 
-      // Handle trigger
+      // Handle trigger — _saveRun() after trigger data assigned
       switch (res.trigger) {
         case 'event':
           this.currentEvent = res.trigger_data;
+          this._saveRun();
           this.transition('EVENT', res.trigger_data);
           break;
         case 'landmark':
           this.currentLandmark = res.trigger_data;
+          this._saveRun();
           this.transition('LANDMARK', res.trigger_data);
           break;
         case 'river':
           this.currentRiver = res.trigger_data;
+          this._saveRun();
           this.transition('RIVER', res.trigger_data);
           break;
         case 'death':
+          this._saveRun();
           this.transition('DEATH', res.trigger_data);
           break;
         case 'arrival':
@@ -459,7 +499,7 @@ class GameEngine {
           this.transition('WIPE');
           break;
         default:
-          // No trigger — auto-advance after display delay
+          this._saveRun();
           this._scheduleNextAdvance(res.summaries);
           break;
       }
@@ -665,3 +705,8 @@ class GameEngine {
     this.transition('TITLE');
   }
 }
+
+window.GameEngine = GameEngine;
+window.engine = new GameEngine();
+window.CHALLENGE_INFO = CHALLENGE_INFO;
+window.GameEngine = GameEngine;

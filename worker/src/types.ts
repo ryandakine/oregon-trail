@@ -268,6 +268,7 @@ export interface SimulationState {
   resolved_crossings: string[];
   visited_landmarks: string[];
   pending_event_hash: string | null;
+  landmark_rest_used: string[];
 }
 
 export interface GameState {

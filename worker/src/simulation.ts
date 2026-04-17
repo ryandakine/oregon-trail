@@ -71,6 +71,22 @@ export function advanceDays(
     const weatherProfile = getWeather(ctx, month, segment.region);
     const paceModifier = weatherProfile?.pace_modifier ?? 1;
 
+    // Pre-movement guard: block if unresolved crossing exists at or before current miles
+    const overdueRiver = getNextRiverCrossing(
+      ctx,
+      next.position.current_segment_id,
+      next.simulation.resolved_crossings,
+      0, // check from start of segment
+    );
+    if (overdueRiver && next.position.miles_traveled >= overdueRiver.mile_marker) {
+      return {
+        state: next,
+        summaries,
+        trigger: "river",
+        triggerData: overdueRiver,
+      };
+    }
+
     // 1. Advance miles (oxen required for movement)
     const baseMiles = PACE_MILES[next.settings.pace];
     const oxenModifier = next.supplies.oxen >= 6 ? 1.0

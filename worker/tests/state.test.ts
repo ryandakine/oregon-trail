@@ -63,6 +63,7 @@ describe("createInitialState", () => {
     expect(state.simulation.resolved_crossings).toEqual([]);
     expect(state.simulation.visited_landmarks).toEqual([]);
     expect(state.simulation.pending_event_hash).toBeNull();
+    expect(state.simulation.landmark_rest_used).toEqual([]);
     expect(state.meta.event_count).toBe(0);
     expect(state.meta.run_id).toBeTruthy();
   });

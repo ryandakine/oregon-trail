@@ -44,6 +44,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
       resolved_crossings: [],
       visited_landmarks: [],
       pending_event_hash: null,
+      landmark_rest_used: [],
     },
     meta: {
       run_id: "test-run",

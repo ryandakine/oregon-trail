@@ -1,4 +1,4 @@
-import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES } from "./state";
+import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES, STORE_PRICES } from "./state";
 import { assembleEventPrompt } from "./prompt-assembly";
 import { callAnthropic, parseEventResponse, FALLBACK_EVENTS } from "./anthropic";
 import { advanceDays } from "./simulation";
@@ -27,23 +27,28 @@ export interface Env {
   ALLOWED_ORIGIN: string;
 }
 
-// Rate limiter: in-memory Map, 30 calls/min per IP
+// Rate limiter: in-memory Map, 200 calls/min per IP
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+let rateLimitRequestCount = 0;
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
+  rateLimitRequestCount++;
+
+  // Periodic cleanup every 100 requests (regardless of IP)
+  if (rateLimitRequestCount % 100 === 0 || rateLimitMap.size > 10_000) {
+    for (const [key, val] of rateLimitMap) {
+      if (now > val.resetAt) rateLimitMap.delete(key);
+    }
+  }
+
   const entry = rateLimitMap.get(ip);
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
-    if (rateLimitMap.size > 10_000) {
-      for (const [key, val] of rateLimitMap) {
-        if (now > val.resetAt) rateLimitMap.delete(key);
-      }
-    }
     return true;
   }
   entry.count++;
-  return entry.count <= 30;
+  return entry.count <= 200;
 }
 
 function corsHeaders(origin: string): Record<string, string> {
@@ -117,6 +122,11 @@ export default {
           return await handleLandmark(request, env, origin);
         case "/api/hunt":
           return await handleHunt(request, env, origin);
+        case "/api/prices":
+          if (request.method === "GET") {
+            return jsonResponse({ prices: STORE_PRICES }, 200, origin);
+          }
+          return jsonResponse({ error: "method_not_allowed" }, 405, origin);
         case "/api/challenge":
           if (request.method === "GET") {
             const current = getCurrentChallenge();
@@ -250,6 +260,10 @@ async function handleAdvance(
     return jsonResponse({ error: verified.error }, 403, origin);
   }
 
+  if (verified.state.simulation.pending_event_hash !== null) {
+    return jsonResponse({ error: "resolve_pending_event" }, 400, origin);
+  }
+
   // Apply pace/rations changes from client before simulation
   const stateToAdvance = structuredClone(verified.state);
   const bodyAny = body as Record<string, unknown>;
@@ -378,6 +392,14 @@ async function handleNewspaper(
   }
 
   const state = verified.state;
+
+  // Phase gate: newspaper only valid at arrival or wipe (miles >= 1700 or all dead)
+  const allDead = state.party.members.every((m) => !m.alive);
+  const arrived = state.position.miles_traveled >= 1700;
+  if (!allDead && !arrived) {
+    return jsonResponse({ error: "newspaper_not_available" }, 400, origin);
+  }
+
   const journalText = state.journal.length > 0
     ? state.journal.map((e, i) => `${i + 1}. ${e}`).join("\n")
     : "No notable events recorded yet.";
@@ -638,6 +660,13 @@ async function handleLandmark(
   const historical = ctx as unknown as HistoricalContext;
 
   if (body.action === "rest") {
+    const restUsed = next.simulation.landmark_rest_used ?? [];
+    const restCount = restUsed.filter(id => id === body.landmark_id).length;
+    if (restCount >= 3) {
+      return jsonResponse({ error: "rest_limit_reached" }, 400, origin);
+    }
+    next.simulation.landmark_rest_used = [...restUsed, body.landmark_id];
+
     // Advance date +1 day
     const d = new Date(next.position.date + "T12:00:00Z");
     d.setUTCDate(d.getUTCDate() + 1);
@@ -673,6 +702,16 @@ async function handleLandmark(
 
   if (!Array.isArray(body.trade_items) || body.trade_items.length === 0) {
     return jsonResponse({ error: "no_items_specified" }, 400, origin);
+  }
+
+  const tradeChallenge = next.settings.challenge_id ? getChallengeById(next.settings.challenge_id) : undefined;
+  if (tradeChallenge) {
+    for (const tradeReq of body.trade_items) {
+      const supplyKey = mapTradeItemToSupplyKey(tradeReq.item);
+      if (tradeChallenge.no_ammo && supplyKey === "ammo") return jsonResponse({ error: "challenge_restricted: ammo" }, 400, origin);
+      if (tradeChallenge.no_medicine && supplyKey === "medicine") return jsonResponse({ error: "challenge_restricted: medicine" }, 400, origin);
+      if (tradeChallenge.no_spare_parts && supplyKey === "spare_parts") return jsonResponse({ error: "challenge_restricted: spare_parts" }, 400, origin);
+    }
   }
 
   let totalCost = 0;
@@ -737,6 +776,11 @@ async function handleHunt(
   const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
   if (!verified.valid) {
     return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  // Phase gate: hunting only allowed during travel (miles > 0, not at arrival)
+  if (verified.state.position.miles_traveled === 0) {
+    return jsonResponse({ error: "hunt_not_available" }, 400, origin);
   }
 
   // Challenge constraint: no hunting

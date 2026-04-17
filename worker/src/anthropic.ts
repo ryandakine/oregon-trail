@@ -8,6 +8,11 @@ const ALLOWED_CONSEQUENCE_KEYS = new Set([
   "medicine", "money", "oxen", "morale", "miles", "days",
 ]);
 
+// Retry config: shrinking timeouts to cap total latency at ~17s worst case
+const RETRY_STATUS_CODES = new Set([429, 529]);
+const RETRY_TIMEOUTS = [8000, 4000, 2000]; // 1st attempt, 1st retry, 2nd retry
+const RETRY_DELAYS = [1000, 2000]; // delay before 1st retry, before 2nd retry
+
 export async function callAnthropic(
   system: string,
   user: string,
@@ -15,40 +20,66 @@ export async function callAnthropic(
   opts?: { maxTokens?: number; timeout?: number },
 ): Promise<string> {
   const maxTokens = opts?.maxTokens ?? 800;
-  const timeout = opts?.timeout ?? 8000;
+  const baseTimeout = opts?.timeout ?? 8000;
+  const maxAttempts = RETRY_TIMEOUTS.length;
+  let lastError: Error | null = null;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const timeout = attempt === 0 ? baseTimeout : RETRY_TIMEOUTS[attempt];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
 
-  try {
-    const response = await fetch(ANTHROPIC_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: maxTokens,
-        system,
-        messages: [{ role: "user", content: user }],
-      }),
-      signal: controller.signal,
-    });
+    try {
+      const response = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: maxTokens,
+          system,
+          messages: [{ role: "user", content: user }],
+        }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
+      if (response.ok) {
+        const data = (await response.json()) as {
+          content: Array<{ type: string; text: string }>;
+        };
+        return data.content[0].text;
+      }
+
+      const status = response.status;
       const body = await response.text().catch(() => "");
-      throw new Error(`Anthropic API ${response.status}: ${body}`);
-    }
+      lastError = new Error(`Anthropic API ${status}: ${body}`);
 
-    const data = (await response.json()) as {
-      content: Array<{ type: string; text: string }>;
-    };
-    return data.content[0].text;
-  } finally {
-    clearTimeout(timer);
+      // Only retry on 429 (rate limit) or 529 (overloaded)
+      if (!RETRY_STATUS_CODES.has(status) || attempt >= maxAttempts - 1) {
+        throw lastError;
+      }
+
+      // Honor Retry-After header if present
+      const retryAfter = response.headers.get("retry-after");
+      const delayMs = retryAfter
+        ? Math.min(parseInt(retryAfter, 10) * 1000, 5000)
+        : RETRY_DELAYS[attempt];
+      await new Promise((r) => setTimeout(r, delayMs || RETRY_DELAYS[attempt]));
+    } catch (err) {
+      if (err === lastError) throw err; // re-throw non-retryable
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt >= maxAttempts - 1) throw lastError;
+      // Timeout/network errors: retry
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+    } finally {
+      clearTimeout(timer);
+    }
   }
+
+  throw lastError || new Error("callAnthropic: unexpected retry exhaustion");
 }
 
 export function parseEventResponse(raw: string): EventResponse {

@@ -1,0 +1,527 @@
+{
+  "timestamp": "2026-04-13T01:11:08.076Z",
+  "model": "claude-haiku-4-5-20251001",
+  "events_per_tier": 50,
+  "total_tokens": {
+    "input": 108784,
+    "output": 52666
+  },
+  "estimated_cost_usd": "0.2977",
+  "tiers": {
+    "low": {
+      "tier": "low",
+      "total": 50,
+      "json_valid": 49,
+      "json_valid_pct": 98,
+      "refusals": 0,
+      "refusal_pct": 0,
+      "avg_description_length": 395,
+      "avg_choices": "3.0",
+      "consequence_key_usage": {
+        "health": 121,
+        "food": 93,
+        "ammo": 28,
+        "clothing": 3,
+        "spare_parts": 2,
+        "medicine": 38,
+        "money": 35,
+        "oxen": 25,
+        "morale": 118,
+        "miles": 63,
+        "days": 92
+      },
+      "tone_keyword_hits": {
+        "low": 34,
+        "medium": 64,
+        "high": 13
+      },
+      "parse_errors": [
+        {
+          "idx": 24,
+          "error": "Expected ',' or '}' after property value in JSON at position 789 (line 1 column 790)",
+          "snippet": "```json\n{\"title\":\"A Pawnee hunting party approaches\",\"description\":\"Three Pawnee hunters on horsebac"
+        }
+      ]
+    },
+    "medium": {
+      "tier": "medium",
+      "total": 50,
+      "json_valid": 50,
+      "json_valid_pct": 100,
+      "refusals": 0,
+      "refusal_pct": 0,
+      "avg_description_length": 381,
+      "avg_choices": "3.0",
+      "consequence_key_usage": {
+        "health": 121,
+        "food": 101,
+        "ammo": 30,
+        "clothing": 1,
+        "spare_parts": 2,
+        "medicine": 31,
+        "money": 28,
+        "oxen": 36,
+        "morale": 106,
+        "miles": 63,
+        "days": 97
+      },
+      "tone_keyword_hits": {
+        "low": 27,
+        "medium": 84,
+        "high": 36
+      },
+      "parse_errors": []
+    },
+    "high": {
+      "tier": "high",
+      "total": 50,
+      "json_valid": 48,
+      "json_valid_pct": 96,
+      "refusals": 2,
+      "refusal_pct": 4,
+      "avg_description_length": 460,
+      "avg_choices": "3.0",
+      "consequence_key_usage": {
+        "health": 112,
+        "food": 77,
+        "ammo": 19,
+        "clothing": 2,
+        "spare_parts": 1,
+        "medicine": 51,
+        "money": 30,
+        "oxen": 50,
+        "morale": 103,
+        "miles": 59,
+        "days": 90
+      },
+      "tone_keyword_hits": {
+        "low": 34,
+        "medium": 89,
+        "high": 44
+      },
+      "parse_errors": []
+    }
+  },
+  "sample_events": {
+    "low": [
+      {
+        "title": "Pawnee hunters approach the camp",
+        "description": "A band of five Pawnee hunters, well-mounted and armed, ride toward your evening camp. They show no immediate hostility, but their presence is commanding. Your party has goods they might want, and the encounter could go several ways—trade, negotiation, or a tense standoff. William, already anxious, grips his rifle.",
+        "choices": [
+          {
+            "label": "Invite them to trade; offer coffee and a meal",
+            "consequences": {
+              "food": -12,
+              "money": -50,
+              "morale": 3
+            }
+          },
+          {
+            "label": "Remain cautious; refuse direct contact and prepare to move camp at dawn",
+            "consequences": {
+              "morale": -2,
+              "days": 1,
+              "miles": -5
+            }
+          },
+          {
+            "label": "Offer a small gift of ammunition and ask safe passage information",
+            "consequences": {
+              "ammo": -20,
+              "morale": 2
+            }
+          }
+        ],
+        "personality_effects": {
+          "William": {
+            "sanity": -5,
+            "morale": -3
+          },
+          "James": {
+            "morale": 2
+          }
+        },
+        "journal_entry": "Pawnee hunters visited our camp—we chose hospitality over fear, and they shared knowledge of the trail ahead."
+      },
+      {
+        "title": "Mary's Fever Worsens at Camp",
+        "description": "Mary's cholera has progressed to violent stomach cramps and fever. The humid river valley heat makes her condition critical. A Pawnee medicine man from the hunting party that traded with you yesterday has appeared at camp with his son, offering to help—but his methods are unfamiliar, and your limited medicine stocks won't stretch far either way.",
+        "choices": [
+          {
+            "label": "Accept the Pawnee medicine man's treatment",
+            "consequences": {
+              "health": 8,
+              "medicine": 0,
+              "morale": 5
+            }
+          },
+          {
+            "label": "Use your own medicine and rest; decline outside help",
+            "consequences": {
+              "health": 3,
+              "medicine": -3,
+              "morale": -4
+            }
+          },
+          {
+            "label": "Push on at reduced pace; Mary needs motion to prevent worse complications",
+            "consequences": {
+              "health": -5,
+              "food": -5,
+              "miles": 8,
+              "morale": -8
+            }
+          }
+        ],
+        "personality_effects": {
+          "James": {
+            "sanity": -8,
+            "morale": -10
+          },
+          "Thomas": {
+            "sanity": -5,
+            "morale": -6
+          },
+          "Sarah": {
+            "sanity": -6,
+            "morale": -7
+          }
+        },
+        "journal_entry": "Mary's cholera worsened in the humid valley; we faced a choice between Pawnee healing knowledge, our dwindling medicine, or pressing forward despite her illness."
+      },
+      {
+        "title": "Mountain Pass Washout Blocks Forward Route",
+        "description": "A violent afternoon thunderstorm has carved a deep gully across the main trail through the pass ahead. Your scouts report the crossing is impassable for wagons—the newly exposed rock is slick, and the drop is steep. You have two alternatives: a longer northern route that adds three days but is safer, or attempt to lower the wagons one by one down the southern slope, a risky maneuver that demands time, rope, and steady hands. Mary's fever has worsened, and Thomas argues that delay may cost her life.",
+        "choices": [
+          {
+            "label": "Take the longer northern route—safety over speed",
+            "consequences": {
+              "days": 3,
+              "food": -8,
+              "morale": -4,
+              "miles": 0
+            }
+          },
+          {
+            "label": "Attempt to lower wagons down the southern slope",
+            "consequences": {
+              "days": 1,
+              "health": -6,
+              "spare_parts": -1,
+              "morale": 2,
+              "miles": 8,
+              "ammo": -5
+            }
+          }
+        ],
+        "personality_effects": {
+          "Thomas": {
+            "sanity": -5,
+            "morale": -8
+          },
+          "James": {
+            "sanity": -3,
+            "morale": -2
+          },
+          "Mary": {
+            "sanity": -4,
+            "morale": -6
+          }
+        },
+        "journal_entry": "A storm washed out our path through the pass; we chose between lost time and dangerous risk."
+      }
+    ],
+    "medium": [
+      {
+        "title": "The Pawnee Camp Smoke",
+        "description": "At dusk, you spot smoke rising from a ravine two miles north of the trail. Thomas thinks it's a hunting party. Mary says the Pawnee trade fairly with emigrants. William, fever-weak from the river crossing, insists you circle wide. The smoke drifts closer as the wind shifts. You have maybe an hour before dark.",
+        "choices": [
+          {
+            "label": "Ride ahead to parley. Bring gifts from supplies.",
+            "consequences": {
+              "food": -15,
+              "money": -50,
+              "miles": 1,
+              "health": -2,
+              "morale": 3
+            }
+          },
+          {
+            "label": "Circle north at distance. Lose the trail slightly.",
+            "consequences": {
+              "miles": -1,
+              "days": 1,
+              "health": 0,
+              "morale": -4
+            }
+          },
+          {
+            "label": "Push on past. Keep the camp behind you.",
+            "consequences": {
+              "health": 0,
+              "miles": 2,
+              "morale": -3,
+              "food": 0
+            }
+          }
+        ],
+        "personality_effects": {
+          "Mary": {
+            "sanity": 5,
+            "morale": 2
+          },
+          "Thomas": {
+            "sanity": -3,
+            "morale": -2
+          },
+          "William": {
+            "sanity": -4,
+            "morale": 0
+          },
+          "Sarah": {
+            "sanity": 0,
+            "morale": 4
+          }
+        },
+        "journal_entry": "Smoke in the ravine at dusk—chose a path that costs either pride or time or trust."
+      },
+      {
+        "title": "Mary's Fever Breaks Wrong",
+        "description": "Mary wakes lucid for the first time in four days, but it's the clarity of something burning out. Her skin is gray. She asks for water in a voice that isn't quite hers—thin, stretched. Thomas notices the smell from her bedroll before anyone else does. The river is close. The oxen are restless in the heat. You have maybe six hours before the choice hardens into fact.",
+        "choices": [
+          {
+            "label": "Keep moving. She'll stabilize on the road.",
+            "consequences": {
+              "health": -8,
+              "food": -5,
+              "days": 1,
+              "morale": -12
+            }
+          },
+          {
+            "label": "Stop here three days. Nurse her with what medicine you have.",
+            "consequences": {
+              "health": -3,
+              "medicine": -3,
+              "food": -8,
+              "days": 3,
+              "miles": -15,
+              "morale": 5
+            }
+          },
+          {
+            "label": "End it. One shot. No more suffering for anyone.",
+            "consequences": {
+              "health": -25,
+              "ammo": -1,
+              "morale": -35,
+              "money": -50
+            }
+          }
+        ],
+        "personality_effects": {
+          "James": {
+            "sanity": -15,
+            "morale": -8
+          },
+          "Thomas": {
+            "sanity": -10,
+            "morale": -15
+          },
+          "Sarah": {
+            "sanity": -12,
+            "morale": -20
+          }
+        },
+        "journal_entry": "Mary is dying and we must choose how."
+      },
+      {
+        "title": "The fever breaks, but the cost",
+        "description": "Mary's fever broke in the night, though she's weak as boiled cloth. Thomas found fresh elk tracks near the cold spring—meat enough to get you over the pass. But the animal is fresh-killed, maybe two hours old, and the Shoshone have been trailing your party for three days. You have enough ammunition to take the elk and enough to defend the kill, but not both.",
+        "choices": [
+          {
+            "label": "Take the elk. Post watch for trouble.",
+            "consequences": {
+              "food": 40,
+              "ammo": -20,
+              "days": 1
+            }
+          },
+          {
+            "label": "Leave the meat. Push hard for the pass while light holds.",
+            "consequences": {
+              "food": -5,
+              "days": 0,
+              "health": -2
+            }
+          },
+          {
+            "label": "Butcher what you can carry, leave the rest. Move on.",
+            "consequences": {
+              "food": 15,
+              "ammo": 0,
+              "days": 0,
+              "health": -1
+            }
+          }
+        ],
+        "personality_effects": {
+          "Thomas": {
+            "sanity": -5,
+            "morale": -8
+          },
+          "James": {
+            "sanity": -3,
+            "morale": -5
+          }
+        },
+        "journal_entry": "Mary lives but the mountains want their payment, and the Shoshone want what we want."
+      }
+    ],
+    "high": [
+      {
+        "title": "The Pawnee hunters at the ford",
+        "description": "Three Pawnee hunters emerge from the cottonwoods near the water crossing, horses lathered and urgent. Their leader, face painted for recent kills, gestures toward your herd with unmistakable intent. He speaks no English, but his meaning is clear: he wants oxen. Behind them, smoke rises from the distant bluffs—a larger camp. James watches William's hand drift toward his rifle.",
+        "choices": [
+          {
+            "label": "Offer trade: two oxen for safe passage and supplies",
+            "consequences": {
+              "oxen": -2,
+              "food": 15,
+              "ammo": -20,
+              "morale": -8
+            }
+          },
+          {
+            "label": "Refuse and move the herd downriver, fast",
+            "consequences": {
+              "oxen": -1,
+              "health": -3,
+              "days": 1,
+              "morale": -12
+            }
+          },
+          {
+            "label": "Attempt to intimidate with weapons display",
+            "consequences": {
+              "ammo": -30,
+              "health": -8,
+              "oxen": -3,
+              "morale": 5
+            }
+          }
+        ],
+        "personality_effects": {
+          "William": {
+            "sanity": -5,
+            "morale": -8
+          },
+          "Sarah": {
+            "sanity": -8,
+            "morale": -15
+          }
+        },
+        "journal_entry": "The Pawnee came for cattle at the ford, and we chose between hunger, haste, and bloodshed."
+      },
+      {
+        "title": "Mary's Fever Peaks at Dusk",
+        "description": "Mary wakes screaming that the canvas is full of teeth. Her skin burns against your palm—104 degrees if the thermometer is honest. She's been void of the flux for two days, which means the cholera is eating deeper now, the kind that liquefies a person from inside. You have four doses of calomel left. Thomas watches from his bedroll, jaw tight. Sarah, who's been weak since Kansas, sits apart, not meeting anyone's eyes.",
+        "choices": [
+          {
+            "label": "Dose her heavily with calomel and laudanum. Pray it breaks the fever.",
+            "consequences": {
+              "medicine": -2,
+              "health": -5,
+              "days": 0
+            }
+          },
+          {
+            "label": "Ration the medicine. Keep her comfortable through the night, conserve supplies.",
+            "consequences": {
+              "medicine": 0,
+              "health": -12,
+              "days": 1
+            }
+          },
+          {
+            "label": "Leave her in the wagon with Sarah to tend her. Push on at first light—halting kills morale more than miles.",
+            "consequences": {
+              "miles": 8,
+              "health": -8,
+              "morale": -4
+            }
+          }
+        ],
+        "personality_effects": {
+          "James": {
+            "sanity": -3,
+            "morale": -2
+          },
+          "Mary": {
+            "sanity": -4,
+            "morale": -3
+          },
+          "Thomas": {
+            "sanity": -1,
+            "morale": -1
+          },
+          "Sarah": {
+            "sanity": -2,
+            "morale": -2
+          }
+        },
+        "journal_entry": "Mary raves in the dark while we stand helpless—five oxen, four people, and one woman coming apart at the seams."
+      },
+      {
+        "title": "The Shoshone at the pass",
+        "description": "A band of seven Shoshone riders emerges from the rocks above your camp at the cold spring, their horses moving with purpose down the slope. Their leader—a lean man with a scarred jaw—gestures to your oxen. Your party has thirty pounds of food left. Mary still burns with fever. James recognizes the gesture: trade or they take what they need. The Shoshone do not look hungry. They look like men who have decided something about your animals.",
+        "choices": [
+          {
+            "label": "Offer five pounds of flour and two bottles of medicine; ask safe passage",
+            "consequences": {
+              "food": -5,
+              "medicine": -2,
+              "miles": 8,
+              "morale": -3
+            }
+          },
+          {
+            "label": "Give them one ox for provisions and safe passage to the valley ahead",
+            "consequences": {
+              "oxen": -1,
+              "food": 15,
+              "medicine": 0,
+              "morale": -8,
+              "health": -2
+            }
+          },
+          {
+            "label": "Refuse and prepare for conflict; cache supplies and move at night",
+            "consequences": {
+              "food": -3,
+              "miles": -5,
+              "ammo": -20,
+              "health": -4,
+              "morale": -12
+            }
+          }
+        ],
+        "personality_effects": {
+          "James": {
+            "sanity": -4,
+            "morale": -5
+          },
+          "Mary": {
+            "sanity": -3,
+            "morale": -2
+          },
+          "Thomas": {
+            "sanity": -6,
+            "morale": -8
+          }
+        },
+        "journal_entry": "The Shoshone came for oxen at the spring where Mary lies fevered, and we learned what the trail truly costs."
+      }
+    ]
+  }
+}

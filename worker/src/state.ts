@@ -12,14 +12,14 @@ import type {
 } from "./types";
 import { signState, verifyState } from "./hmac";
 
-// ── Store Prices (cents per unit) ──────────────
-export const STORE_PRICES: Record<string, { price_cents: number; unit_amount: number }> = {
-  food:        { price_cents: 30,   unit_amount: 10 },  // 30c per 10 lbs
-  ammo:        { price_cents: 200,  unit_amount: 20 },  // $2 per 20 rounds
-  clothing:    { price_cents: 300,  unit_amount: 1 },   // $3 per set
-  spare_parts: { price_cents: 200,  unit_amount: 1 },   // $2 per part
-  medicine:    { price_cents: 100,  unit_amount: 3 },   // $1 per 3 doses
-  oxen:        { price_cents: 5000, unit_amount: 2 },   // $50 per yoke (2 oxen)
+// ── Store Prices (cents per unit) — single source of truth ──
+export const STORE_PRICES: Record<string, { price_cents: number; unit_amount: number; unit_label: string; tooltip: string }> = {
+  food:        { price_cents: 30,   unit_amount: 10, unit_label: '10 lbs',    tooltip: '200 lbs per person for the full journey' },
+  ammo:        { price_cents: 200,  unit_amount: 20, unit_label: '20 rounds', tooltip: 'For hunting and defense' },
+  clothing:    { price_cents: 300,  unit_amount: 1,  unit_label: '1 set',     tooltip: 'Essential for mountain crossings' },
+  spare_parts: { price_cents: 200,  unit_amount: 1,  unit_label: '1 part',    tooltip: 'Broken axles and tongues can strand you' },
+  medicine:    { price_cents: 100,  unit_amount: 3,  unit_label: '3 doses',   tooltip: 'Reduces disease mortality by half' },
+  oxen:        { price_cents: 5000, unit_amount: 2,  unit_label: '1 yoke (2)', tooltip: '6 minimum (3 yoke) to pull a loaded wagon' },
 };
 
 const STARTING_MONEY: Record<Profession, number> = {
@@ -104,6 +104,7 @@ export async function createInitialState(
       resolved_crossings: [],
       visited_landmarks: [],
       pending_event_hash: null,
+      landmark_rest_used: [],
     },
     meta: {
       run_id: crypto.randomUUID(),

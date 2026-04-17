@@ -1,24 +1,46 @@
-const CACHE_NAME = 'oregon-trail-v1';
+const CACHE_NAME = 'oregon-trail-kaplay-v3-primitive';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/game.js',
-  '/ui.js',
-  '/style.css',
-  '/newspaper.js',
-  '/tombstone.js',
+  '/engine.js',
+  '/main.js',
   '/html2canvas.min.js',
   '/manifest.json',
   '/fonts/ibm-plex-mono-400.ttf',
   '/fonts/ibm-plex-mono-700.ttf',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/scenes/loading.js',
+  '/scenes/title.js',
+  '/scenes/profession.js',
+  '/scenes/names.js',
+  '/scenes/tone.js',
+  '/scenes/store.js',
+  '/scenes/travel.js',
+  '/scenes/event.js',
+  '/scenes/landmark.js',
+  '/scenes/river.js',
+  '/scenes/death.js',
+  '/scenes/hunting.js',
+  '/scenes/arrival.js',
+  '/scenes/wipe.js',
+  '/scenes/newspaper.js',
+  '/scenes/share.js',
+];
+const OPTIONAL_ASSETS = [
+  '/lib/draw.mjs',
+  '/lib/hud.mjs',
+  '/lib/tone.mjs',
 ];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then(async (cache) => {
+        await cache.addAll(STATIC_ASSETS);
+        // Optional assets may 404 between commit landings; allSettled tolerates it.
+        await Promise.allSettled(OPTIONAL_ASSETS.map((a) => cache.add(a)));
+      })
       .then(() => self.skipWaiting())
   );
 });
