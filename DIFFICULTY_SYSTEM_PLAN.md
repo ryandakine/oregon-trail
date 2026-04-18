@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: /home/ryan/.gstack/projects/oregon-trail/kaplay-rebuild-autoplan-restore-20260417-183231.md -->
 # Difficulty System — Implementation Plan (v1)
 
 **Status:** Plan ready for review gauntlet. NOT implemented yet.
@@ -289,12 +290,97 @@ Per `feedback_always_full_review_gauntlet`: run all of these before implementati
 
 ## GSTACK REVIEW REPORT
 
+Autoplan invoked 2026-04-17. **Stopped at CEO premise gate — User Challenge triggered.**
+
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
-| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
-| Codex Review | `/codex review` | Independent 2nd opinion | 0 | — | — |
-| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 0 | — | — |
-| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | — |
-| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | **REJECT-ALIGNED** | 9 critical findings, both voices agree plan shouldn't ship |
+| Codex Review | `/codex review` | Independent 2nd opinion | 1 | **REJECT** | Plan solves unproven segmentation problem; cuts against "click → play" wedge |
+| Eng Review | `/plan-eng-review` | Architecture & tests | 0 | Not run (short-circuit on CEO rejection) | — |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | Not run (short-circuit) | — |
+| DX Review | `/plan-devex-review` | DX gaps | 0 | Skipped (not dev-facing) | — |
 
-**VERDICT:** NO REVIEWS YET — run `/autoplan` for full review pipeline, or individual reviews above.
+---
+
+## CEO Phase 1 — Dual Voices Consensus
+
+Both the Claude CEO subagent and Codex (independently) recommended against shipping this plan. This is a **User Challenge** per autoplan rules — when both models disagree with the user's stated direction, it cannot be auto-decided. Ryan decides.
+
+### Consensus table
+
+| Dimension | Claude | Codex | Consensus |
+|---|---|---|---|
+| 1. Premises valid? | NO — "3/3 playtests" is N=3 after bugfix, extrapolated | NO — telemetry is out of scope, no evidence users want more choice | **CONFIRMED — premises weak** |
+| 2. Right problem to solve? | NO — tune Medium first, prove it needs structural change | NO — the problem is fairness-feel, not segmentation | **CONFIRMED — wrong problem** |
+| 3. Scope calibration correct? | NO — 6-8 hr architecture for what's a 30-min tuning pass | NO — 9-cell matrix is fake product surface | **CONFIRMED — over-scoped** |
+| 4. Alternatives sufficiently explored? | NO — homesteader profession, adaptive difficulty, A/B landing dismissed | NO — PLAN.md §5.8 already accepts adaptive difficulty; this plan contradicts it | **CONFIRMED — alternatives waved off** |
+| 5. Competitive/market risks covered? | NO — dilutes horror hook (Easy+High becomes most-picked = not scary) | NO — brand sentence "goes as dark as you want" becomes "has presets" | **CONFIRMED — brand risk** |
+| 6. 6-month trajectory sound? | NO — most likely outcome: 85% play Medium+Medium, 7 cells unused | NO — maintaining a matrix nobody visits | **CONFIRMED — maintenance debt** |
+
+**Six for six CONFIRMED rejections. No disagreements between the models.**
+
+### Top strategic risks (both voices independently surfaced)
+
+1. **Horror hook dilution (CRITICAL)** — "Easy + High tone" becomes the most-picked cell. Players get horror aesthetic without horror consequences. Screenshots lose bite. The differentiator is neutered by the config.
+2. **Solving the wrong KPI** — survival rate isn't the product goal. The newspaper + epitaph artifacts are. A dramatic earned wipe at mile 249 is a success, not a failure, if it's legible.
+3. **Attribution chaos (HIGH)** — the game already has 5 difficulty levers (profession, pace, rations, challenges, now post-fix clamps). Adding a 6th makes deaths feel arbitrary.
+4. **Orthogonality is dissonance** — Codex flagged: the plan redefines tone as narrative-only and difficulty as math-only, but PLAN.md:85 is explicit that "horror comes from mechanics, not atmosphere." Easy+High is incoherent with the product thesis.
+5. **Already-accepted alternative was ignored** — PLAN.md:164 and decision-audit row #4 accepted adaptive difficulty. Adding an explicit picker is the opposite move.
+
+### The unified recommendation from both voices
+
+**Don't build the difficulty axis. Instead:**
+
+1. **Measure first.** Run 20 automated `playthrough.mjs` runs on post-bugfix v4 (farmer, steady, medium tone). If median wipe >500 miles: Medium is fine. If <300 miles: Medium needs a tuning nudge. 1-2 hours, no new code.
+
+2. **One-lever fixes, in priority order** (ship ONE, measure, then decide if more are needed):
+   - **A.** Global Medium tune — adjust `disease_base_probability ×0.7` + `starvation_grace_days 3→4`. One commit, no UI, no types. (~30 min)
+   - **B.** Implement adaptive difficulty (already accepted in PLAN.md:164). LLM-read party state, soften next 5 days if someone just died. Zero UI surface. (~2 hr)
+   - **C.** Add "Homesteader" profession at $2400 starting money + 2 oxen bonus, labeled "Easy starter." Honest onboarding layer, zero new screens. (~45 min)
+
+3. **If telemetry later shows players genuinely want explicit difficulty segmentation:** tone-gate it. High forces Hard. Easy+High is structurally impossible. 9-cell matrix becomes honest 7-cell.
+
+### Risks of building the plan as-drafted
+- **Horror-mode virality dilution** (the Reddit screenshot loses its power)
+- **Funnel loss** from an extra screen (marketing asset adds ceremony)
+- **6 hours + 4 commits + new HMAC back-compat path** for a problem a 30-minute tune may solve
+- **Attribution chaos** across 6 difficulty levers
+- **Product-thesis contradiction** with PLAN.md:85 (horror is mechanical, not atmospheric)
+
+### Risks of NOT building the plan (if the measurement shows Medium is fine)
+- **Zero.** Current v4 ships with clamp fix. Game is playable. Horror tier intact.
+
+### Risks of NOT building (if Medium IS too hard)
+- Casual players bounce. Solvable by the one-lever fixes above without adding a setup screen.
+
+---
+
+## PREMISE GATE — User Challenge
+
+**What you said:** Build a 3×3 tone×difficulty matrix with a new DIFFICULTY screen between TONE and STORE. 6-8 hrs / 4 commits.
+
+**What both models recommend:** Don't build it. Tune Medium globally + use existing levers (profession, adaptive difficulty from PLAN.md:164). 30 min to 2 hrs depending on which lever. No new UI.
+
+**Why both models agree:**
+- Product is a 5–15 min marketing funnel, not a 40 hr roguelike. Rimworld/Frostpunk comparators don't transfer.
+- PLAN.md:85 is explicit: "horror comes from mechanics, not atmosphere." Splitting tone from difficulty contradicts the product thesis.
+- You already accepted adaptive difficulty (PLAN.md:164, audit row #4). Adding a visible picker is the opposite move.
+- 3/3 playtests is N=3 after a now-fixed bug. Telemetry doesn't exist yet. The evidence base is too thin for architectural work.
+
+**What the models might be missing:**
+- Your personal taste / authorial vision for the game having player-facing choice
+- Marketing value of having "choose your difficulty" as a landing-page bullet
+- Portfolio-demo value of shipping a visibly thoughtful difficulty system (demonstrates OSI's systems thinking)
+- Future plans for the game that aren't in PLAN.md
+
+**If the models are wrong, the cost is:** you spent 1–2 hours tuning and measuring, and now you still build the matrix with better data. Nothing lost except a week of delay.
+
+**If the models are right and you build it anyway, the cost is:**
+- 6–8 hours on a structural change that should have been a tune
+- Horror hook dilution (Easy+High becomes most-picked, viral Reddit moment disappears)
+- Maintenance overhead on 9 cells where 2 get used
+- Contradicting PLAN.md's stated horror thesis
+
+---
+
+**VERDICT:** REJECT-ALIGNED — both voices independently recommend not shipping. Decision deferred to Ryan at the gate. Default per autoplan rules: user's original direction stands unless explicitly changed.
