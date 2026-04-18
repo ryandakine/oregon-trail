@@ -262,7 +262,11 @@ export interface ChallengeConstraints {
   no_hunting: boolean;
 }
 
-export type BitterPathOutcome = "none" | "dignified" | "hopeful" | "taken";
+// "refused" = player opted out via the content-warning gate before seeing the
+// scene body. Mechanically a no-op (no food, morale, sanity, or days delta)
+// so we are not rewarding players for skipping. The flag lets the newspaper
+// and telemetry distinguish opt-out from dignified choice.
+export type BitterPathOutcome = "none" | "dignified" | "hopeful" | "taken" | "refused";
 
 export interface SimulationState {
   starvation_days: number;

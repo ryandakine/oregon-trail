@@ -125,6 +125,8 @@ export default {
           return await handleHunt(request, env, origin);
         case "/api/bitter_path":
           return await handleBitterPath(request, env, origin);
+        case "/api/bitter_path_skip":
+          return await handleBitterPathSkip(request, env, origin);
         case "/api/prices":
           if (request.method === "GET") {
             return jsonResponse({ prices: STORE_PRICES }, 200, origin);
@@ -483,6 +485,53 @@ async function handleBitterPath(
   const signature = await signState(next, env.HMAC_SECRET);
   const signed_state: SignedGameState = { state: next, signature };
   return jsonResponse({ signed_state, outcome: effects.bitter_path_taken }, 200, origin);
+}
+
+// Skip endpoint: fires when the player opts out of the Long Night scene via
+// the content-warning gate before seeing the scene body. Requires the same
+// event-hash echo as /api/bitter_path so a client cannot skip without first
+// having received a legitimate bitter_path trigger. Mechanically a no-op —
+// no food, morale, sanity, or days delta — so we are not rewarding skip.
+// The enum value "refused" lets newspaper copy + telemetry distinguish
+// opt-out from the dignified choice.
+async function handleBitterPathSkip(
+  request: Request,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const body = (await request.json()) as {
+    signed_state: SignedGameState;
+    event: EventResponse;
+  };
+
+  const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
+  if (!verified.valid) {
+    return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  const submittedHash = await hashEvent(body.event);
+  if (verified.state.simulation.pending_event_hash !== submittedHash) {
+    return jsonResponse({ error: "event_hash_mismatch" }, 400, origin);
+  }
+
+  if (verified.state.simulation.bitter_path_taken !== "none") {
+    return jsonResponse({ error: "already_resolved" }, 400, origin);
+  }
+
+  const next = structuredClone(verified.state);
+  next.simulation.bitter_path_taken = "refused";
+  next.simulation.pending_event_hash = null;
+  next.simulation.days_since_last_event = 0;
+
+  // Skip-specific journal beat — does not reveal scene content to players who
+  // opted out. Same 5-entry cap as other journal writes.
+  next.journal.push("We turned away from what the trail asked of us.");
+  if (next.journal.length > 5) next.journal = next.journal.slice(-5);
+  next.meta.event_count += 1;
+
+  const signature = await signState(next, env.HMAC_SECRET);
+  const signed_state: SignedGameState = { state: next, signature };
+  return jsonResponse({ signed_state, outcome: "refused" }, 200, origin);
 }
 
 async function handleNewspaper(
