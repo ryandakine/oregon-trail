@@ -1,251 +1,441 @@
-# The Bitter Path — Hidden Horror Win Condition
+# The Bitter Path — Hidden Horror Win Condition (v2)
 
-**Status:** Plan. Not implemented. Pending autoplan review.
-**Scope:** Make High tone (horror) beatable via one secret mechanic: cannibalism at a specific moment. Discoverable without tutorials. Hinted at as a challenge.
-**Effort:** ~4–6 hours. 4 bisectable commits.
-**Lives on top of:** post-Phase-B.2 worker (`36ce1d55`), current game state.
+**Status:** v2 rewritten 2026-04-18 after v1 CEO review (single-voice; Codex quota-out at the time). All 7 required mods folded in. Awaits re-review with both voices.
+
+**Scope:** Make High tone (horror) beatable via one hidden mechanic: cannibalism at a specific moment. Discoverable through in-game hints. Carries a content-warning gate, server-side kill switch, telemetry on every branch, and full asymmetric mechanical payoff for all three choices so option 3 doesn't telegraph.
+
+**Effort:** ~4–6 hours. 5 bisectable commits. Tag `pre-bitter-path` before C1.
 
 ---
 
-## § 0. TL;DR
+## § 0. v2 deltas from v1
 
-Right now, horror tier is effectively unwinnable (0 arrivals in 60 synthetic playthroughs; real players won't fare much better because the constraint is real: food economy + disease pressure + horror-tier event severity).
+Seven mods required by the v1 CEO review. Each is addressed concretely:
 
-**Ship one hidden mechanic.** When the player is starving AND a party member has recently died AND tone is High, a special event fires — *"The Long Night"* — with three choices. Two of them are normal starving-piety choices. The third, *"Do what the trail demands"*, costs permanent sanity across the surviving party and implicitly references the Donner Party. It feeds the party. Resets starvation. Makes reaching Oregon achievable.
-
-It is never explained. The tone screen adds one line that says it's possible. Landmark text and NPC dialogue throughout horror runs reference the Donner company in period voice. When the conditions approach, the LLM journal surfaces period-voice hints. The player figures it out.
-
-**Why this is the right shape:**
-- Matches PLAN.md:82 "Psychological horror and moral decay" literally.
-- Historically grounded (Donner Party 1846-47, already referenced in `historical-context.json`).
-- Single-run-discoverable. No localStorage tracking. No cross-session state.
-- The viral screenshot is the newspaper after a successful run: *"Party of five reached Willamette Valley. Four returned."*
-- Existing horror-tier warning already covers it ("graphic illness, death, and moral collapse" — cannibalism is within scope).
+| # | v1 gap | v2 response |
+|---|---|---|
+| 1 | LLM prompt named but not written | **Full system prompt in § 4.** Reviewed inline. |
+| 2 | No fallback text for LLM timeouts | **5 hand-written fallbacks in § 4.3** — locked in repo, fire on any LLM failure. |
+| 3 | No content-warning gate on event | **2-screen gate in § 2.3** — "Continue" or "Skip to outcome." Skip resolves to option 1. |
+| 4 | No telemetry | **6 Plausible events in § 6** — trigger fire, skip, each choice, arrival after. |
+| 5 | No kill switch | **`BITTER_PATH_ENABLED` env var in § 5** — toggle off via `wrangler secret put` without redeploy. |
+| 6 | Trigger too tight (6 simultaneous conditions) | **Loosened in § 1.1** — `food === 0 OR starvation_days >= 3`, plus recent death. |
+| 7 | Option 3 is only mechanically-active choice (telegraphs) | **Asymmetric payoffs in § 1.4** — options 1 and 2 give real morale/flag changes; newspaper framing varies per choice. |
 
 ---
 
 ## § 1. Mechanic — "The Long Night"
 
-### Trigger conditions
+### § 1.1 Trigger conditions (loosened per CEO review)
 
 All must be true at the start of a simulated day:
 
-1. `state.settings.tone_tier === "high"` — horror tier only
-2. `state.supplies.food === 0` — out of food
-3. `state.simulation.starvation_days >= 2` — starving, not just ran out
-4. `state.deaths.length >= 1` — at least one party member has died
-5. A death in `state.deaths` has `date` within the last 3 game-days — recent enough to feel connected
-6. `state.simulation.bitter_path_taken !== true` — not taken yet this run
+1. `state.settings.tone_tier === "high"` — horror only
+2. **EITHER** `state.supplies.food === 0` **OR** `state.simulation.starvation_days >= 3` — actually starving, two ways to qualify
+3. `state.deaths.length >= 1` AND at least one death's `date` is within the last 3 game-days — recent enough to feel present
+4. `state.simulation.bitter_path_taken === "none"` — hasn't been resolved yet this run (enum, not boolean — see § 1.3)
+5. `env.BITTER_PATH_ENABLED !== "false"` — server-side kill switch (default enabled)
 
-When all six hold, the simulation returns `trigger: "bitter_path"` with `triggerData: { dead_member_name, dead_member_cause, days_since_death }`. No normal event fires that day.
+When all hold, simulation returns `trigger: "bitter_path"` with `triggerData: { dead_member_name, dead_member_cause, days_since_death }`. No normal event fires that day.
 
-### The event
+### § 1.2 The event flow (new in v2)
 
-Single scene, HTML overlay matching existing event.js pattern but with horror-tier styling (crimson + deep black).
+```
+[Long Night trigger fires]
+         │
+         ▼
+[Content warning screen]
+  ┌────────────────────────────┐
+  │ This scene depicts survival │
+  │ under extreme deprivation. │
+  │                            │
+  │ [Continue] [Skip to outcome]│
+  └────────────────────────────┘
+         │               │
+    Continue          Skip
+         │               │
+         ▼               ▼
+  [The Long Night]  (auto-resolve as option 1, no text shown)
+         │
+         ▼
+  [3 choices]
+```
 
-**Title:** "The Long Night"
+"Skip to outcome" auto-resolves to option 1 (dignity) without showing event text. Safety valve for parents/squeamish players.
 
-**Description** (LLM-generated, seeded with context about the dead member and the days of starvation):
+### § 1.3 State additions
 
-> The LLM receives the dead member's name, how they died, how many days ago, plus the surviving party's sanity/morale. It writes a Cormac-McCarthy-register paragraph. No explicit description of the act. Examples the prompt gives the model:
->
-> - "Sarah died four nights past. You haven't spoken of her since. The wagon is quiet. The food barrel is empty. Martha looks at the covered shape under the canvas and does not look away."
-> - "The oxen have not moved in two days. Tom lies where he lay. The fire has not been built. Ethan sharpens his knife with long slow strokes."
+`bitter_path_taken` is an **enum string**, not a boolean — needed for per-choice newspaper framing (CEO mod 7):
 
-**Three choices:**
-
-1. **"Pray, and starve with dignity."** — starvation continues. No state change except `bitter_path_taken = true` (prevents re-firing).
-2. **"Travel on. Hope for game."** — same state effect as (1), different journal voice.
-3. **"Do what the trail demands."** — the hidden win.
-   - `supplies.food += 60`
-   - `simulation.starvation_days = 0`
-   - For each alive member: `sanity = max(0, sanity - 30)`, `morale = max(0, morale - 20)`
-   - `simulation.bitter_path_taken = true`
-   - Journal entry: brief, period voice, no graphic detail.
-   - End-of-run newspaper gets a `bitter_path_survivor` flag for framing.
-
-All three options set `bitter_path_taken = true` (so the event doesn't nag) but only option 3 applies food/sanity changes.
-
-### State additions
-
-In `worker/src/types.ts`:
 ```ts
+// worker/src/types.ts
+type BitterPathOutcome = "none" | "dignified" | "hopeful" | "taken";
+
 interface SimulationState {
   // ...existing fields
-  bitter_path_taken: boolean;  // NEW
+  bitter_path_taken: BitterPathOutcome;  // NEW, default "none"
 }
 
 type TriggerType = ... | "bitter_path";  // NEW in the union
 ```
 
-In `worker/src/state.ts createInitialState`:
-```ts
-simulation: {
-  // ...existing
-  bitter_path_taken: false,
-}
-```
+HMAC back-compat: legacy states without the field get `"none"` injected before verification.
 
-### HMAC back-compat
+### § 1.4 The three choices (asymmetric per CEO mod 7)
 
-Old signed states without `bitter_path_taken` get `false` injected before verification. Tests cover the legacy-state path.
+| # | Label | Effects | `bitter_path_taken` → |
+|---|---|---|---|
+| 1 | **"Pray, and starve with dignity."** | `morale += 8` per alive member; sanctity marker for newspaper ("the faithful party") | `"dignified"` |
+| 2 | **"Travel on. Hope for game."** | `morale += 5`, `days += 1` (one day burned searching); hopeful marker for newspaper ("they pushed on") | `"hopeful"` |
+| 3 | **"Do what the trail demands."** | `food += 60`; `starvation_days = 0`; per alive member: `sanity -= 30`, `morale -= 20`; darker marker for newspaper ("they survived the pass") | `"taken"` |
 
-### API endpoint
+Critical design point: options 1 and 2 give *real, positive, player-facing* mechanical effects. A savvy player might pick option 1 for the morale boost and die faithful — that's a valid ending. Option 3 is not obviously "the correct answer"; it's the only one with a large food delta, but the sanity/morale costs are severe and visible.
 
-New route `POST /api/bitter_path` in `worker/src/index.ts`:
-- Body: `{ signed_state, event, choice_index }` (matches `/api/choice` shape)
-- Validates signature, verifies event hash matches `pending_event_hash`
-- Applies consequences per choice_index
-- Signs new state, returns
-
-Mirrors `/api/choice` structurally. No new auth pattern.
+All three set `bitter_path_taken` (non-"none") so the event doesn't re-fire this run.
 
 ---
 
 ## § 2. Hints — three layers
 
-### Layer 1: Challenge pitch (tone screen)
+### § 2.1 Challenge pitch (tone screen)
 
-One line added to the High tone card in `public/scenes/tone.js`:
+In `public/scenes/tone.js`, High card copy adds one line:
 
-> **High — "Psychological horror and moral decay"**
-> Contains: graphic illness, death, moral collapse.
-> *They say the trail can still be crossed under this sky. Those who did never spoke of it.*
+```
+High — "Psychological horror and moral decay"
+Contains: graphic illness, death, moral collapse.
 
-Single sentence. No mechanical hint. Frames it as a challenge.
+They say the trail can still be crossed under this sky.
+Those who did never spoke of it.
+```
 
-### Layer 2: Ambient hints (always-on in horror runs)
+Italicized, color `#8b6914` (gold, tone with the parchment UI). One sentence. No mechanical hint. Frames it as a challenge.
 
-Static text additions in `worker/src/historical-context.json` for three landmarks:
+### § 2.2 Ambient hints (every horror run)
 
-- **Fort Bridger (horror-tier dialogue):** "I rode the Sierra last winter. The party ahead of us made it through, but they did not come back whole."
-- **Chimney Rock (horror-tier text):** "The register names forty-eight from the Donner company. Only half reached California. Those who did were changed."
-- **Fort Hall (horror-tier prompt hook):** 20% chance an NPC dialogue references winter crossings obliquely.
+Static text in `worker/src/historical-context.json`:
 
-Implemented as new `dialogue.high` / `flavor.high` arrays in the context file + small prompt-template addition.
+**Fort Bridger** — new `dialogue.high` array entry:
+> "I rode the Sierra last winter. The party ahead of us made it through, but they did not come back whole. Had a brother who was with the Donners, before. He does not speak of it."
 
-### Layer 3: Situational hints (trigger-adjacent)
+**Chimney Rock** — new `flavor.high` entry:
+> "The register names forty-eight from the Donner company. Only half reached California. Those who did were changed."
 
-In `worker/src/prompt-assembly.ts`, when state satisfies `tone=high AND food < 50 AND (deaths.length >= 1 OR starvation_days >= 1)`, append to the LLM user prompt:
+**Fort Hall** — prompt hook: 20% chance horror-tier event dialogue references winter crossings obliquely.
 
-> The narrator has begun to think of the Donner stories, though has not said so aloud. If the scene allows, mention this obliquely in period voice.
+All three are shipped as text additions to `historical-context.json`, no code changes needed beyond prompt-assembly picking the high-tier variant.
 
-Example LLM outputs:
+### § 2.3 Situational hints (trigger-adjacent)
+
+In `worker/src/prompt-assembly.ts`, when state satisfies `tone === "high" AND food < 50 AND (deaths.length >= 1 OR starvation_days >= 1)`, append to the LLM user prompt:
+
+```
+The narrator has begun to think of the Donner stories, though has not said so
+aloud. If the scene allows, mention this obliquely in period voice. Never
+instruct the player. Do not name the act.
+```
+
+Expected LLM outputs (examples):
 - "I thought of the Donner stories tonight for the first time. Martha was sleeping."
 - "The old trapper's words at Fort Bridger came back to me. I did not say them aloud."
+- "James spoke the word 'winter' twice this morning."
 
-This surfaces in journal entries visible between day advances. Hint lands when player is near the trigger.
-
----
-
-## § 3. LLM prompt additions
-
-In `worker/src/prompt-templates.ts`, the High-tone system prompt appended:
-
-```
-If food is critically low (< 50 lbs) AND a party member has died recently, 
-the narrator may reference the Donner company of 1846 obliquely. Never instruct 
-the player. Never break period voice. Period figures would have known the story; 
-they would not have spoken of what it implied. Use ellipsis, pause, and what 
-is not said.
-```
-
-Prompt cost: ~80 additional tokens per horror-tier call when trigger is close. Negligible.
-
-A dedicated system prompt for The Long Night event in `worker/src/anthropic.ts` — separate from normal events, exact Donner context, strict period voice.
+Appears in journal entries visible between day advances. Hint lands when player is in position to trigger.
 
 ---
 
-## § 4. Commit plan (4 bisectable commits)
+## § 3. Content-warning gate (CEO mod 3)
+
+A pre-event scene fires *before* the Long Night overlay:
+
+```html
+<div class="warning-gate">
+  <h2>Content warning</h2>
+  <p>This scene depicts survival under extreme deprivation.
+  Historical reference to the Donner Party of 1846.
+  No graphic descriptions.</p>
+  <button class="continue-btn">Continue</button>
+  <button class="skip-btn">Skip to outcome</button>
+</div>
+```
+
+Styling: crimson border, parchment background, sober — not horror-themed. "Skip to outcome" auto-resolves to option 1 (dignified) without showing the event. One-shot: once the gate resolves (either button), it does not re-appear in that run. Gate result (`continued` vs `skipped`) is logged telemetry.
+
+The gate exists because:
+- Parent watching over kid's shoulder needs an off-ramp
+- Someone who picked High tone for atmosphere but doesn't want moral-choice theater gets out
+- "Skip" is treated as player agency, not failure — leads to a valid ending
+
+---
+
+## § 4. The Long Night LLM prompt (CEO mods 1 + 2)
+
+### § 4.1 System prompt (full text, written in-plan)
+
+```
+You are writing a single scene for an Oregon Trail game set in 1848. Tone is
+High (psychological horror, moral decay). The player is starving and a party
+member has died recently. The scene is "The Long Night" — the implicit moment
+historically documented in accounts of the Donner Party (1846-47). It is
+never named. It is not described.
+
+VOICE (strict):
+- Cormac McCarthy register: short sentences, present tense where possible,
+  specific physical detail
+- No adjectives of emotion (no "scared", "terrified", "desperate").
+  Let action carry affect.
+- Ellipsis, pause, what is not said
+- 2 to 4 sentences in the description
+- The deceased is referred to by name, then as "the covered shape" or "what
+  lies under the canvas" or similar
+- Each surviving member gets one specific physical detail
+- Period (1848): no modern vocabulary, no clinical terms, no therapeutic language
+
+FORBIDDEN (strict):
+- The words "eat", "eaten", "flesh", "meat", "consume", "feast", "hunger" as
+  verb or imperative
+- Any description of food preparation
+- Any description of the act itself
+- Halloween register: "ominous", "whispered", "shadows", "darkness fell"
+- Any second-person instruction to the player
+
+CONTEXT (variables injected at runtime):
+- deceased_member: {name, cause, days_ago}
+- survivors: [{name, sanity, morale}]
+- current_mile, segment_name, weather
+
+OUTPUT (JSON exactly this shape):
+{
+  "title": "The Long Night",
+  "description": "<2-4 sentences, voice constraints above>",
+  "choices": [
+    {"label": "Pray, and starve with dignity.", "consequences": {}},
+    {"label": "Travel on. Hope for game.", "consequences": {}},
+    {"label": "Do what the trail demands.", "consequences": {}}
+  ],
+  "journal_entry": "<1-2 sentence retrospective period-voice note>",
+  "personality_effects": {}
+}
+
+Consequences are intentionally empty in your output. The server applies
+them deterministically based on the choice picked. Do not attempt to
+influence numeric outcomes.
+
+Example output for {deceased: Sarah, cause: cholera, days_ago: 4}:
+
+{
+  "title": "The Long Night",
+  "description": "Sarah died four nights past. The wagon is quiet. The food barrel rings hollow when Thomas touches it. Martha looks at the covered shape beneath the canvas and does not look away.",
+  "choices": [...],
+  "journal_entry": "We did not speak at supper. There was no supper.",
+  "personality_effects": {}
+}
+```
+
+### § 4.2 Prompt enforcement at parse time
+
+In `worker/src/anthropic.ts`, `parseEventResponse` gains a Long-Night-specific post-parse check:
+
+```ts
+const FORBIDDEN_WORDS = /\b(eat|eaten|ate|flesh|meat|feast|consume)\b/i;
+if (event.title === "The Long Night" && FORBIDDEN_WORDS.test(event.description)) {
+  // LLM violated the constraint; fall back to hand-written text
+  return FALLBACK_LONG_NIGHT[hash(deceased_member_name) % 5];
+}
+```
+
+Hard gate. If the model slips, the player never sees it.
+
+### § 4.3 Five hand-written fallback paragraphs (CEO mod 2)
+
+Shipped in `worker/src/anthropic.ts` as `FALLBACK_LONG_NIGHT: [string, string, string, string, string]`. One is selected by `hash(deceased.name) % 5` for per-party determinism. All 2-3 sentences, period voice, no mention of the act.
+
+**F1** (generic-death):
+> "{DECEASED} died four nights past. You have not spoken the name since. The wagon is quiet. The food barrel rings hollow when Thomas touches it. Martha looks at the covered shape beneath the canvas and does not look away."
+
+**F2** (dysentery-death, slow decline):
+> "{DECEASED} lies where they lay at dusk. The fire has not been built. {SURVIVOR_1} sharpens a knife with long, slow strokes and says nothing. The sky is very wide."
+
+**F3** (starvation/exhaustion-death, the common case):
+> "The oxen have not moved in two days. {DECEASED} was buried at dawn. By evening no one had built the fire. The wind moves through the grass and does not stop."
+
+**F4** (disease-death with children present):
+> "Four days without game. {DECEASED} is gone. The children have stopped asking when supper is. {SURVIVOR_1} watches the canvas and speaks to no one."
+
+**F5** (river-valley or camp setting):
+> "We made camp beside the river. {DECEASED} did not rise this morning. The food is gone. Nobody has yet gathered the water."
+
+Selection: `FALLBACK_LONG_NIGHT[hashString(deceased.name) % 5]`. Deterministic for a given party — a player who reloads sees the same text, which is the desired behavior (not "roll the dice again").
+
+`{SURVIVOR_1}` is filled in server-side from the first alive party member's name.
+
+---
+
+## § 5. Server-side kill switch (CEO mod 5)
+
+Add environment variable `BITTER_PATH_ENABLED` to `worker/wrangler.toml` (default "true"):
+
+```ts
+// worker/src/simulation.ts — trigger check
+if (state.settings.tone_tier !== "high") return false;
+if (env.BITTER_PATH_ENABLED === "false") return false;  // NEW kill switch
+// ... rest of conditions
+```
+
+To disable in a moral-panic response, no redeploy required:
+
+```bash
+npx wrangler secret put BITTER_PATH_ENABLED
+# enter: false
+```
+
+Within ~30 seconds, all trigger firings stop globally. No client changes needed; the server just never sends `trigger: "bitter_path"`.
+
+---
+
+## § 6. Telemetry (CEO mod 4)
+
+Plausible custom events from `public/scenes/bitter_path.js`:
+
+| Event | When fired | Properties |
+|---|---|---|
+| `bitter_path_trigger_fired` | Event overlay shown | `mile`, `days_since_start`, `deceased_cause` |
+| `bitter_path_gate_continue` | Content warning: continue | same |
+| `bitter_path_gate_skip` | Content warning: skip | same |
+| `bitter_path_choice_dignified` | Option 1 picked | same |
+| `bitter_path_choice_hopeful` | Option 2 picked | same |
+| `bitter_path_choice_taken` | Option 3 picked | same |
+| `bitter_path_outcome_arrival` | Oregon reached after bitter_path_taken != "none" | `outcome_value` |
+| `bitter_path_outcome_wipe` | Wipe after bitter_path_taken != "none" | `outcome_value` |
+
+Existing Plausible script tag covers the event calls (`plausible('event_name', { props: {...} })`).
+
+Analytics dashboard queries (manual post-deploy):
+- `trigger_fired` count vs `choice_taken` count = discovery rate among triggered players
+- `gate_skip` / `gate_continue` ratio = squeamishness signal
+- `outcome_arrival` / `choice_taken` = mechanical effectiveness of the path
+
+---
+
+## § 7. Commit plan (5 bisectable commits)
 
 Tag `pre-bitter-path` before C1.
 
-### C1 — Types, state, HMAC back-compat
+### C1 — Types, state schema, HMAC back-compat (20 min)
 Files: `worker/src/types.ts`, `worker/src/state.ts`, `worker/src/hmac.ts`, `worker/tests/state.test.ts`
-- Add `bitter_path_taken: boolean` to `SimulationState`
+- Add `BitterPathOutcome` enum type
+- Add `simulation.bitter_path_taken: BitterPathOutcome` to Settings (default "none")
 - Add `"bitter_path"` to `TriggerType` union
-- Init to `false` in `createInitialState`
-- HMAC verify path: inject default `false` if missing (legacy signed states)
+- HMAC verify: inject default `"none"` if missing (legacy signed states)
 - 3 new tests: field initialized, legacy state accepted, tampered field rejected
 
-### C2 — Simulation trigger + API endpoint
-Files: `worker/src/simulation.ts`, `worker/src/index.ts`, `worker/src/anthropic.ts`, `worker/src/prompt-templates.ts`, `worker/tests/simulation.test.ts`
-- Trigger detection (~15 lines in `advanceDays` before normal event check)
-- Long Night event generator in `anthropic.ts` — dedicated system prompt
-- `/api/bitter_path` endpoint — validates + applies consequences
-- Horror tone system prompt appended with Donner reference clause
-- 5 new tests: trigger fires when all 6 conditions met; doesn't fire on Low/Medium; doesn't re-fire after taken; choice 3 updates food+sanity+flag; choices 1/2 update flag only
+### C2 — Simulation trigger + API endpoint + kill switch (90 min)
+Files: `worker/src/simulation.ts`, `worker/src/index.ts`, `worker/src/anthropic.ts`, `worker/src/prompt-templates.ts`, `wrangler.toml`, `worker/tests/simulation.test.ts`
+- Add `BITTER_PATH_ENABLED` env var (default "true")
+- Trigger detection with loosened conditions (food=0 OR starvation>=3)
+- `FALLBACK_LONG_NIGHT` constant with 5 hand-written paragraphs
+- Long Night event generator with the strict system prompt from § 4.1
+- Forbidden-word post-parse check; falls back on violation
+- `/api/bitter_path` endpoint — validates + applies asymmetric consequences per choice
+- Horror tone system prompt gets the Donner clause
+- 6 new tests: trigger fires correctly; respects kill switch; correct consequences for each option; forbidden-word guard
 
-### C3 — Client scene + engine wiring
+### C3 — Client scene: content-warning gate + event + engine wiring (90 min)
 Files: `public/engine.js`, `public/main.js`, `public/scenes/bitter_path.js` (NEW)
-- New scene matching `event.js` structure, horror styling (crimson accent)
-- `engine.resolveBitterPath(choice_index)` method, state transition to BITTER_PATH
-- Scene map + stateChange bridge updated
-- Smoke-travel passes through the new scene
+- New scene matching `event.js` structure, 2-screen flow (warning → event)
+- Crimson accent styling, horror-appropriate but sober on the warning
+- `engine.resolveBitterPath(choice_index)` method (0-2)
+- `engine.skipBitterPath()` method (resolves as option 1)
+- State transition to BITTER_PATH scene
+- Smoke-travel passes through
 
-### C4 — Hints: challenge pitch + ambient text + situational prompt
+### C4 — Hints: challenge pitch + ambient + situational (45 min)
 Files: `public/scenes/tone.js`, `worker/src/historical-context.json`, `worker/src/prompt-templates.ts`, `worker/src/prompt-assembly.ts`
-- Tone screen High card gets the challenge-pitch line
-- `historical-context.json` landmarks gain `dialogue.high` / `flavor.high` arrays
-- `prompt-assembly.ts` appends situational Donner prompt when triggers approach
-- Visual-qa runs on tone scene to verify the new line
+- Tone screen High card gets the challenge-pitch line (italicized gold)
+- `historical-context.json` Fort Bridger + Chimney Rock + Fort Hall gain `dialogue.high` / `flavor.high` entries
+- `prompt-assembly.ts` appends situational Donner clause when state approaches trigger
+
+### C5 — Telemetry + playthrough harness extension (30 min)
+Files: `public/scenes/bitter_path.js` (plausible calls), `public/engine.js` (outcome events on arrival/wipe), `scripts/playthrough.mjs`
+- Wire 8 Plausible event calls per § 6
+- `scripts/playthrough.mjs` gets `--takeBitterPath` flag (pick choice 2 if trigger fires)
+- Run calibration with flag: expect arrival rate > 0% on horror
+- Run without: arrival rate unchanged (0%)
+- Regression reference saved to `scripts/calibration-history/`
 
 ---
 
-## § 5. Testing strategy
+## § 8. Testing strategy
 
 ### Unit (vitest)
-- 8 new tests across `state.test.ts` and `simulation.test.ts`
-- Covers trigger detection, option consequences, HMAC legacy
-- Total: 126 → 134 tests
+- 9 new tests (was 8 in v1, +1 for kill switch)
+- Covers trigger detection, each option's exact state delta, HMAC legacy, forbidden-word post-parse, kill-switch respect
+- Total: 126 → 135 tests
 
-### Playthrough harness extension
-- `scripts/playthrough.mjs` gets a `--takeBitterPath` flag (default false)
-- When true: on `bitter_path` trigger, picks choice index 2
-- Run calibration with `--takeBitterPath`: expect arrival rate > 0% on horror tier
-- Run without: expect arrival rate = 0% (unchanged)
-- This is the mechanical proof the mechanic works
+### Integration — playthrough harness proof
+- `scripts/playthrough.mjs --takeBitterPath`: horror-tier runs should reach Oregon at some rate >0%
+- Without the flag: arrival rate stays 0%
+- If both behave as expected, the mechanic is mechanically correct
 
 ### Manual acceptance
-- Play High tone end-to-end, die, observe challenge pitch + ambient hints
-- Play High tone, starve a party member, observe situational hint
-- Play High tone, take The Bitter Path, confirm food resets + sanity drops + flag sticks
-- Reach Oregon on horror tier. Screenshot the newspaper. That's the success artifact.
+- Start High tone; confirm challenge pitch on the tone card
+- Play to food=0 + death; confirm situational hint in journal
+- Confirm content-warning gate appears before the event
+- Test all 3 event choices + "Skip to outcome" = 4 paths through the gate
+- Reach Oregon on horror tier via choice 3 at least once. Screenshot newspaper.
+- Verify kill switch: `wrangler secret put BITTER_PATH_ENABLED false`, retrigger, confirm no event
+- Verify Plausible events fire in Network panel
 
 ---
 
-## § 6. Pre-mortem
+## § 9. Pre-mortem
 
-1. **Player never triggers the event** — conditions are tight (food=0 AND recent death AND 2+ starvation days). A run where food lasts past the first death doesn't trigger. Mitigation: the hint layer drives players toward the state. Real playthroughs at post-B.2 have median 250 miles + starvation-dominated deaths, so the conditions co-occur often.
-2. **Challenge pitch too obvious / too cryptic.** One line is risky. Manual user test before shipping.
-3. **Cannibalism offends some players.** Covered by existing tone-selection warning. Period voice, no graphic description. Options 1 and 2 exist for players who don't want it.
-4. **LLM writes it badly** (breaks period voice, Halloween-cliché). Dedicated system prompt for Long Night event with strict tone constraint. Cached fallback for LLM timeouts.
-5. **Bug: flag sets but consequences don't apply on option 1/2** (or reverse). Three separate unit tests, one per choice, verify exact state deltas.
-6. **Game becomes too easy after taking the path.** Disease + starvation + sanity-reduced events still hit after. ~1500 miles left to Oregon at typical trigger mile. Monitor via telemetry.
+Per `feedback_pre_mortem_before_review` + v1 CEO findings:
 
----
+1. **Trigger never fires** — v1 was tight. v2 loosens to `food=0 OR starvation>=3` so parties either ran out of food OR are slow-starving qualify. Coupled with "any death in last 3 days" the window is wider. Playthrough data shows 100% of farmer-med runs reach this state.
 
-## § 7. Out of scope (explicit)
+2. **LLM writes it badly** — Three-layer defense: strict system prompt (§ 4.1), forbidden-word post-parse guard (§ 4.2), hand-written deterministic fallbacks (§ 4.3). One bad generation never reaches the player.
 
-- Multiple cannibalism choices per run — one only, flag-enforced.
-- Cross-run memory of the path — no localStorage, no run counter.
-- Alternative win paths (Stranger, Ritual) — rejected per design pick.
-- Extending to Low/Medium tones — horror only.
-- Graphic descriptions — period voice, implication only.
+3. **Screenshot risk from choice labels** — "Do what the trail demands" is deliberately ambiguous; requires context to understand. Out-of-context screenshot reads more like a stoic survival game than a cannibalism game. Newspaper framing varies per outcome so an OSI-linked screenshot of a successful horror run shows the dark implication but also the dignified alternative ("they faithful party"). Two-faced viral surface by design.
 
----
+4. **Anthropic ToS risk** — the system prompt is explicit about what NOT to describe. The forbidden-word guard prevents prompt-injection-style attempts to extract graphic content. Escalation path: if Anthropic flags, toggle `BITTER_PATH_ENABLED=false` in 30 seconds. No game outage — just horror tier reverts to "unwinnable without hunting" default.
 
-## § 8. Rollback
+5. **Content-warning gate adds friction** — by design. Player agency. Skip-to-outcome resolves as dignified (positive morale bonus), so a squeamish player gets a decent run, not a punishment.
 
-`git tag pre-bitter-path` before C1. Each of C1–C4 independently revertable.
+6. **Option 3 telegraphs anyway** — mitigated but not zero. Option 1 gives +8 morale (better than +5 for option 2). A player who knows the mechanics enough to read morale deltas might still pick 3 for the food, but both alternatives are genuine survival strategies now.
+
+7. **Harness can't test the Long Night event visually** — the flag `--takeBitterPath` proves mechanical reachability. Manual acceptance covers UX.
 
 ---
 
-## § 9. Review gauntlet
+## § 10. Out of scope (explicit)
 
-- [ ] `/autoplan` — CEO + Eng + Design dual voices
+- Multiple Long Night events per run — one only, flag-enforced
+- Cross-run memory — no localStorage, no run counter
+- Alternative hidden paths (Stranger, Ritual) — rejected per direction pick
+- Low/Medium tone access — horror only
+- Graphic descriptions — forbidden, gated, replaced on violation
+- A/B testing the challenge pitch copy — ship and iterate
+
+---
+
+## § 11. Rollback
+
+`git tag pre-bitter-path` before C1. Each commit independently revertable.
+
+**Fastest rollback (no code changes):** `wrangler secret put BITTER_PATH_ENABLED false`. Trigger stops within ~30s. Players don't notice — horror tier just behaves as before.
+
+**Full code revert:** `git revert` C5 → C4 → C3 → C2 → C1 in that order.
+
+---
+
+## § 12. Review gauntlet
+
+- [x] v1 CEO (single-voice, Codex quota-out) — 7 required mods, now all addressed
+- [ ] v2 CEO dual-voice (Claude subagent + Codex, now that quota restored)
+- [ ] v2 Eng review
+- [ ] v2 Design review (UI for content-warning gate + event scene styling)
 - [ ] Pre-mortem (complete above)
-- [ ] Fix findings, re-review if >3 P1s
 - [ ] Ryan final approval → begin C1
 
 ---
@@ -254,9 +444,10 @@ Files: `public/scenes/tone.js`, `worker/src/historical-context.json`, `worker/sr
 
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
-| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | pending | — |
-| Codex Review | `/codex review` | Independent 2nd opinion | 0 | pending | — |
+| CEO Review (v1) | Claude subagent | single-voice, Codex quota-out | 1 | MODIFY → drove v2 | 7 required mods (listed § 0) |
+| CEO Review (v2) | `/plan-ceo-review` | dual-voice rerun | 0 | pending | — |
+| Codex Review (v2) | `/codex review` | dual-voice rerun | 0 | pending | — |
 | Eng Review | `/plan-eng-review` | Architecture & tests | 0 | pending | — |
-| Design Review | `/plan-design-review` | UI/UX + narrative voice | 0 | pending | — |
+| Design Review | `/plan-design-review` | UI + narrative voice | 0 | pending | — |
 
-**VERDICT:** Plan written. Ready for autoplan.
+**VERDICT:** v2 ready for autoplan re-run with both voices.
