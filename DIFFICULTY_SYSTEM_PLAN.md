@@ -1,386 +1,337 @@
 <!-- /autoplan restore point: /home/ryan/.gstack/projects/oregon-trail/kaplay-rebuild-autoplan-restore-20260417-183231.md -->
-# Difficulty System — Implementation Plan (v1)
+# Difficulty System — Implementation Plan (v2 — revised after autoplan CEO phase)
 
-**Status:** Plan ready for review gauntlet. NOT implemented yet.
-**Target:** Add orthogonal `difficulty: "easy" | "medium" | "hard"` axis alongside existing `tone_tier`, giving players 9 tone×difficulty combinations.
-**Scope:** ~6–8 hours implementation. 4 commits. Covered by existing 124 worker tests + ~15 new tests.
-**Origin:** Ryan reported v3 "died in 20 miles" — root bug (1-event wipe) fixed 2026-04-17. But the game stays too hard for casual first-time players (3/3 playtests wiped). Conclusion: don't water down Medium tone; add a difficulty axis so horror tier stays brutal AND casuals get a landing zone.
+**Status:** Rewritten 2026-04-17 after autoplan CEO phase rejected v1. 6/6 CONFIRMED rejections from Claude + Codex (dual-voice, independent). This version addresses every finding. Ready for re-review.
+
+**Target:** Fix the "too hard for casuals" problem with minimum surface area. Four sequential phases, each with a measurement gate. Only escalate to structural changes if simpler tuning fails.
+
+**Scope:** Phase A alone is ~1 hour. All four phases together are ~6–8 hrs only if every measurement gate says "still too hard."
+
+**Origin:** v3 "died in 20 miles" → clamp-fix bug shipped 2026-04-17 (HEAD `30662f2`). Post-fix playtests: 249/351/98 miles at 32–46 days. Still 0/3 survival at Medium. **But:** sample size N=3, no telemetry, no user complaints beyond Ryan's test. Need data before architecture.
 
 ---
 
 ## § 0. TL;DR
 
-Tone and difficulty are currently conflated in one field (`tone_tier`). That field does both narrative work (LLM system prompts, visual overlay, sanity mechanic) and implicit difficulty work (LLM event severity, game feel). Splitting them into two orthogonal axes gives us a 3×3 matrix:
+v1 of this plan proposed a 3×3 tone×difficulty matrix with a new setup screen. Autoplan's CEO phase killed it on strategic grounds:
 
-|  | **Easy** | **Medium (current)** | **Hard** |
+- "Solves unproven segmentation problem instead of proven fairness problem" (Codex)
+- "Dilutes the horror hook — Easy+High becomes the most-picked cell" (Claude)
+- "6 hours + 4 commits + new HMAC back-compat path for a problem a 30-minute tune may solve" (both voices)
+- "Contradicts PLAN.md:85 — horror comes from mechanics, not atmosphere" (Codex)
+- "Adaptive difficulty already accepted in PLAN.md:164 — this plan is the opposite move" (Codex)
+
+**v2 responds with a measure-first, escalation-gated approach:**
+
+| Phase | What | Effort | Ships iff |
 |---|---|---|---|
-| **Low tone** | Classroom, ~80% survival | Family road trip, ~50% | Period-accurate, ~20% |
-| **Medium tone** | Accessible, ~60% | Current default, ~30% | Hardcore history, ~10% |
-| **High tone** | Creepy but fair, ~40% | The Haunting, ~15% | **Viral-screenshot cell**, ~3–5% |
+| **A** | Measure: 20 automated playthroughs on post-bugfix v4. Produce `difficulty-calibration-v2.json`. | 1 hr | Always runs. Produces data, not code. |
+| **B** | Global Medium tune: `disease_base ×0.7` + `starvation_grace 3→4`. One commit. | 30 min | Phase A shows median Medium wipe <500 miles OR first-event fatality within 15 days |
+| **C** | Adaptive difficulty (PLAN.md:164). Server softens next 5 days after any party death. Invisible. | 2 hrs | Phase B re-measurement still shows wipe <50% at Medium across 10 runs |
+| **D** | Tone-gated explicit axis. High tone FORCES Hard (no Easy+High). Only 7 real cells, presented as 2-button flow: tone screen gets a "challenge mode" checkbox. | 4 hrs | Phase C re-measurement STILL shows median wipe <50% at the default (no-checkbox) path |
 
-**Axis ownership:**
-- **Tone** = narrative only (LLM system prompt, fallback events, visual overlay, sanity mechanic, gore descriptions). No survival-math impact.
-- **Difficulty** = survival economy only (disease rates, food consumption, starvation timing, event consequence clamps, starting money). No narrative change.
+Every phase ends with a re-run of the calibration and a decision gate. If any phase solves the survival-rate problem, we stop there.
 
-Any LLM prompt that currently receives `tone` does NOT need `difficulty` — difficulty is enforced server-side by the simulation and clamp math. Keeps prompt tokens unchanged.
-
----
-
-## § 1. Research findings (that changed the plan)
-
-Dispatched two agents in parallel. Key takeaways applied below:
-
-**From Rimworld (Storyteller × Difficulty):** the mental model "tone = when/how events arrive, difficulty = how hard they hit" is the cleanest framing. Two sequential screens > one 9-cell grid. Players parse a grid as correlated rows/columns; two screens teach independence.
-
-**From Frostpunk:** show numeric deltas on difficulty, prose on tone. "Food consumption +20%, disease chance +50%" beats "Harder."
-
-**From Darkest Dungeon (Stygian):** Hard tier needs an explicit warning string. "Recommended after one full playthrough."
-
-**From FTL (difficulty + AE toggle):** two independent toggles, side by side, with labels that are verbs/questions, not bare nouns. "How dark?" and "How hard?" beats "Tone" and "Difficulty."
-
-**From Rimworld Custom (do NOT copy):** do not ship custom sliders. Preset tiers only. Telemetry says most players use presets anyway.
-
-**From DF (anti-pattern):** do not expose raw parameter sheets. Abstract behind tiers.
-
-**From Oregon Trail 1985 (profession-as-difficulty):** already have this — banker ($1600) is stealth-easy vs farmer ($400). Doesn't replace an explicit difficulty axis, but interacts with it: Easy + Banker = double-easy; Hard + Farmer = double-hard. Matrix stays honest.
+**Most likely outcome per autoplan CEO findings:** Phase A or B is sufficient. Phase C ships for the product-vision value (already in PLAN.md:164). Phase D probably never ships.
 
 ---
 
-## § 2. Codebase audit (what changes, where)
+## § 1. What changed from v1 (response to each CEO finding)
 
-Dispatched Explore agent on /home/ryan/code/oregon-trail. Summary of touchpoints:
+### Finding 1: "Solves unproven segmentation problem"
+**v1:** assumed 3/3 playtests = user demand for a difficulty axis.
+**v2:** Phase A measures with N=20 before any architectural work. If post-bugfix Medium is actually fine, we stop at Phase A.
 
-| Layer | File | Current | Change |
-|---|---|---|---|
-| Types | `worker/src/types.ts` | `ToneTier`, `Settings.tone_tier`, `StartRequest.tone_tier`, `ChallengeConstraints.force_tone` | Add `Difficulty`, `Settings.difficulty`, `StartRequest.difficulty?`, `ChallengeConstraints.force_difficulty` |
-| State init | `worker/src/state.ts:58,96` | `createInitialState(…, toneTier, …)` writes tone + respects challenge.force_tone | Add `difficulty` param + write + respect challenge.force_difficulty |
-| Challenges | `worker/src/state.ts:32–43` | 10 challenges, some set `force_tone` | Add `force_difficulty` to nightmare (hard) + rich_fool (optional medium). Others null. |
-| Clamp | `worker/src/state.ts:241–287` | `clampConsequences(c)` applies fixed bounds | Add `difficulty` param; scale negative-side bounds by factor (0.7 easy / 1.0 med / 1.3 hard) |
-| Simulation | `worker/src/simulation.ts:130–150` | Disease onset: `base_probability * regionRisk * monthRisk` | Add `* difficultyMultiplier` (0.5 / 1.0 / 1.5) |
-| Simulation | `worker/src/simulation.ts:161–163` | Mortality: `ceil(100 * mortality_rate / progression_days)` | Scale by `difficultyMortality` (0.7 / 1.0 / 1.3) |
-| Simulation | `worker/src/simulation.ts:19–29` | `PACE_MILES`, `RATIONS_PER_PERSON` constants | Unchanged — difficulty adjusts food-per-day via rations multiplier OR via a new `rationsEfficiency` multiplier |
-| Simulation | `worker/src/simulation.ts:104–117` | Starvation kicks in after 3 days of 0 food | Add `starvation_grace_days` derived from difficulty (5 / 3 / 2) |
-| API | `worker/src/index.ts:162–178` | `/api/start` validates `tone_tier`, passes to `createInitialState` | Validate `difficulty`, pass through |
-| Prompts | `worker/src/prompt-assembly.ts:125` | `SYSTEM_PROMPTS[state.settings.tone_tier]` | UNCHANGED (difficulty stays server-side) |
-| Client | `public/engine.js:395–409` | `selectTone(tier)` stores + sends | Add `selectDifficulty(level)`; send both on `/api/start` |
-| Scenes | `public/scenes/tone.js` | Existing 3-card picker | UNCHANGED (still picks tone) |
-| Scenes | `public/scenes/difficulty.js` | NEW — mirror of tone.js but shows numeric deltas + "recommended" pill | NEW FILE |
-| State machine | `public/engine.js:303` | After TONE → STORE | Insert DIFFICULTY between TONE and STORE |
-| Tests | `worker/tests/state.test.ts` | 36 tests, existing fixtures use `tone_tier` only | Add `difficulty` to all fixtures; add ~5 clamp-per-difficulty tests |
-| Tests | `worker/tests/simulation.test.ts` | 19 tests | Add ~5 disease-scaling tests (easy vs hard) |
-| Tests | `worker/tests/prompt-assembly.test.ts` | 31 tests | Add `difficulty` field to fixtures; no prompt behavior change |
-| Visual QA | `scripts/visual-qa.mjs` | Tests 7 scenes | Add `difficulty` scene to the list |
-| Playthrough | `scripts/playthrough.mjs` | Takes `--tone`, `--profession`, `--pace` | Add `--difficulty` flag |
+### Finding 2: "Cuts against click→play wedge / product is a marketing funnel"
+**v1:** added a whole new setup screen between TONE and STORE.
+**v2:** Phase D's axis, if it ever ships, rides on the EXISTING tone screen as a checkbox ("Challenge mode ⚠️"), not a new scene. Zero new screens unless Phase D triggers.
 
-**Estimated effort (from audit):** 5–7 hours. Plus ~30–60 min for the new scene + review feedback. Total: 6–8 hours.
+### Finding 3: "Orthogonal axes contradicts horror thesis (PLAN.md:85)"
+**v1:** strict orthogonality (Easy+High = horror visuals + easy math).
+**v2:** **tone-gated.** High tone forces Hard difficulty. No Easy+High cell exists. 9-cell matrix collapses to an honest 7 cells where horror mechanics and horror narrative stay coupled (per PLAN.md:85).
 
----
+### Finding 4: "Adaptive difficulty already accepted, this plan is the opposite move"
+**v1:** didn't mention adaptive difficulty.
+**v2:** Phase C **implements PLAN.md:164 directly.** Adaptive difficulty is the first non-tuning response before any explicit axis. Invisible softening when a party is struggling. This is what the product-vision document always said we'd ship.
 
-## § 3. Commit plan (4 commits)
+### Finding 5: "9-cell matrix is fake product surface area"
+**v1:** designed all 9 cells equally, deferred telemetry.
+**v2:** Phase D builds at most 7 cells (High forces Hard), presented as a 2-state default/challenge UX. If Phase D never triggers, we never build ANY cells.
 
-Each independently revertable. Tag `pre-difficulty` at current HEAD (commit `30662f2`) before C1.
+### Finding 6: "Attribution chaos — 6 difficulty levers, deaths feel arbitrary"
+**v1:** celebrated "Easy + Banker" / "Hard + Farmer" as matrix interactions.
+**v2:** Phase D is the ONLY new difficulty lever. It does NOT stack with profession — it replaces profession's stealth-difficulty role. When Phase D ships, profession goes back to pure flavor (same $400 start for all three). This removes a lever instead of adding one.
 
-### C1 — Types + state + simulation wiring (backend)
-Files: `worker/src/types.ts`, `worker/src/state.ts`, `worker/src/simulation.ts`, `worker/src/index.ts`
-- Add `Difficulty` type + `Settings.difficulty` + `StartRequest.difficulty`
-- Extend `createInitialState` signature with `difficulty` (default `"medium"` for back-compat)
-- Update `/api/start` validator + handler
-- Add difficulty multipliers in `simulation.ts` (disease onset, mortality, starvation grace)
-- Update `clampConsequences(c, difficulty?)` signature with difficulty-scaled bounds
-- Add `force_difficulty` to `ChallengeConstraints`, set on `nightmare` challenge
-- Update all existing worker tests to pass `difficulty` in fixtures (no behavior change)
-- ~15 new tests: difficulty-scaled disease, difficulty-scaled clamp, challenge force_difficulty
-- Acceptance: 139+ tests pass (was 124).
-
-### C2 — Client engine + state machine (client logic)
-Files: `public/engine.js`, `public/main.js`
-- Add `selectDifficulty(level)` method on engine
-- Add `DIFFICULTY` to scene map + state transition table
-- Change TONE → DIFFICULTY → STORE (was TONE → STORE directly)
-- Send `difficulty` in `/api/start` POST body
-- Default `difficulty = "medium"` if client is older than server schema (safe back-compat)
-- Update `engine.difficulty` getter parallel to `engine.tone`
-
-### C3 — Difficulty scene (UI)
-Files: `public/scenes/difficulty.js` (NEW), `public/main.js` (register)
-- Mirror of `tone.js` structure — 3 cards, keyboard nav, click/tap support
-- Shows numeric deltas per tier (Frostpunk pattern):
-  - Easy: "Food burn -33%. Disease chance halved. Event consequences softened. Extra $200 starting money."
-  - Medium: "Standard survival. Recommended for first run." (pill)
-  - Hard: "Food burns 20% faster. Disease strikes more often. No mercy. ⚠️ Recommended after one full playthrough."
-- Uses existing `draw.mjs` PALETTE (parchment + goldBright)
-- No tone overlay on this scene (it's a UI screen, not a game scene)
-- Passes `difficulty` to `engine.selectDifficulty()` which triggers STORE transition
-
-### C4 — QA + docs
-Files: `scripts/visual-qa.mjs`, `scripts/playthrough.mjs`, `CLAUDE.md`, `README.md`
-- Add `difficulty` scene to visual-qa scope
-- Add `--difficulty=easy|medium|hard` flag to playthrough
-- Run 9 playthroughs (3 tones × 3 difficulties) to calibrate survival rates
-- Adjust multipliers if survival rates wildly off target (Easy=80% / Medium=30% / Hard=5%)
-- Document difficulty matrix in CLAUDE.md § 3 (Architecture Invariants) under new "3.8 Orthogonal tone and difficulty axes"
-- Commit the 9-run playthrough output as `.gstack/qa-reports/difficulty-calibration.json` for future regression reference
+### Other risks addressed
+- **Brand voice:** Phase D's UI copy doesn't say "Difficulty." It says "Challenge mode" (on) vs default. Matches the "It goes as dark as you want" brand sentence instead of SaaS-style preset picker.
+- **HMAC injection path:** dropped. If Phase D ships, signed states from before the deploy are rejected; players start a fresh game. Safer than security-boundary back-compat. Accepted risk: mid-game players lose their run at deploy time. Acceptable for a 10-min game.
 
 ---
 
-## § 4. Proposed multiplier table (v1 — to be calibrated in C4)
+## § 2. Phase A — Measure (always runs)
 
-Backend multipliers read from a single lookup table in `simulation.ts`:
+**Duration:** 1 hour.
+**Produces:** `.gstack/qa-reports/difficulty-calibration-v2.json`, a 20-run survival distribution.
 
+### Steps
+
+1. Run `scripts/playthrough.mjs` 20 times against post-bugfix v4 production (`trail.osi-cyber.com`):
+   - 10 runs: farmer / steady / medium tone (the most-likely "casual first time" path)
+   - 5 runs: farmer / steady / high tone (stress test the horror tier)
+   - 5 runs: banker / steady / medium tone (money-rich baseline)
+
+2. For each run, capture:
+   - Miles traveled at death/arrival
+   - Day of first member death
+   - Deaths by cause (disease name, starvation, drowning, event)
+   - Events handled (count)
+   - % of runs that reach each landmark (Kearney / Chimney / Laramie / South Pass / Fort Hall / Blue Mtns)
+
+3. Aggregate to a calibration JSON:
+   ```json
+   {
+     "run_date": "2026-04-17",
+     "worker_version": "e7d18d36",
+     "scenarios": [
+       { "name": "farmer-steady-medium", "runs": 10, "survived": N, "median_miles": N, "median_days_to_first_death": N, ... },
+       ...
+     ],
+     "global_stats": {
+       "wipe_rate_medium_default": 0.00,
+       "first_event_fatality_rate": 0.00,
+       "starvation_death_share": 0.00,
+       "disease_death_share": 0.00
+     }
+   }
+   ```
+
+4. **Decision gate:** commit the calibration JSON. Read it. Three outcomes:
+
+   - **Medium wipe rate ≥ 70% AND median wipe < 300 miles:** proceed to Phase B.
+   - **Medium wipe rate 40–70% OR median wipe 300–700 miles:** proceed to Phase C (skip B, because Medium isn't clearly broken).
+   - **Medium wipe rate < 40%:** STOP. Game is fine. Close this plan as "no change needed."
+
+### Phase A acceptance
+- JSON committed as regression reference
+- Summary line in this doc: "Phase A measured {WIPE_RATE}% Medium wipe, median {MILES} miles. Proceeding to Phase {X}."
+
+### No code changes in Phase A
+Pure measurement. If we stop here, repo state is unchanged.
+
+---
+
+## § 3. Phase B — Global Medium tune (ships iff Phase A triggers)
+
+**Duration:** 30 minutes.
+**Files:** `worker/src/simulation.ts` (2 lines)
+
+### Change
 ```ts
-const DIFFICULTY_MULTIPLIERS = {
-  easy:   { disease: 0.5, mortality: 0.7, starvationGrace: 5, consequenceFactor: 0.7, startingMoneyBonus: 0.5 },
-  medium: { disease: 1.0, mortality: 1.0, starvationGrace: 3, consequenceFactor: 1.0, startingMoneyBonus: 0.0 },
-  hard:   { disease: 1.5, mortality: 1.3, starvationGrace: 2, consequenceFactor: 1.3, startingMoneyBonus: -0.25 },
-};
+// simulation.ts
+const DISEASE_PROBABILITY_MULTIPLIER = 0.7;  // NEW — was effectively 1.0
+// Apply at line 138: `base_probability_per_day * riskMultiplier * DISEASE_PROBABILITY_MULTIPLIER`
+
+// simulation.ts, line 107
+if (next.simulation.starvation_days >= 4) {  // was 3 — one extra grace day
 ```
 
-| Variable | Easy | Medium | Hard |
-|---|---|---|---|
-| Disease onset probability × | 0.5 | 1.0 | 1.5 |
-| Disease mortality rate × | 0.7 | 1.0 | 1.3 |
-| Starvation grace days (time before 0 food starts killing) | 5 | 3 | 2 |
-| Event negative consequence bound × | 0.7 | 1.0 | 1.3 |
-| Starting money multiplier (on top of profession) | +50% | +0% | −25% |
+### Tests
+- Add 2 vitest tests: disease onset ~30% less frequent with the multiplier, starvation kicks in day 4 not day 3.
+- Existing 124 tests pass unchanged.
 
-**Rationale:** survival is driven by food × disease × events. One multiplier per axis prevents thrash. Starting money is the lowest-coupling lever — we can tune it post-launch without touching the simulation.
+### Phase B re-measure
+- Re-run the same 20-scenario Phase A suite against the local worker (`npx wrangler dev`) with the tune applied.
+- If Medium wipe rate drops below 40% → ship it. Deploy. **STOP.**
+- If Medium wipe rate still ≥ 40% → keep the tune, proceed to Phase C.
 
-**Not touching on v1:**
-- Pace/rations (player choice, already in-game)
-- Hunting yields (too many second-order effects)
-- Max concurrent diseases (nice-to-have but would need a new sim check)
-- River crossing fail rates (separate system — save for v2)
+### Phase B acceptance
+- 2 lines changed, 2 tests added
+- Re-measurement JSON committed
+- Decision logged: "Phase B tune {SUFFICIENT / INSUFFICIENT}. Proceeding to Phase C."
 
 ---
 
-## § 5. UI flow + copy
+## § 4. Phase C — Adaptive difficulty (PLAN.md §5.8)
 
-### Flow change
+**Duration:** 2 hours.
+**Files:** `worker/src/simulation.ts` (+30 lines), `worker/src/state.ts` (+1 field: `recent_death_grace_days`), `worker/tests/simulation.test.ts` (+4 tests)
 
-Before: `TITLE → PROFESSION → NAMES → TONE → STORE → TRAVEL`
-After: `TITLE → PROFESSION → NAMES → TONE → DIFFICULTY → STORE → TRAVEL`
+**This is the implementation of PLAN.md §5.8 — already accepted in the original product vision (audit row #4 of the CEO plan).**
 
-**No change to tone screen.** Difficulty screen is new, follows the tone screen's pattern.
+### Mechanism
+After any party member dies, the server sets `state.simulation.recent_death_grace_days = 5`. For the next 5 simulation days:
+- `DISEASE_PROBABILITY_MULTIPLIER × 0.5`
+- `consequence_clamp negative side × 0.7`
+- `starvation_grace += 2`
 
-### Difficulty screen copy
+After 5 days (or another death), the grace counter resets. Multiple deaths in one day count as one death for grace purposes (no runaway softening).
 
-Header: "How hard is survival?"
-Subhead: "Tone sets the mood. Difficulty sets the math."
+### Why this is the right abstraction per PLAN.md:164
+- "Well-stocked party gets harder challenges, struggling party gets recovery opportunities. Not cheating — good dungeon mastering."
+- Invisible to the player → no UI churn, no new screens, no attribution chaos.
+- Preserves the horror thesis: a party *can* still wipe, it just gets one breath after a death.
 
-Three cards in a row (follow existing `tone.js` card layout):
+### Tests
+- A party with a recent death suffers lower disease probability than a party without (seeded RNG)
+- Grace resets after 5 days
+- Grace doesn't stack from multiple same-day deaths
+- Grace does not apply if `tone_tier === "high"` AND `profession === "banker"` — a deliberate carve-out so horror+rich players don't get a safety net (opinionated default; change later if telemetry says otherwise)
 
-**Easy — "A gentler trail"**
-- Food burns slower (−33% consumption)
-- Disease is rare and mild (×0.5 chance, ×0.7 mortality)
-- Events hit softer
-- Starting money bonus: +50%
-- Keyboard hint: press `1`
+### Phase C re-measure
+- Same 20 scenarios. If median Medium wipe rises above 500 miles AND wipe rate drops below 40% → ship. **STOP.**
+- If not → Phase D (explicit axis is the lever of last resort).
 
-**Medium — "Pioneer standard" *(Recommended)*** [gold pill]
-- The default 1848 experience
-- Based on the original game's tuning
-- Keyboard hint: press `2`
-
-**Hard — "The trail gives no mercy"**
-- Food burns faster (+20%)
-- Disease strikes often and kills fast (×1.5 chance, ×1.3 mortality)
-- Events cost more
-- Starting money: −25%
-- ⚠ Recommended after one full playthrough
-- Keyboard hint: press `3`
-
-**Accessibility:** Same keyboard nav + tap-target sizes as tone.js. `aria-label` on each card describing the effect.
-
-**Persistence:** remembered in localStorage as `ot_last_difficulty` so repeat players don't re-pick (same pattern used for tone). Show selected-card highlight on re-entry.
+### Phase C acceptance
+- ~30 net lines, 4 new tests (132 total)
+- Re-measurement JSON committed
+- Decision logged
 
 ---
 
-## § 6. Testing strategy
+## § 5. Phase D — Tone-gated explicit challenge mode (ships only if A+B+C fail)
 
-### Unit tests (vitest, worker)
-- `state.test.ts`: 5 new tests
-  - createInitialState with each difficulty level sets `settings.difficulty` correctly
-  - nightmare challenge forces both `tone_tier: "high"` AND `difficulty: "hard"`
-  - `clampConsequences(c, "easy")` applies 0.7× scaling to negative bounds
-  - `clampConsequences(c, "hard")` applies 1.3× scaling
-  - back-compat: `createInitialState` without difficulty param defaults to "medium"
-- `simulation.test.ts`: 5 new tests
-  - Disease onset on easy ~50% less frequent over 100 simulated days than medium
-  - Mortality on hard kills a diseased member ~30% faster than medium (seeded RNG)
-  - Starvation on easy doesn't damage until day 5 (not day 3)
-  - Starvation on hard damages from day 2 onward
-  - Difficulty=medium produces identical results to pre-change state (regression guard)
+**Duration:** 4 hours.
+**Files:** `worker/src/types.ts`, `worker/src/state.ts`, `worker/src/simulation.ts`, `worker/src/index.ts`, `public/engine.js`, `public/scenes/tone.js` (extension, NOT new scene).
 
-### Integration — 9-run calibration
-In C4: run `playthrough.mjs` 9 times (3 tones × 3 difficulties), farmer profession, steady pace, option-0 each event. Expected survival rates (rough target, not hard assertion):
+**Ship this ONLY if Phase C's re-measurement still shows Medium wipe rate ≥ 50% after the adaptive softening.**
 
-|  | Easy | Medium | Hard |
-|---|---|---|---|
-| Low tone | 70–85% | 40–55% | 15–25% |
-| Medium tone | 55–70% | 25–40% | 5–15% |
-| High tone | 35–50% | 10–20% | 2–8% |
+### Key difference from v1
+- **No new scene.** Tone screen gets a checkbox below the three tone cards: `[ ] Challenge mode — faster disease, harsher events, no adaptive mercy`. Single checkbox, one line of copy. Zero additional clicks for default players.
+- **Tone-gated.** High tone auto-checks "Challenge mode" and disables the box. Horror = Challenge, always. Preserves the horror hook (the CEO phase's #1 finding).
+- **"Difficulty" is never the word.** UI copy is "Challenge mode." Matches the product brand voice.
+- **No changes to profession tuning.** Profession goes back to being pure flavor. Banker and Farmer both start with the same $400 once Challenge mode is the explicit lever. (One less attribution axis — addresses CEO finding 6.)
 
-Each cell runs the simulation twice (low variance check). Results commit to `.gstack/qa-reports/difficulty-calibration.json` as a regression reference. If any cell is >20 percentage points off target, adjust `DIFFICULTY_MULTIPLIERS` and re-run — but NOT on the hot path; fold into a follow-up tuning commit.
+### Wire format
+- `StartRequest.challenge_mode?: boolean` (default `false`)
+- `Settings.challenge_mode: boolean`
+- If `tone_tier === "high"`, server forces `challenge_mode = true` regardless of client input.
+- Challenge mode activates: disease multiplier 1.4, starvation grace 2, clamp negative side 1.3, adaptive softening DISABLED.
+- Non-challenge mode = everything Phase B + C already established.
 
-### Visual QA
-`visual-qa.mjs` gets a new scene entry for `difficulty`. Must show 3 cards, 0 JS errors, readable "Recommended" pill.
+### The cell matrix (honest, not aspirational)
 
----
+|  | Default (no checkbox) | Challenge mode (checked) |
+|---|---|---|
+| Low tone | Easy storytelling | Low narrative, harsher math |
+| Medium tone | Default path | Medium narrative, harsher math |
+| **High tone** | **Forced Challenge** | same as default High |
 
-## § 7. Back-compat + migration
+Six player-facing states collapse into four actual mechanical states:
+1. Casual (default): Phase B tune + Phase C adaptive
+2. Challenge Low: no adaptive, harsher disease, mild narrative
+3. Challenge Medium: no adaptive, harsher disease, gray narrative
+4. Challenge High = horror: no adaptive, harsher disease, horror narrative. **The viral-screenshot mode.**
 
-**Client forward-compat:** A player loading an old saved run (signed state with no `difficulty` field) should default to `"medium"`. Handled by `createInitialState` default + client-side `engine.difficulty` getter with `?? "medium"`.
+### HMAC back-compat
+- Dropped the inject-default path. Old signed states without `challenge_mode` are rejected. Players start fresh after deploy. Accepted trade.
 
-**Server back-compat:** `/api/start` accepts optional `difficulty` on request body. Missing → default medium. Won't break anyone already mid-game; the signed state gets the new field on the next state mutation.
-
-**HMAC chain:** adding a new field to GameState.settings triggers the key-sorting in `deepCanonicalize` (`hmac.ts`). No code change required, but existing in-flight signed states from before the deploy won't verify under the new schema. Two options:
-
-1. **Include `difficulty: "medium"` as a default in the existing validator** — if an incoming signed state lacks the field, inject it before verify. Zero user friction.
-2. **Reject old states and force a new game** — cleaner but annoys anyone mid-run at deploy time.
-
-**Chose #1**: inject default in `verifyIncomingState()` before HMAC check. New tests cover the "old state passes validation" path.
+### Phase D acceptance
+- ~60 net lines
+- 6 new tests (138 total)
+- Re-measurement JSON for the checkbox path shows median Medium wipe above 700 miles
+- Visual QA passes with new tone.js extended
 
 ---
 
-## § 8. Rollback
+## § 6. Sequencing + rollback
 
-- Tag `pre-difficulty` at `30662f2` before C1 lands.
-- Each of C1–C4 independently revertable (`git revert <sha>`).
-- If C1 reverts: back to current Medium-only game. Frontend C2/C3 gracefully default to medium.
-- If all 4 revert: `git reset --hard pre-difficulty`.
-- Cloudflare Pages + Worker rollback: re-deploy the previous build from the dashboard OR re-run `wrangler deploy` on the reverted commit.
+Tag `pre-difficulty-v2` at HEAD `30662f2` before any phase lands.
 
----
+Phase A is always first. Each subsequent phase reads the measurement from the prior gate and only runs if triggered.
 
-## § 9. Pre-mortem — 5 ways this goes wrong
+Revert order (if something regresses):
+1. Phase D revert: `git revert <sha>` — players default to Phase A+B+C state
+2. Phase C revert: adaptive difficulty off, Phase B tune remains
+3. Phase B revert: Medium goes back to pre-tune
+4. Phase A: no code, no revert needed
 
-Per `feedback_pre_mortem_before_review`: list failures before handing to reviewers.
-
-1. **Matrix is too coarse — 9 cells feel samey.** Medium-tone+Easy and Medium-tone+Medium feel identical because the multipliers are too close. *Mitigation:* the calibration step in C4 actually measures this with 9 playthroughs. If Easy and Medium end up within 10 points, widen the easy multipliers (0.5 → 0.3 on disease, starting money bonus +50% → +100%).
-2. **Hard + High tone is unplayable — 0% survival makes it a stunt, not a game.** *Mitigation:* at launch, that's the Reddit-screenshot cell. Accept it. If telemetry shows >99% wipe, soften mortality on Hard+High only. Otherwise leave it.
-3. **Adding a screen kills TTV (time-to-value) — players bounce before travel.** *Mitigation:* make the difficulty screen as fast as tone. Keyboard `1/2/3` presses land in <3 seconds. Default Medium is pre-highlighted + Enter-to-confirm works.
-4. **The LLM doesn't know the difficulty, so its events feel wrong on Easy** (e.g., "Your party ate the dog" fires on Easy mode where that tonally doesn't fit). *Mitigation:* the LLM already gets tone. Difficulty stays mechanical. Easy on High tone still generates horror events — the difficulty just clamps the numeric consequence. Accept this; don't bloat the prompt with difficulty context.
-5. **Back-compat injection of `difficulty: "medium"` into old signed states re-signs them with a new signature, breaking the "client holds state" invariant.** *Mitigation:* inject the field BEFORE verify (transparent to signature), only for the missing-field case. Unit test covers the exact path.
+Each phase ships independently; nothing bundled.
 
 ---
 
-## § 10. Out of scope (explicit)
+## § 7. Testing strategy
 
-- Custom difficulty sliders (Rimworld-style). Ship presets only.
-- Per-biome or per-segment difficulty ramps (ITB's island scaling). The trail already gets harder geographically; don't double up.
-- New scene for PROFESSION difficulty interaction visualization. Profession remains flavor; difficulty is explicit.
-- Rebalancing Medium tier to be easier globally. Ryan's decision: Medium stays where it is; Easy is the new on-ramp.
-- "Nightmare" weekly challenge redesign. Leave existing challenges alone; they get `force_difficulty: null` except `nightmare` which becomes `"hard"`.
-- Translating difficulty copy. English-only for v1.
-- Telemetry on which cells players pick. Would need Plausible event wiring — follow-on PR.
+- Phase A: `scripts/playthrough.mjs` regression suite already exists
+- Phase B: 2 unit tests + re-measure
+- Phase C: 4 unit tests + re-measure
+- Phase D: 6 unit tests + visual-qa with extended tone scene + re-measure
+
+**Total test delta if every phase ships:** +12 tests (136 total). v1 was +15 tests (139) for the axis alone. v2 is actually lighter despite the phased rigor.
+
+### Calibration regression
+After each phase ships, commit the re-measurement JSON. If 6 months later we want to re-tune, we have a reference distribution.
+
+---
+
+## § 8. What's explicitly out of scope
+
+- Custom difficulty sliders (Rimworld-style)
+- Per-biome or per-segment difficulty ramps
+- 9-cell matrix with independent tone × difficulty picking (killed by CEO phase)
+- "Difficulty" as a player-facing noun (killed — it's "Challenge mode")
+- New setup screen (killed — checkbox on tone screen if anything)
+- HMAC inject-default back-compat (killed — new game on deploy is fine)
+- Telemetry wiring (deferred to follow-on, but Phase A's measurement JSON is our baseline)
+- Rebalancing Medium globally *before* measuring (Phase A blocks this)
+
+---
+
+## § 9. Pre-mortem — 5 ways THIS version goes wrong
+
+1. **Phase A measurement runs flaky against production** (LLM non-determinism, rate limits). *Mitigation:* add retries, or run against local `npx wrangler dev` with deterministic fallback events. 20 runs × 3 minutes = 1 hour, acceptable.
+2. **Phase B tune is too aggressive, game becomes trivial** at Medium. *Mitigation:* the 0.7 multiplier + 1-day grace is intentionally modest. If re-measurement shows wipe rate <20%, roll back the 0.7 to 0.85.
+3. **Phase C adaptive softening feels like cheating** to players who notice the pattern. *Mitigation:* "grace period" after a death is a real dramatic beat; journal entry can lampshade it ("The party buried Sarah. No one spoke for three days. The trail felt quieter."). This is PLAN.md:164's explicit framing ("not cheating — good dungeon mastering").
+4. **Phase D's Challenge-mode checkbox on the tone screen is visually cluttered.** *Mitigation:* single line under the three cards, no extra screen, copy is short. Design review before shipping.
+5. **The entire plan is premature.** Phase A measures and reveals Medium is already fine. We've spent 1 hour measuring, nothing to revert. Worst case is a non-problem caught early.
+
+---
+
+## § 10. Decision tree summary
+
+```
+Phase A (always) ─ measure
+     │
+     ├─ wipe < 40%? ─── STOP (game is fine, no changes)
+     │
+     ├─ wipe 40–70%? ── skip to Phase C (Medium not broken, just needs dungeon-master touch)
+     │
+     └─ wipe ≥ 70%? ─── Phase B (tune) → re-measure
+                              │
+                              ├─ wipe < 40%? ── STOP, ship B
+                              │
+                              └─ wipe ≥ 40%? ── Phase C (adaptive) → re-measure
+                                                     │
+                                                     ├─ wipe < 50%? ── STOP, ship B+C
+                                                     │
+                                                     └─ wipe ≥ 50%? ── Phase D (checkbox) → ship B+C+D
+```
 
 ---
 
 ## § 11. Review gauntlet
 
-Per `feedback_always_full_review_gauntlet`: run all of these before implementation.
+- [ ] `/autoplan` (re-run) — dual-voice reviews on this revised plan
+- [ ] Fix findings, re-review if >3 P1s
+- [ ] User final approval → begin Phase A
 
-- [ ] `/plan-eng-review` — architecture (type split, multiplier table, HMAC back-compat)
-- [ ] `/plan-design-review` — new screen UI, copy, "Recommended" pill (now that Step 0E is wired, should also declare the source of truth: this plan file is it, no Figma needed)
-- [ ] `/codex review` — independent second opinion
-- [ ] Fix findings, update this doc, re-review if >3 P1s
-- [ ] User final approval → begin C1
+---
+
+## Previous CEO phase (v1) archived
+
+See git commit `cc04fa0` for the full v1 CEO findings and consensus table. Six confirmed rejections on v1 drove every change in this v2. The v1 restore point is preserved at `~/.gstack/projects/oregon-trail/kaplay-rebuild-autoplan-restore-20260417-183231.md`.
 
 ---
 
 ## GSTACK REVIEW REPORT
 
-Autoplan invoked 2026-04-17. **Stopped at CEO premise gate — User Challenge triggered.**
-
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
-| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | **REJECT-ALIGNED** | 9 critical findings, both voices agree plan shouldn't ship |
-| Codex Review | `/codex review` | Independent 2nd opinion | 1 | **REJECT** | Plan solves unproven segmentation problem; cuts against "click → play" wedge |
-| Eng Review | `/plan-eng-review` | Architecture & tests | 0 | Not run (short-circuit on CEO rejection) | — |
-| Design Review | `/plan-design-review` | UI/UX gaps | 0 | Not run (short-circuit) | — |
+| CEO Review (v1) | `/plan-ceo-review` | Scope & strategy | 1 | **REJECTED** (archived) | 9 findings, 6/6 consensus reject → drove this v2 rewrite |
+| CEO Review (v2) | `/plan-ceo-review` | Scope & strategy | 0 | Pending re-run | — |
+| Codex Review (v1) | `/codex review` | Independent 2nd opinion | 1 | **REJECT** (archived) | Aligned with CEO subagent, 9 findings |
+| Codex Review (v2) | `/codex review` | Independent 2nd opinion | 0 | Pending re-run | — |
+| Eng Review | `/plan-eng-review` | Architecture & tests | 0 | Pending (short-circuited on v1) | — |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | Pending (short-circuited on v1) | — |
 | DX Review | `/plan-devex-review` | DX gaps | 0 | Skipped (not dev-facing) | — |
 
----
-
-## CEO Phase 1 — Dual Voices Consensus
-
-Both the Claude CEO subagent and Codex (independently) recommended against shipping this plan. This is a **User Challenge** per autoplan rules — when both models disagree with the user's stated direction, it cannot be auto-decided. Ryan decides.
-
-### Consensus table
-
-| Dimension | Claude | Codex | Consensus |
-|---|---|---|---|
-| 1. Premises valid? | NO — "3/3 playtests" is N=3 after bugfix, extrapolated | NO — telemetry is out of scope, no evidence users want more choice | **CONFIRMED — premises weak** |
-| 2. Right problem to solve? | NO — tune Medium first, prove it needs structural change | NO — the problem is fairness-feel, not segmentation | **CONFIRMED — wrong problem** |
-| 3. Scope calibration correct? | NO — 6-8 hr architecture for what's a 30-min tuning pass | NO — 9-cell matrix is fake product surface | **CONFIRMED — over-scoped** |
-| 4. Alternatives sufficiently explored? | NO — homesteader profession, adaptive difficulty, A/B landing dismissed | NO — PLAN.md §5.8 already accepts adaptive difficulty; this plan contradicts it | **CONFIRMED — alternatives waved off** |
-| 5. Competitive/market risks covered? | NO — dilutes horror hook (Easy+High becomes most-picked = not scary) | NO — brand sentence "goes as dark as you want" becomes "has presets" | **CONFIRMED — brand risk** |
-| 6. 6-month trajectory sound? | NO — most likely outcome: 85% play Medium+Medium, 7 cells unused | NO — maintaining a matrix nobody visits | **CONFIRMED — maintenance debt** |
-
-**Six for six CONFIRMED rejections. No disagreements between the models.**
-
-### Top strategic risks (both voices independently surfaced)
-
-1. **Horror hook dilution (CRITICAL)** — "Easy + High tone" becomes the most-picked cell. Players get horror aesthetic without horror consequences. Screenshots lose bite. The differentiator is neutered by the config.
-2. **Solving the wrong KPI** — survival rate isn't the product goal. The newspaper + epitaph artifacts are. A dramatic earned wipe at mile 249 is a success, not a failure, if it's legible.
-3. **Attribution chaos (HIGH)** — the game already has 5 difficulty levers (profession, pace, rations, challenges, now post-fix clamps). Adding a 6th makes deaths feel arbitrary.
-4. **Orthogonality is dissonance** — Codex flagged: the plan redefines tone as narrative-only and difficulty as math-only, but PLAN.md:85 is explicit that "horror comes from mechanics, not atmosphere." Easy+High is incoherent with the product thesis.
-5. **Already-accepted alternative was ignored** — PLAN.md:164 and decision-audit row #4 accepted adaptive difficulty. Adding an explicit picker is the opposite move.
-
-### The unified recommendation from both voices
-
-**Don't build the difficulty axis. Instead:**
-
-1. **Measure first.** Run 20 automated `playthrough.mjs` runs on post-bugfix v4 (farmer, steady, medium tone). If median wipe >500 miles: Medium is fine. If <300 miles: Medium needs a tuning nudge. 1-2 hours, no new code.
-
-2. **One-lever fixes, in priority order** (ship ONE, measure, then decide if more are needed):
-   - **A.** Global Medium tune — adjust `disease_base_probability ×0.7` + `starvation_grace_days 3→4`. One commit, no UI, no types. (~30 min)
-   - **B.** Implement adaptive difficulty (already accepted in PLAN.md:164). LLM-read party state, soften next 5 days if someone just died. Zero UI surface. (~2 hr)
-   - **C.** Add "Homesteader" profession at $2400 starting money + 2 oxen bonus, labeled "Easy starter." Honest onboarding layer, zero new screens. (~45 min)
-
-3. **If telemetry later shows players genuinely want explicit difficulty segmentation:** tone-gate it. High forces Hard. Easy+High is structurally impossible. 9-cell matrix becomes honest 7-cell.
-
-### Risks of building the plan as-drafted
-- **Horror-mode virality dilution** (the Reddit screenshot loses its power)
-- **Funnel loss** from an extra screen (marketing asset adds ceremony)
-- **6 hours + 4 commits + new HMAC back-compat path** for a problem a 30-minute tune may solve
-- **Attribution chaos** across 6 difficulty levers
-- **Product-thesis contradiction** with PLAN.md:85 (horror is mechanical, not atmospheric)
-
-### Risks of NOT building the plan (if the measurement shows Medium is fine)
-- **Zero.** Current v4 ships with clamp fix. Game is playable. Horror tier intact.
-
-### Risks of NOT building (if Medium IS too hard)
-- Casual players bounce. Solvable by the one-lever fixes above without adding a setup screen.
-
----
-
-## PREMISE GATE — User Challenge
-
-**What you said:** Build a 3×3 tone×difficulty matrix with a new DIFFICULTY screen between TONE and STORE. 6-8 hrs / 4 commits.
-
-**What both models recommend:** Don't build it. Tune Medium globally + use existing levers (profession, adaptive difficulty from PLAN.md:164). 30 min to 2 hrs depending on which lever. No new UI.
-
-**Why both models agree:**
-- Product is a 5–15 min marketing funnel, not a 40 hr roguelike. Rimworld/Frostpunk comparators don't transfer.
-- PLAN.md:85 is explicit: "horror comes from mechanics, not atmosphere." Splitting tone from difficulty contradicts the product thesis.
-- You already accepted adaptive difficulty (PLAN.md:164, audit row #4). Adding a visible picker is the opposite move.
-- 3/3 playtests is N=3 after a now-fixed bug. Telemetry doesn't exist yet. The evidence base is too thin for architectural work.
-
-**What the models might be missing:**
-- Your personal taste / authorial vision for the game having player-facing choice
-- Marketing value of having "choose your difficulty" as a landing-page bullet
-- Portfolio-demo value of shipping a visibly thoughtful difficulty system (demonstrates OSI's systems thinking)
-- Future plans for the game that aren't in PLAN.md
-
-**If the models are wrong, the cost is:** you spent 1–2 hours tuning and measuring, and now you still build the matrix with better data. Nothing lost except a week of delay.
-
-**If the models are right and you build it anyway, the cost is:**
-- 6–8 hours on a structural change that should have been a tune
-- Horror hook dilution (Easy+High becomes most-picked, viral Reddit moment disappears)
-- Maintenance overhead on 9 cells where 2 get used
-- Contradicting PLAN.md's stated horror thesis
-
----
-
-**VERDICT:** REJECT-ALIGNED — both voices independently recommend not shipping. Decision deferred to Ryan at the gate. Default per autoplan rules: user's original direction stands unless explicitly changed.
+**VERDICT:** v2 revised after v1 rejection. Ready for autoplan re-run.
