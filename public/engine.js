@@ -145,6 +145,9 @@ class GameEngine {
     this.state = 'TITLE';
     this.signedState = null;
     this.currentEvent = null;
+    this.currentBitterPath = null;
+    this.currentBitterPathMeta = null;
+    this._resolvingBitterPath = false;
     this.rumor = null;
     this.listeners = {};
     this.apiBase = 'https://oregon-trail-api.trails710.workers.dev';
@@ -246,6 +249,8 @@ class GameEngine {
         currentEvent: this.currentEvent,
         currentRiver: this.currentRiver,
         currentLandmark: this.currentLandmark,
+        currentBitterPath: this.currentBitterPath,
+        currentBitterPathMeta: this.currentBitterPathMeta,
       }));
     } catch (_) {}
   }
@@ -262,6 +267,7 @@ class GameEngine {
   }
 
   getResumeScene() {
+    if (this.currentBitterPath) return 'BITTER_PATH';
     if (this.currentEvent) return 'EVENT';
     if (this.currentRiver) return 'RIVER';
     if (this.currentLandmark) return 'LANDMARK';
@@ -472,6 +478,15 @@ class GameEngine {
           this._saveRun();
           this.transition('EVENT', res.trigger_data);
           break;
+        case 'bitter_path':
+          // trigger_data is the full EventResponse (body the scene renders +
+          // echoes back for hash binding). trigger_meta carries sim metadata
+          // (dead_member_name, trigger_variant, days_since_death) for display.
+          this.currentBitterPath = res.trigger_data;
+          this.currentBitterPathMeta = res.trigger_meta || null;
+          this._saveRun();
+          this.transition('BITTER_PATH', res.trigger_data);
+          break;
         case 'landmark':
           this.currentLandmark = res.trigger_data;
           this._saveRun();
@@ -532,6 +547,67 @@ class GameEngine {
     } catch (e) {
       this.emit('loading', false);
       this.emit('error', { message: e.message, recoverable: true });
+    }
+  }
+
+  // Bitter Path resolution — mirrors makeChoice but routes to /api/bitter_path
+  // and uses a spam-click guard since the scene disables buttons on click.
+  // On error, currentBitterPath is NOT cleared so a retry via button re-enable
+  // can re-POST. If the server already resolved it in a prior attempt we get
+  // `already_resolved` and the scene transitions to TRAVEL.
+  async resolveBitterPath(choiceIndex) {
+    if (this._resolvingBitterPath) return;
+    if (choiceIndex < 0 || choiceIndex > 2) return;
+    if (!this.currentBitterPath) return;
+    this._resolvingBitterPath = true;
+    this.emit('loading', true);
+    try {
+      const res = await this.api('/api/bitter_path', {
+        signed_state: this.signedState,
+        event: this.currentBitterPath,
+        choice_index: choiceIndex,
+      });
+      this.signedState = res.signed_state;
+      const outcome = res.outcome;
+      this.currentBitterPath = null;
+      this.currentBitterPathMeta = null;
+      this._saveRun();
+      this.emit('loading', false);
+      this.emit('bitterPathResolved', { outcome, choiceIndex });
+      this.transition('TRAVEL');
+    } catch (e) {
+      this.emit('loading', false);
+      this.emit('error', { message: e.message, recoverable: true });
+    } finally {
+      this._resolvingBitterPath = false;
+    }
+  }
+
+  // Skip via content-warning gate. Fires BEFORE the scene body renders.
+  // Server applies zero mechanical effects but flags the run as "refused"
+  // for newspaper/telemetry differentiation. Same spam-click guard.
+  async skipBitterPath() {
+    if (this._resolvingBitterPath) return;
+    if (!this.currentBitterPath) return;
+    this._resolvingBitterPath = true;
+    this.emit('loading', true);
+    try {
+      const res = await this.api('/api/bitter_path_skip', {
+        signed_state: this.signedState,
+        event: this.currentBitterPath,
+      });
+      this.signedState = res.signed_state;
+      this.currentBitterPath = null;
+      this.currentBitterPathMeta = null;
+      this._saveRun();
+      this.emit('loading', false);
+      this.emit('bitterPathResolved', { outcome: 'refused', choiceIndex: -1 });
+      this.transition('TRAVEL');
+    } catch (e) {
+      this.emit('loading', false);
+      this.emit('error', { message: e.message, recoverable: true });
+    } finally {
+      this._resolvingBitterPath = false;
     }
   }
 
@@ -689,6 +765,9 @@ class GameEngine {
   restart() {
     this.signedState = null;
     this.currentEvent = null;
+    this.currentBitterPath = null;
+    this.currentBitterPathMeta = null;
+    this._resolvingBitterPath = false;
     this.rumor = null;
     this.fullJournal = [];
     this.profession = null;

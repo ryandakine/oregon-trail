@@ -44,6 +44,7 @@ engine.on("stateChange", ({ from, to, data }) => {
     STORE: "store",
     TRAVEL: "travel",
     EVENT: "event",
+    BITTER_PATH: "bitter_path",
     LANDMARK: "landmark",
     RIVER: "river",
     DEATH: "death",
