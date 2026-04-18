@@ -324,14 +324,109 @@ See git commit `cc04fa0` for the full v1 CEO findings and consensus table. Six c
 
 ## GSTACK REVIEW REPORT
 
+Autoplan re-invoked on v2 plan 2026-04-17. **Second User Challenge — both voices again recommend modifying further.**
+
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
-| CEO Review (v1) | `/plan-ceo-review` | Scope & strategy | 1 | **REJECTED** (archived) | 9 findings, 6/6 consensus reject → drove this v2 rewrite |
-| CEO Review (v2) | `/plan-ceo-review` | Scope & strategy | 0 | Pending re-run | — |
-| Codex Review (v1) | `/codex review` | Independent 2nd opinion | 1 | **REJECT** (archived) | Aligned with CEO subagent, 9 findings |
-| Codex Review (v2) | `/codex review` | Independent 2nd opinion | 0 | Pending re-run | — |
-| Eng Review | `/plan-eng-review` | Architecture & tests | 0 | Pending (short-circuited on v1) | — |
-| Design Review | `/plan-design-review` | UI/UX gaps | 0 | Pending (short-circuited on v1) | — |
-| DX Review | `/plan-devex-review` | DX gaps | 0 | Skipped (not dev-facing) | — |
+| CEO Review (v1) | `/plan-ceo-review` | Scope & strategy | 1 | **REJECTED** | 9 findings → drove v2 rewrite |
+| CEO Review (v2) | `/plan-ceo-review` | Scope & strategy | 1 | **MODIFY FURTHER** | 5 findings; Phase D + Phase-C-design + profession-flatten flagged |
+| Codex Review (v1) | `/codex review` | Independent 2nd opinion | 1 | **REJECT** | Aligned with CEO subagent v1 |
+| Codex Review (v2) | `/codex review` | Independent 2nd opinion | 1 | **MODIFY FURTHER** | 6 findings; naming collision + harness narrow claim + C redesign |
+| Eng Review | `/plan-eng-review` | Architecture & tests | 0 | Pending (short-circuited 2nd time) | — |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | Pending | — |
+| DX Review | `/plan-devex-review` | DX gaps | 0 | Skipped | — |
 
-**VERDICT:** v2 revised after v1 rejection. Ready for autoplan re-run.
+---
+
+## CEO Phase v2 — Dual Voices Consensus
+
+### What v2 got right (both voices confirmed)
+
+- **Tone-gating fixes the horror-hook dilution** (v1's worst flaw). High tone forcing Challenge eliminates the Easy+High cell.
+- **Phase C implementing PLAN.md:164** is real alignment; audit row #4 has been waiting 6 months.
+- **Phase A as a gate** is a meaningful discipline that v1 lacked.
+
+### What v2 got wrong (both voices converged)
+
+| # | Issue | Claude | Codex | Consensus |
+|---|---|---|---|---|
+| 1 | **Phase D creates Medium+Challenge dilution vector** — the new Easy+High equivalent. Horror-light cell siphons viral users. | YES | YES | **Drop Phase D entirely** |
+| 2 | **Phase C is rubber-banding, not DMing** — 5-day post-death mercy timer ≠ live-state-aware danger tuning. PLAN.md:164 means vary danger BEFORE disaster, based on party state. | YES | YES | **Redesign Phase C: live party-state reading (health, supplies, distance, recent events), not post-death grace** |
+| 3 | **Profession flatten is a net regression** — Banker/Carpenter/Farmer money spread IS the invisible zero-UI difficulty axis already shipped. Don't erase it. | YES | YES | **Revert the "all $400" decision; keep the money spread** |
+| 4 | **"Checkbox on tone screen" is implementation-minimal, not UX-minimal** — asking one screen to do two jobs (narrative + mechanics) adds cognitive load even without a new scene. | YES | YES | **If Phase D ever ships, it's a separate screen, not a tone-screen hijack** (or doesn't ship at all — preferred) |
+| 5 | **Phase A gates calibrated to auto-proceed** — 40/50/70% thresholds + LLM noise floor at N=20 means Phase B almost always triggers. Narrow the harness's claim to "emergency calibration only," not "product truth." | YES | YES | **Add confidence intervals; explicit STOP-as-valid outcome; Phase A can merge alone before planning the rest** |
+| 6 | **Codex-only:** `challenge_id` (weekly challenges) + new `challenge_mode` (Phase D) = naming + semantic collision. | N/A | YES | **If any explicit mode ever ships, don't name it "Challenge"** |
+
+### The converged recommendation
+
+Ship the 2-phase minimum. Redesign Phase C. Kill Phase D.
+
+```
+Phase A (always) ─── narrow claim: emergency calibration only
+     │
+     ├─ Medium wipe < 40% (with confidence interval) ─── STOP, re-plan if needed
+     │
+     └─ Medium wipe ≥ 40% ─── Phase B (30-min tune)
+                                    │
+                                    ├─ still broken? ─── Phase C' (redesigned)
+                                    │
+                                    └─ fixed? ─── STOP
+
+Phase C' (redesigned): LIVE party state → danger curve
+  - Read: avg_health, food_days_remaining, alive_count/party_size,
+    recent_event_severity, miles_from_destination
+  - Vary: disease_probability, event_consequence_clamp, landmark rest-bonuses
+  - No post-death pity timer. No carve-outs. Always on. Matches PLAN.md:164
+    "good dungeon mastering" literally — well-stocked gets harder, struggling
+    gets recovery opportunities.
+
+Phase D: DELETED. No checkbox, no second axis, no new lever.
+  Profession money spread stays as the zero-UI difficulty signaling already
+  in the product. If post-C data shows Medium+Farmer is still too hard,
+  the response is either: more profession spread (Homesteader $2400), or
+  more adaptive aggressiveness — NOT a user-facing toggle.
+```
+
+### Other fixes agreed on
+
+- Keep profession money spread intact. Revert the "all $400" decision entirely. Phase D erasing profession flavor is a bad trade.
+- Rename anything that isn't "tone" or "profession" to avoid colliding with weekly `challenge_id`.
+- HMAC back-compat drop was correct; keep that decision even though Phase D doesn't ship.
+- Phase A's playthrough harness is narrow (option 0, fixed loadout). Its conclusion can only be "is Medium catastrophically broken" — not a proxy for actual user fairness. Narrow the claim in the plan text.
+- Ship Phase A alone, merge, close this doc, write a fresh follow-up plan from the data.
+
+---
+
+## PREMISE GATE — User Challenge (v2)
+
+**What you said:** Rewrite the plan in v2 with phased approach + tone-gating + checkbox + profession-flatten.
+
+**What both models recommend:**
+- Ship Phase A alone as its own work unit. Merge. Re-plan from data.
+- If and only if Phase A flags Medium as broken: ship Phase B (30-min tune).
+- If and only if Phase B is insufficient: ship **redesigned Phase C** (live-state-aware adaptive difficulty, no post-death mercy timer).
+- **Kill Phase D.** No checkbox, no second axis. Profession money spread stays.
+
+**Why both models agree:**
+- Medium+Challenge is the new Easy+High (dilution vector, same class of problem as v1's biggest flaw).
+- Phase C as designed is rubber-banding, not DMing. PLAN.md:164 literally says "vary danger by party state" — not "pity timer after a death."
+- Profession erasure trades zero-UI difficulty signaling for new-UI — the wrong direction.
+- `challenge_mode` name collides with existing `challenge_id`.
+- Phase A + B + redesigned C is the minimum that solves the actual problem. Phase D is architectural ambition that the evidence doesn't justify.
+
+**What the models might be missing:**
+- Your desire to ship a user-visible difficulty control as a product feature (not just an invisible softening)
+- Taste preference for explicit player agency over hidden servant-of-the-DM magic
+- Portfolio value of demonstrably-thoughtful difficulty design
+
+**If the models are wrong, the cost is:** Phase A + B + C ships in ~3 hours. You look at telemetry for a month. If you still want Phase D, plan it separately with data.
+
+**If the models are right and you push through to Phase D anyway, the cost is:**
+- ~4 extra hours on a feature that may be net-negative for virality (Medium+Challenge dilution)
+- Profession flavor erased
+- Naming collision with weekly challenges
+- A user-facing difficulty toggle that 80% of players will never touch
+
+---
+
+**VERDICT:** Both autoplan CEO phases (on v1 and v2) converged on the same final shape. Decision deferred to Ryan.
