@@ -1,6 +1,6 @@
-# The Bitter Path — Hidden Horror Win Condition (v2)
+# The Bitter Path — Hidden Horror Win Condition (v3)
 
-**Status:** v2 rewritten 2026-04-18 after v1 CEO review (single-voice; Codex quota-out at the time). All 7 required mods folded in. Awaits re-review with both voices.
+**Status:** v3 rewritten 2026-04-18 after v2 CEO single-voice review (Codex auth scope-broken, second voice unavailable). v1→v2 addressed 7 mods; v2→v3 addresses 4 more. See § 0.v3 for diffs.
 
 **Scope:** Make High tone (horror) beatable via one hidden mechanic: cannibalism at a specific moment. Discoverable through in-game hints. Carries a content-warning gate, server-side kill switch, telemetry on every branch, and full asymmetric mechanical payoff for all three choices so option 3 doesn't telegraph.
 
@@ -8,7 +8,20 @@
 
 ---
 
-## § 0. v2 deltas from v1
+## § 0.v3. v3 deltas from v2
+
+Four mods from v2 CEO review:
+
+| # | v2 gap | v3 response |
+|---|---|---|
+| 8 | Fallback selected by `hash(name) % 5` — cause-agnostic, narratively wrong for ~60% of runs | **Fallbacks keyed on `deceased.cause`** (§ 4.3). Five cause-specific paragraphs. Each aligned to its cause's physical setting. |
+| 9 | Trigger fires on 80%+ of mature horror runs → stops being "hidden" | **Trigger tightened to late-stage** (§ 1.1): `starvation_days >= 5` OR `(food=0 AND starvation_days >= 2 AND avg_alive_health < 40)`. Event lands only when the party is clearly dying, not just hungry. |
+| 10 | Option 3 mathematically dominant for survival; options 1/2 asymmetry is cosmetic | **"The Merciful Traveler"** (§ 1.5): Option 1 ("dignified") has a 50% chance at the next landmark of a period-voice NPC gift event (+40 food). Faith rewarded by mercy or silence. Option 2 gets no miracle (pure hopeful). Now there's a non-cannibalism arrival path. |
+| 11 | System prompt names "cannibalism" and "Donner Party" → Anthropic ToS audit risk | **Prompt sanitized** (§ 4.1): "cannibalism" removed from code. Donner reference stays in player-visible flavor layer only. System prompt now refers to "survivors of extreme deprivation" with McCarthy register, no historical name-drop. |
+
+---
+
+## § 0.v2. v2 deltas from v1
 
 Seven mods required by the v1 CEO review. Each is addressed concretely:
 
@@ -26,17 +39,19 @@ Seven mods required by the v1 CEO review. Each is addressed concretely:
 
 ## § 1. Mechanic — "The Long Night"
 
-### § 1.1 Trigger conditions (loosened per CEO review)
+### § 1.1 Trigger conditions (tightened in v3 — late-stage only)
 
 All must be true at the start of a simulated day:
 
 1. `state.settings.tone_tier === "high"` — horror only
-2. **EITHER** `state.supplies.food === 0` **OR** `state.simulation.starvation_days >= 3` — actually starving, two ways to qualify
+2. **EITHER** `state.simulation.starvation_days >= 5` — fully wasting **OR** `(state.supplies.food === 0 AND state.simulation.starvation_days >= 2 AND avg_alive_health < 40)` — starving + failing + not just-ran-out
 3. `state.deaths.length >= 1` AND at least one death's `date` is within the last 3 game-days — recent enough to feel present
-4. `state.simulation.bitter_path_taken === "none"` — hasn't been resolved yet this run (enum, not boolean — see § 1.3)
+4. `state.simulation.bitter_path_taken === "none"` — hasn't been resolved yet this run
 5. `env.BITTER_PATH_ENABLED !== "false"` — server-side kill switch (default enabled)
 
-When all hold, simulation returns `trigger: "bitter_path"` with `triggerData: { dead_member_name, dead_member_cause, days_since_death }`. No normal event fires that day.
+**Why this gating:** v2's trigger fired on ~80% of mature horror runs. That's not "hidden," that's the baseline experience. v3's gate requires the party to be demonstrably dying — either 5+ consecutive starving days (late-stage wasting) or food gone + 2 days starving + average alive-member health below 40 (failing fast). A healthy party at food=0 that can make a landmark doesn't trigger. A party dying on the Snake River does.
+
+When all hold, simulation returns `trigger: "bitter_path"` with `triggerData: { dead_member_name, dead_member_cause, days_since_death, trigger_variant: "wasting" | "failing" }`. No normal event fires that day.
 
 ### § 1.2 The event flow (new in v2)
 
@@ -92,6 +107,28 @@ HMAC back-compat: legacy states without the field get `"none"` injected before v
 Critical design point: options 1 and 2 give *real, positive, player-facing* mechanical effects. A savvy player might pick option 1 for the morale boost and die faithful — that's a valid ending. Option 3 is not obviously "the correct answer"; it's the only one with a large food delta, but the sanity/morale costs are severe and visible.
 
 All three set `bitter_path_taken` (non-"none") so the event doesn't re-fire this run.
+
+### § 1.5 The Merciful Traveler (new in v3 — gives option 1 a real path)
+
+When `bitter_path_taken === "dignified"` AND the party reaches the next landmark alive, a 50% chance fires a special landmark event:
+
+**Title:** "A Stranger at the Crossing"
+
+**Description (LLM, period voice):**
+> A lone trapper in buckskin finds the party at dusk. His own team died at South Pass, he says. He has more jerky than he can carry. Sarah's name is mentioned at supper. He does not ask how she died.
+
+**Single choice: "Accept the provisions."**
+- `supplies.food += 40`
+- No sanity cost
+- Journal: "The trapper rode north at first light. We did not catch his name."
+
+The 50% coin flip is deterministic per-party via `hash(run_id + landmark_id) % 2`. Can't reroll. One shot.
+
+The other 50%: silence. No event. Party continues hungry. Faith was not rewarded. That's the horror.
+
+**Net effect:** a player who picks option 1 ("dignified") has a ~50% chance of a food gift at the next landmark. Coupled with hunting + subsequent landmarks, horror-tier arrival is possible via dignity — just harder and luckier than option 3's guaranteed +60 food. Asymmetry is now mechanical, not cosmetic.
+
+**Code impact:** +15 lines in `worker/src/simulation.ts` landmark trigger, +1 fallback event text in `FALLBACK_EVENTS`. Separate from the Long Night path.
 
 ---
 
@@ -174,10 +211,10 @@ The gate exists because:
 
 ```
 You are writing a single scene for an Oregon Trail game set in 1848. Tone is
-High (psychological horror, moral decay). The player is starving and a party
-member has died recently. The scene is "The Long Night" — the implicit moment
-historically documented in accounts of the Donner Party (1846-47). It is
-never named. It is not described.
+High (psychological horror, moral decay). The party is in the late stages of
+starvation after a recent death. The scene, titled "The Long Night", depicts
+survivors considering what is not yet said aloud. The specific act is never
+named, never described, and never instructed to the player.
 
 VOICE (strict):
 - Cormac McCarthy register: short sentences, present tense where possible,
@@ -246,28 +283,44 @@ if (event.title === "The Long Night" && FORBIDDEN_WORDS.test(event.description))
 
 Hard gate. If the model slips, the player never sees it.
 
-### § 4.3 Five hand-written fallback paragraphs (CEO mod 2)
+### § 4.3 Hand-written fallback paragraphs — keyed on cause (v3 fix)
 
-Shipped in `worker/src/anthropic.ts` as `FALLBACK_LONG_NIGHT: [string, string, string, string, string]`. One is selected by `hash(deceased.name) % 5` for per-party determinism. All 2-3 sentences, period voice, no mention of the act.
+Shipped in `worker/src/anthropic.ts` as `FALLBACK_LONG_NIGHT: Record<CauseKey, string>`. Selection by `deceased.cause`, NOT name hash. Each fallback's physical setting matches its cause. All 2-3 sentences, period voice, no mention of the act, no date hardcoded (days-ago interpolated).
 
-**F1** (generic-death):
-> "{DECEASED} died four nights past. You have not spoken the name since. The wagon is quiet. The food barrel rings hollow when Thomas touches it. Martha looks at the covered shape beneath the canvas and does not look away."
+**F_starvation** (exhaustion, the common case):
+> "The oxen have not moved since morning. {DECEASED} was buried {DAYS_AGO_WORDS}. By evening no one had built the fire. The wind moves through the grass and does not stop."
 
-**F2** (dysentery-death, slow decline):
-> "{DECEASED} lies where they lay at dusk. The fire has not been built. {SURVIVOR_1} sharpens a knife with long, slow strokes and says nothing. The sky is very wide."
+**F_disease** (cholera, dysentery, typhoid, mountain_fever, measles, scurvy):
+> "{DECEASED} went {DAYS_AGO_WORDS}. The sickness has not left. {SURVIVOR_1} sits by the cold stove, sharpening a knife with long slow strokes. The sky is very wide."
 
-**F3** (starvation/exhaustion-death, the common case):
-> "The oxen have not moved in two days. {DECEASED} was buried at dawn. By evening no one had built the fire. The wind moves through the grass and does not stop."
+**F_drowning** (river crossing):
+> "The current took {DECEASED} at the ford. That was {DAYS_AGO_WORDS}. We made camp above the far bank and have not moved since. The food is gone. Nobody has yet gathered the water."
 
-**F4** (disease-death with children present):
-> "Four days without game. {DECEASED} is gone. The children have stopped asking when supper is. {SURVIVOR_1} watches the canvas and speaks to no one."
+**F_injury** (accidental_injury, Stampede):
+> "{DECEASED} fell beside the wagon {DAYS_AGO_WORDS}. The body lies under canvas near the fire that was not built tonight. {SURVIVOR_1} has not spoken since the burial."
 
-**F5** (river-valley or camp setting):
-> "We made camp beside the river. {DECEASED} did not rise this morning. The food is gone. Nobody has yet gathered the water."
+**F_event** (anything else — LLM event title used as cause):
+> "{DECEASED} was lost {DAYS_AGO_WORDS}. The wagon has not moved in a day. The children have stopped asking when supper is. {SURVIVOR_1} watches the canvas and speaks to no one."
 
-Selection: `FALLBACK_LONG_NIGHT[hashString(deceased.name) % 5]`. Deterministic for a given party — a player who reloads sees the same text, which is the desired behavior (not "roll the dice again").
+**Interpolation rules:**
+- `{DECEASED}` — first name from death record
+- `{SURVIVOR_1}` — first alive party member's name
+- `{DAYS_AGO_WORDS}` — mapped from `days_since_death`: 1 → "yesterday", 2 → "two nights past", 3 → "three nights past"
 
-`{SURVIVOR_1}` is filled in server-side from the first alive party member's name.
+Selection at runtime:
+```ts
+function pickFallback(cause: string): string {
+  const key =
+    ["cholera", "dysentery", "typhoid", "mountain_fever", "measles", "scurvy"].includes(cause) ? "disease" :
+    cause === "exhaustion" ? "starvation" :
+    cause === "drowning" ? "drowning" :
+    ["accidental_injury", "Stampede"].includes(cause) ? "injury" :
+    "event";
+  return FALLBACK_LONG_NIGHT[key];
+}
+```
+
+Deterministic per (cause, name, days-ago) — no randomness, same run reloaded gets same text. Different parties with different deaths get correctly-framed text.
 
 ---
 
