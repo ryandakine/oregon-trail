@@ -28,6 +28,13 @@ const RATIONS_PER_PERSON: Record<Rations, number> = {
   bare_bones: 1,
 };
 
+// Phase B Medium tune (2026-04-17): Phase A calibration showed farmer-medium
+// wipe rate 100% (LB 79.6%) at mile 227 from disease + starvation chains.
+// These two constants soften the global economy without adding new state or
+// player-facing surface. Revisit with real user telemetry, not synthetic.
+const DISEASE_PROBABILITY_MULTIPLIER = 0.7;
+const STARVATION_GRACE_DAYS = 4;
+
 interface AdvanceResult {
   state: GameState;
   summaries: DaySummary[];
@@ -104,7 +111,7 @@ export function advanceDays(
     // 3. Starvation
     if (next.supplies.food === 0) {
       next.simulation.starvation_days++;
-      if (next.simulation.starvation_days >= 3) {
+      if (next.simulation.starvation_days >= STARVATION_GRACE_DAYS) {
         for (const member of next.party.members) {
           if (!member.alive) continue;
           member.health = Math.max(0, member.health - 10);
@@ -135,7 +142,7 @@ export function advanceDays(
         const monthElevated = disease.months_elevated.includes(month);
         const riskMultiplier =
           1 + (regionElevated ? 1 : 0) + (monthElevated ? 0.5 : 0);
-        if (Math.random() < disease.base_probability_per_day * riskMultiplier) {
+        if (Math.random() < disease.base_probability_per_day * riskMultiplier * DISEASE_PROBABILITY_MULTIPLIER) {
           member.disease = {
             id: disease.id,
             days_sick: 0,
