@@ -6,9 +6,9 @@ See `DIFFICULTY_SYSTEM_PLAN.md` for the full plan. Phase C deferred until real u
 
 ---
 
-## 🎯 CURRENT PHASE: Phase A — Emergency Calibration
+## 🎯 CURRENT PHASE: Phase B — Medium tune
 
-**Status:** Initializing (tracker just created)
+**Status:** 🟡 Phase A complete, Phase B triggered
 **Started:** 2026-04-17
 **Last updated:** 2026-04-17
 **Owner:** Ryan + Claude
@@ -20,8 +20,8 @@ See `DIFFICULTY_SYSTEM_PLAN.md` for the full plan. Phase C deferred until real u
 
 | Phase | State | Result | Commit | Date |
 |---|---|---|---|---|
-| **A** — Measure 30 playthroughs, decide STOP/B | 🟡 in progress | — | — | 2026-04-17 |
-| **B** — Disease ×0.7, starvation grace 3→4 | ⚪ gated on A | — | — | — |
+| **A** — Measure 30 playthroughs, decide STOP/B | 🟢 done | PHASE_B | see calibration JSON | 2026-04-18 |
+| **B** — Disease ×0.7, starvation grace 3→4 | 🟡 triggered — implementing | — | — | 2026-04-18 |
 | **C** — Live-state adaptive difficulty | ⛔ deferred | — | — | waiting for real user data |
 
 Legend: 🟢 done · 🟡 in progress · 🔴 blocked · ⚪ not started · ⛔ deferred
@@ -34,7 +34,7 @@ _(appended to as decisions are made)_
 
 | # | Date | Phase | Decision | Data | Rationale |
 |---|---|---|---|---|---|
-| — | — | — | — | — | — |
+| 1 | 2026-04-18 | A | PHASE_B | wipe 100.0% CI [79.6–100.0%] | farmer-medium wipe_rate_LB 79.6% ≥ 70%. Medium is clearly broken. Ship Phase B tune. |
 
 ---
 
@@ -42,18 +42,18 @@ _(appended to as decisions are made)_
 
 _(filled in after Phase A completes)_
 
-**Calibration JSON:** not yet produced
+**Calibration JSON:** `.gstack/qa-reports/difficulty-calibration-v3.json`
 **Worker version:** pending
-**Scenarios run:** 0 / 30
+**Scenarios run:** 30 / 30
 
 ### Results (filled in after Phase A):
 
 | Scenario | N | Wipe rate | 95% CI | Median miles | First-death day |
 |---|---|---|---|---|---|
-| farmer-steady-medium | — | — | — | — | — |
-| carpenter-steady-medium | — | — | — | — | — |
-| farmer-steady-high | — | — | — | — | — |
-| banker-steady-medium | — | — | — | — | — |
+| farmer-steady-medium | 15 | 100.0% | [79.6%–100.0%] | 227 | 22 |
+| carpenter-steady-medium | 5 | 100.0% | [56.6%–100.0%] | 271 | 17 |
+| farmer-steady-high | 5 | 80.0% | [37.6%–96.4%] | 148 | 22.5 |
+| banker-steady-medium | 5 | 100.0% | [56.6%–100.0%] | 315 | 32 |
 
 ---
 
