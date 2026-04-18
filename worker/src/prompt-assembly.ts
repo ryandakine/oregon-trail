@@ -96,6 +96,20 @@ export function buildRecentEventsBlock(state: GameState): string {
   return truncateToTokenBudget(`RECENT EVENTS:\n${text}`, 300);
 }
 
+// Situational hint that fires when a horror-tier run is approaching Bitter
+// Path trigger territory: low food + recent death or active starvation.
+// Appended to the LLM user prompt so the narrator starts thinking about
+// Donner-adjacent moments without ever instructing the player or naming
+// the mechanic. Gate mirrors BITTER_PATH_PLAN.md § 2.3.
+export function buildBitterPathSituationalHint(state: GameState): string {
+  if (state.settings.tone_tier !== "high") return "";
+  if (state.supplies.food >= 50) return "";
+  const hasDeath = state.deaths.length >= 1;
+  const isStarving = state.simulation.starvation_days >= 1;
+  if (!hasDeath && !isStarving) return "";
+  return "SITUATIONAL HINT: The narrator has begun to think of the Donner stories, though has not said so aloud. If the scene allows, mention this obliquely in period voice. Never instruct the player. Do not name the act.";
+}
+
 export function buildConditionalBlock(state: GameState, ctx: HistoricalContext): string {
   const parts: string[] = [];
 
@@ -149,6 +163,11 @@ export function assembleEventPrompt(state: GameState, ctx: HistoricalContext): A
 
   if (conditionalBlock) {
     userParts.push('', conditionalBlock);
+  }
+
+  const bitterHint = buildBitterPathSituationalHint(state);
+  if (bitterHint) {
+    userParts.push('', bitterHint);
   }
 
   userParts.push(
