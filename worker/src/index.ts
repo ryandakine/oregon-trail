@@ -1,6 +1,6 @@
 import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES, STORE_PRICES } from "./state";
 import { assembleEventPrompt } from "./prompt-assembly";
-import { callAnthropic, parseEventResponse, FALLBACK_EVENTS } from "./anthropic";
+import { callAnthropic, parseEventResponse, FALLBACK_EVENTS, generateLongNight, bitterPathConsequences } from "./anthropic";
 import { advanceDays } from "./simulation";
 import { signState, deepCanonicalize, bufferToHex } from "./hmac";
 import type {
@@ -25,6 +25,7 @@ export interface Env {
   HMAC_SECRET: string;
   ANTHROPIC_API_KEY: string;
   ALLOWED_ORIGIN: string;
+  BITTER_PATH_ENABLED?: string; // "true" | "false"; default "true". Kill switch for the horror-tier hidden path.
 }
 
 // Rate limiter: in-memory Map, 200 calls/min per IP
@@ -122,6 +123,8 @@ export default {
           return await handleLandmark(request, env, origin);
         case "/api/hunt":
           return await handleHunt(request, env, origin);
+        case "/api/bitter_path":
+          return await handleBitterPath(request, env, origin);
         case "/api/prices":
           if (request.method === "GET") {
             return jsonResponse({ prices: STORE_PRICES }, 200, origin);
@@ -283,7 +286,8 @@ async function handleAdvance(
   }
 
   const historical = ctx as unknown as HistoricalContext;
-  const result = advanceDays(stateToAdvance, historical);
+  const bitterPathEnabled = env.BITTER_PATH_ENABLED !== "false"; // default on
+  const result = advanceDays(stateToAdvance, historical, { bitterPathEnabled });
 
   let eventData: EventResponse | null = null;
 
@@ -302,6 +306,21 @@ async function handleAdvance(
       const fallbacks = FALLBACK_EVENTS[tier];
       eventData = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
+  } else if (result.trigger === "bitter_path") {
+    const td = result.triggerData as {
+      dead_member_name: string;
+      dead_member_cause: string;
+      days_since_death: number;
+    };
+    const firstAlive = result.state.party.members.find((m) => m.alive);
+    const survivorName = firstAlive ? firstAlive.name : "someone";
+    eventData = await generateLongNight(
+      td.dead_member_name,
+      td.dead_member_cause,
+      td.days_since_death,
+      survivorName,
+      env.ANTHROPIC_API_KEY,
+    );
   }
 
   // If we have an event, hash it and embed in state
@@ -377,6 +396,77 @@ async function handleChoice(
   );
 
   return jsonResponse({ signed_state }, 200, origin);
+}
+
+async function handleBitterPath(
+  request: Request,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const body = (await request.json()) as ChoiceRequest;
+
+  const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
+  if (!verified.valid) {
+    return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  // Event-hash binding: the event the client sends back must match the one
+  // we signed into pending_event_hash. Same anti-fabrication invariant as
+  // /api/choice.
+  const submittedHash = await hashEvent(body.event);
+  if (verified.state.simulation.pending_event_hash !== submittedHash) {
+    return jsonResponse({ error: "event_hash_mismatch" }, 400, origin);
+  }
+
+  if (
+    typeof body.choice_index !== "number" ||
+    body.choice_index < 0 ||
+    body.choice_index > 2
+  ) {
+    return jsonResponse({ error: "invalid_choice_index" }, 400, origin);
+  }
+
+  // Refuse if the path has already been resolved this run — shouldn't happen
+  // because the trigger doesn't re-fire, but defend against replay.
+  if (verified.state.simulation.bitter_path_taken !== "none") {
+    return jsonResponse({ error: "already_resolved" }, 400, origin);
+  }
+
+  const next = structuredClone(verified.state);
+  const effects = bitterPathConsequences(body.choice_index as 0 | 1 | 2);
+
+  next.simulation.bitter_path_taken = effects.bitter_path_taken;
+  next.simulation.pending_event_hash = null;
+  next.simulation.days_since_last_event = 0;
+
+  if (effects.food_delta !== 0) {
+    next.supplies.food = Math.max(0, next.supplies.food + effects.food_delta);
+  }
+  if (effects.starvation_days_reset) {
+    next.simulation.starvation_days = 0;
+  }
+  for (const m of next.party.members) {
+    if (!m.alive) continue;
+    if (effects.morale_delta_per_member !== 0) {
+      m.morale = Math.max(0, Math.min(100, m.morale + effects.morale_delta_per_member));
+    }
+    if (effects.sanity_delta_per_member !== 0) {
+      m.sanity = Math.max(0, Math.min(100, m.sanity + effects.sanity_delta_per_member));
+    }
+  }
+  if (effects.days_delta > 0) {
+    const d = new Date(next.position.date + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() + effects.days_delta);
+    next.position.date = d.toISOString().split("T")[0];
+  }
+
+  next.journal.push(body.event.journal_entry);
+  if (next.journal.length > 5) next.journal = next.journal.slice(-5);
+  next.meta.event_count += 1;
+
+  const signature = await signState(next, env.HMAC_SECRET);
+  const signed_state: SignedGameState = { state: next, signature };
+  return jsonResponse({ signed_state, outcome: effects.bitter_path_taken }, 200, origin);
 }
 
 async function handleNewspaper(
