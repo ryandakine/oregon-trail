@@ -75,7 +75,7 @@ function sanitizeName(name: string): string {
   return name.replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 20);
 }
 
-async function hashEvent(event: EventResponse): Promise<string> {
+export async function hashEvent(event: EventResponse): Promise<string> {
   const encoder = new TextEncoder();
   const canonical = deepCanonicalize(event);
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode(canonical));
@@ -416,7 +416,7 @@ async function handleChoice(
   return jsonResponse({ signed_state }, 200, origin);
 }
 
-async function handleBitterPath(
+export async function handleBitterPath(
   request: Request,
   env: Env,
   origin: string,
@@ -494,7 +494,7 @@ async function handleBitterPath(
 // no food, morale, sanity, or days delta — so we are not rewarding skip.
 // The enum value "refused" lets newspaper copy + telemetry distinguish
 // opt-out from the dignified choice.
-async function handleBitterPathSkip(
+export async function handleBitterPathSkip(
   request: Request,
   env: Env,
   origin: string,
