@@ -129,7 +129,7 @@ describe("advanceDays - food consumption", () => {
     vi.restoreAllMocks();
   });
 
-  it("filling rations consumes 3 per alive member per day", () => {
+  it("filling rations consumes 2 per alive member per day (Phase B.2: was 3)", () => {
     const state = makeState();
     state.position.miles_traveled = 320;
     state.position.current_segment_id = "seg_03";
@@ -139,13 +139,13 @@ describe("advanceDays - food consumption", () => {
     state.supplies.food = 500;
 
     const result = advanceDays(state, historical);
-    // 5 alive members * 3 = 15 food per day
+    // 5 alive members * 2 = 10 food per day after Phase B.2 tune
     for (const summary of result.summaries) {
-      expect(summary.food_consumed).toBe(15);
+      expect(summary.food_consumed).toBe(10);
     }
   });
 
-  it("meager rations consumes 2 per alive member per day", () => {
+  it("meager rations consumes 1.5 per alive member per day (Phase B.2: was 2)", () => {
     const state = makeState();
     state.position.miles_traveled = 320;
     state.position.current_segment_id = "seg_03";
@@ -155,8 +155,9 @@ describe("advanceDays - food consumption", () => {
     state.supplies.food = 500;
 
     const result = advanceDays(state, historical);
+    // 5 alive * 1.5 = 7.5 food per day; Math.min with integer food may round
     for (const summary of result.summaries) {
-      expect(summary.food_consumed).toBe(10); // 5 * 2
+      expect(summary.food_consumed).toBe(7.5);
     }
   });
 

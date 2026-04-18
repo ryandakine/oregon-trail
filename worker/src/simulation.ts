@@ -22,9 +22,15 @@ const PACE_MILES: Record<Pace, number> = {
   grueling: 20,
 };
 
+// Phase B.2 (2026-04-17): post-B calibration showed Phase B moved cause
+// distribution (less disease) but not wipe rate (still 10/10 farmer-medium).
+// Starvation was already 49% of deaths pre-B; became 56% post-B as disease
+// softened. Food runway at 15 lbs/day (5 people × 3 lbs filling) vs ~180 lbs
+// starting food = 12 days. Dropping filling to 2 extends runway to 18 days.
+// Tests use historical 3-lb baseline via a fixture toggle; production drops to 2.
 const RATIONS_PER_PERSON: Record<Rations, number> = {
-  filling: 3,
-  meager: 2,
+  filling: 2,       // was 3 (Phase B.2)
+  meager: 1.5,      // was 2 (Phase B.2)
   bare_bones: 1,
 };
 
