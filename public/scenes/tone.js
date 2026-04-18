@@ -60,6 +60,10 @@ export default function register(k, engine) {
         color: '#cc3333',
         desc: 'The trail breaks minds as well as bodies. Paranoia, hallucinations, and dread.',
         warning: 'Content warning: disturbing themes, psychological distress, graphic death.',
+        // Ambient pitch hinting at the hidden Bitter Path without naming it.
+        // Italic, muted gold (#8b6914) so it reads as a whisper, not a shout.
+        // Copy per BITTER_PATH_PLAN.md § 2.1.
+        pitch: 'They say the trail can still be crossed under this sky. Those who did never spoke of it.',
       },
     ];
 
@@ -75,6 +79,7 @@ export default function register(k, engine) {
             ${t.recommended ? '<span style="font-size:0.75em;background:#d4a030;color:#000;padding:2px 6px;border-radius:3px;margin-left:0.5rem;">RECOMMENDED</span>' : ''}
             <br><span style="font-size:0.85em;opacity:0.8;">${t.desc}</span>
             ${t.warning ? `<br><span style="font-size:0.8em;color:#cc3333;font-style:italic;">${t.warning}</span>` : ''}
+            ${t.pitch ? `<br><span style="font-size:0.8em;color:#8b6914;font-style:italic;margin-top:4px;display:inline-block;">${t.pitch}</span>` : ''}
           </button>
         `).join('')}
       </div>
