@@ -185,21 +185,49 @@ describe("advanceDays - starvation", () => {
     vi.restoreAllMocks();
   });
 
-  it("starvation kicks in after 3 days of food=0", () => {
+  it("starvation kicks in after 4 days of food=0 (Phase B grace: was 3)", () => {
     const state = makeState();
     state.position.miles_traveled = 320;
     state.position.current_segment_id = "seg_03";
     state.simulation.visited_landmarks = ["lm_independence", "lm_kansas_river", "lm_alcove_spring", "lm_fort_kearney"];
     state.simulation.resolved_crossings = ["rc_wakarusa_creek", "rc_kansas_river", "rc_big_blue_river", "rc_little_blue_river_multiple_fords"];
     state.supplies.food = 0;
-    state.simulation.starvation_days = 2; // Already 2 days starving
+    state.simulation.starvation_days = 3; // Already 3 days starving — one more and damage
 
     const result = advanceDays(state, historical);
-    // After first day, starvation_days = 3, health/morale should drop
-    expect(result.state.simulation.starvation_days).toBeGreaterThanOrEqual(3);
-    // At least one member should have lost health from starvation
+    // After first sim day, starvation_days = 4, health should drop
+    expect(result.state.simulation.starvation_days).toBeGreaterThanOrEqual(4);
     const healthDrop = result.state.party.members.some((m) => m.health < 100);
     expect(healthDrop).toBe(true);
+  });
+
+  it("Phase B grace: starvation day 3 is one sim-day short of damage", () => {
+    // advanceDays loops 5 sim days per call, so this test verifies the GATE
+    // position changed: with STARVATION_GRACE_DAYS=4, the 3→4 transition during
+    // the loop is when damage starts. Starting at starvation_days=0 + food=0,
+    // the first starvation event should appear on sim-day 4 of the 5-day loop
+    // (previously appeared on sim-day 3).
+    const state = makeState();
+    state.position.miles_traveled = 320;
+    state.position.current_segment_id = "seg_03";
+    state.simulation.visited_landmarks = ["lm_independence", "lm_kansas_river", "lm_alcove_spring", "lm_fort_kearney"];
+    state.simulation.resolved_crossings = ["rc_wakarusa_creek", "rc_kansas_river", "rc_big_blue_river", "rc_little_blue_river_multiple_fords"];
+    state.supplies.food = 0;
+    state.simulation.starvation_days = 0; // fresh 5-day starving window
+
+    const result = advanceDays(state, historical);
+    // Find the first day in summaries with a "Starvation" event
+    let firstStarvationDayIdx = -1;
+    for (let i = 0; i < result.summaries.length; i++) {
+      if (result.summaries[i].events.some((e) => e.toLowerCase().includes("starvation"))) {
+        firstStarvationDayIdx = i;
+        break;
+      }
+    }
+    // With grace=4, starvation_days counter goes 1, 2, 3, 4 across sim-days 1-4,
+    // so the "Starvation" event fires on sim-day 4 (index 3). Previously with
+    // grace=3 it fired on sim-day 3 (index 2).
+    expect(firstStarvationDayIdx).toBeGreaterThanOrEqual(3);
   });
 
   it("starvation days reset when food is available", () => {
@@ -237,6 +265,27 @@ describe("advanceDays - disease", () => {
       (m) => m.alive && m.disease !== null,
     );
     expect(sickMembers.length).toBeGreaterThan(0);
+  });
+
+  it("disease probability multiplier (Phase B): mid-range random no longer triggers", () => {
+    // With DISEASE_PROBABILITY_MULTIPLIER=0.7, a random value that used to trigger
+    // now doesn't. Example: dysentery base_prob 0.03, region+month risk 1.5 → pre-B
+    // threshold 0.045, post-B threshold 0.0315. random=0.040 is in the gap.
+    vi.spyOn(Math, "random").mockReturnValue(0.040);
+    const state = makeState();
+    state.position.miles_traveled = 320;
+    state.position.current_segment_id = "seg_03";
+    state.simulation.visited_landmarks = ["lm_independence", "lm_kansas_river", "lm_alcove_spring", "lm_fort_kearney"];
+    state.simulation.resolved_crossings = ["rc_wakarusa_creek", "rc_kansas_river", "rc_big_blue_river", "rc_little_blue_river_multiple_fords"];
+    state.simulation.days_since_last_event = 0;
+
+    const result = advanceDays(state, historical);
+    // With random=0.040 and the 0.7 multiplier, NO disease should fire for
+    // low-base-probability diseases. The cap is at base*risk*0.7 ~ 0.0315.
+    const sickMembers = result.state.party.members.filter(
+      (m) => m.alive && m.disease !== null,
+    );
+    expect(sickMembers.length).toBe(0);
   });
 
   it("disease check with high random never triggers disease", () => {
