@@ -69,6 +69,7 @@ const sceneModules = await Promise.all([
   import("./scenes/title.js"),
   import("./scenes/travel.js"),
   import("./scenes/event.js"),
+  import("./scenes/bitter_path.js"),
   import("./scenes/profession.js"),
   import("./scenes/names.js"),
   import("./scenes/tone.js"),
