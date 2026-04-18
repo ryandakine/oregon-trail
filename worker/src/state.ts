@@ -104,6 +104,7 @@ export async function createInitialState(
       resolved_crossings: [],
       visited_landmarks: [],
       pending_event_hash: null,
+      pending_event_trigger: null,
       landmark_rest_used: [],
       bitter_path_taken: "none",
     },
@@ -126,12 +127,23 @@ export async function verifyIncomingState(
     return { valid: false, error: "invalid_signature" };
   }
   // Back-compat: legacy signed states from before the Bitter Path mechanic
-  // (pre-2026-04-18) did not have `simulation.bitter_path_taken`. Inject the
-  // default AFTER HMAC verify (the signature covers the legacy shape). The
-  // next re-sign will include the field.
+  // (pre-2026-04-18) did not have `simulation.bitter_path_taken` or
+  // `simulation.pending_event_trigger`. Inject defaults AFTER HMAC verify
+  // (the signature covers the legacy shape). The next re-sign includes them.
   const state = structuredClone(signed.state);
-  if (state.simulation && (state.simulation as { bitter_path_taken?: unknown }).bitter_path_taken === undefined) {
+  const sim = state.simulation as {
+    bitter_path_taken?: unknown;
+    pending_event_trigger?: unknown;
+    pending_event_hash?: string | null;
+  };
+  if (sim && sim.bitter_path_taken === undefined) {
     state.simulation.bitter_path_taken = "none";
+  }
+  if (sim && sim.pending_event_trigger === undefined) {
+    // Legacy state with a pending hash is from a normal event; legacy without
+    // a hash gets null. Bitter Path triggers never pre-dated this field, so
+    // we never default to "bitter_path".
+    state.simulation.pending_event_trigger = sim.pending_event_hash ? "event" : null;
   }
   return { valid: true, state };
 }

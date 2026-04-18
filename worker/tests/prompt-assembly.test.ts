@@ -159,6 +159,7 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
       resolved_crossings: [],
       visited_landmarks: [],
       pending_event_hash: null,
+      pending_event_trigger: null,
       landmark_rest_used: [],
       bitter_path_taken: "none",
     },

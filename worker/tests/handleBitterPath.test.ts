@@ -39,8 +39,24 @@ async function makeBitterReadyState(): Promise<{ state: GameState; signed: Signe
   state.simulation.bitter_path_taken = "none";
   const hash = await hashEvent(LONG_NIGHT_EVENT);
   state.simulation.pending_event_hash = hash;
+  state.simulation.pending_event_trigger = "bitter_path";
   const signature = await signState(state, SECRET);
   return { state, signed: { state, signature }, hash };
+}
+
+// Seed a state that has a pending NORMAL event (trigger="event") — used to
+// prove the cross-endpoint exploit is closed. The hash matches the same
+// event body, but the trigger kind differs from "bitter_path", so every
+// bitter-path endpoint must reject it.
+async function makeEventReadyState(): Promise<{ state: GameState; signed: SignedGameState }> {
+  const { state } = await createInitialState("Alice", MEMBERS, "farmer", "high", SECRET);
+  state.supplies.food = 0;
+  state.simulation.bitter_path_taken = "none";
+  const hash = await hashEvent(LONG_NIGHT_EVENT);
+  state.simulation.pending_event_hash = hash;
+  state.simulation.pending_event_trigger = "event";
+  const signature = await signState(state, SECRET);
+  return { state, signed: { state, signature } };
 }
 
 function makeRequest(body: unknown, url = "https://worker.test/api/bitter_path"): Request {
@@ -132,6 +148,26 @@ describe("handleBitterPath — /api/bitter_path choice resolution", () => {
     const body = await res.json() as { error: string };
     expect(body.error).toBe("already_resolved");
   });
+
+  it("rejects fractional choice_index (exploit: 1.5 falling through to 'taken')", async () => {
+    const { signed } = await makeBitterReadyState();
+    for (const idx of [0.5, 1.5, 1.9, 2.5]) {
+      const req = makeRequest({ signed_state: signed, event: LONG_NIGHT_EVENT, choice_index: idx });
+      const res = await handleBitterPath(req, ENV, ORIGIN);
+      expect(res.status, `choice_index=${idx}`).toBe(400);
+      const body = await res.json() as { error: string };
+      expect(body.error).toBe("invalid_choice_index");
+    }
+  });
+
+  it("rejects a pending normal-event hash with 'wrong_trigger_kind' (cross-endpoint exploit)", async () => {
+    const { signed } = await makeEventReadyState();
+    const req = makeRequest({ signed_state: signed, event: LONG_NIGHT_EVENT, choice_index: 2 });
+    const res = await handleBitterPath(req, ENV, ORIGIN);
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe("wrong_trigger_kind");
+  });
 });
 
 describe("handleBitterPathSkip — /api/bitter_path_skip refused path", () => {
@@ -188,5 +224,14 @@ describe("handleBitterPathSkip — /api/bitter_path_skip refused path", () => {
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
     expect(body.error).toBe("already_resolved");
+  });
+
+  it("rejects a pending normal-event hash with 'wrong_trigger_kind' (can't use skip to erase a regular event)", async () => {
+    const { signed } = await makeEventReadyState();
+    const req = makeRequest({ signed_state: signed, event: LONG_NIGHT_EVENT });
+    const res = await handleBitterPathSkip(req, ENV, ORIGIN);
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe("wrong_trigger_kind");
   });
 });

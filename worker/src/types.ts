@@ -274,6 +274,11 @@ export interface SimulationState {
   resolved_crossings: string[];
   visited_landmarks: string[];
   pending_event_hash: string | null;
+  // Discriminator for pending_event_hash. Without this, a client can take a
+  // regular event's pending hash and send it to /api/bitter_path to claim
+  // bitter-path consequences (e.g. +60 food) for free. Each handler verifies
+  // this matches its expected trigger.
+  pending_event_trigger: "event" | "bitter_path" | null;
   landmark_rest_used: string[];
   bitter_path_taken: BitterPathOutcome;
 }

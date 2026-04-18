@@ -325,10 +325,16 @@ async function handleAdvance(
     );
   }
 
-  // If we have an event, hash it and embed in state
+  // If we have an event, hash it and embed in state along with the trigger
+  // kind. The trigger kind is critical: without it, a client could take a
+  // regular event's pending hash and post it to /api/bitter_path to claim
+  // bitter-path consequences for free. Each consumer handler verifies the
+  // trigger matches before applying effects.
   if (eventData) {
     const eventHash = await hashEvent(eventData);
     result.state.simulation.pending_event_hash = eventHash;
+    result.state.simulation.pending_event_trigger =
+      result.trigger === "bitter_path" ? "bitter_path" : "event";
   }
 
   // Re-sign the state
@@ -387,10 +393,16 @@ async function handleChoice(
     return jsonResponse({ error: verified.error }, 403, origin);
   }
 
-  // Verify event hash matches
+  // Verify event hash matches AND trigger kind is "event". Without the
+  // trigger check, a client could take a bitter_path pending hash and route
+  // it through /api/choice — different consequence application, same exploit
+  // shape as the reverse direction.
   const submittedHash = await hashEvent(body.event);
   if (verified.state.simulation.pending_event_hash !== submittedHash) {
     return jsonResponse({ error: "event_hash_mismatch" }, 400, origin);
+  }
+  if (verified.state.simulation.pending_event_trigger !== "event") {
+    return jsonResponse({ error: "wrong_trigger_kind" }, 400, origin);
   }
 
   if (
@@ -401,9 +413,10 @@ async function handleChoice(
     return jsonResponse({ error: "invalid_choice_index" }, 400, origin);
   }
 
-  // Clear pending event hash before applying
+  // Clear pending event hash + trigger before applying
   const stateForApply = structuredClone(verified.state);
   stateForApply.simulation.pending_event_hash = null;
+  stateForApply.simulation.pending_event_trigger = null;
   stateForApply.simulation.days_since_last_event = 0;
 
   const signed_state = await applyEventAndSign(
@@ -428,16 +441,22 @@ export async function handleBitterPath(
     return jsonResponse({ error: verified.error }, 403, origin);
   }
 
-  // Event-hash binding: the event the client sends back must match the one
-  // we signed into pending_event_hash. Same anti-fabrication invariant as
-  // /api/choice.
+  // Event-hash binding AND trigger-kind check. Both are required: the hash
+  // stops clients from fabricating event bodies; the trigger check stops a
+  // client from routing a regular event's pending hash through this endpoint
+  // to claim bitter-path consequences (+60 food, starvation reset) for free.
   const submittedHash = await hashEvent(body.event);
   if (verified.state.simulation.pending_event_hash !== submittedHash) {
     return jsonResponse({ error: "event_hash_mismatch" }, 400, origin);
   }
+  if (verified.state.simulation.pending_event_trigger !== "bitter_path") {
+    return jsonResponse({ error: "wrong_trigger_kind" }, 400, origin);
+  }
 
+  // Integer check blocks fractional indices (e.g. 1.5) falling through to
+  // the "taken" consequence branch.
   if (
-    typeof body.choice_index !== "number" ||
+    !Number.isInteger(body.choice_index) ||
     body.choice_index < 0 ||
     body.choice_index > 2
   ) {
@@ -455,6 +474,7 @@ export async function handleBitterPath(
 
   next.simulation.bitter_path_taken = effects.bitter_path_taken;
   next.simulation.pending_event_hash = null;
+  next.simulation.pending_event_trigger = null;
   next.simulation.days_since_last_event = 0;
 
   if (effects.food_delta !== 0) {
@@ -509,9 +529,15 @@ export async function handleBitterPathSkip(
     return jsonResponse({ error: verified.error }, 403, origin);
   }
 
+  // Hash + trigger-kind check. Without the trigger check, a client could
+  // use a regular event's pending hash to hit this endpoint and erase the
+  // event at zero cost (no consequences applied, pending hash cleared).
   const submittedHash = await hashEvent(body.event);
   if (verified.state.simulation.pending_event_hash !== submittedHash) {
     return jsonResponse({ error: "event_hash_mismatch" }, 400, origin);
+  }
+  if (verified.state.simulation.pending_event_trigger !== "bitter_path") {
+    return jsonResponse({ error: "wrong_trigger_kind" }, 400, origin);
   }
 
   if (verified.state.simulation.bitter_path_taken !== "none") {
@@ -521,6 +547,7 @@ export async function handleBitterPathSkip(
   const next = structuredClone(verified.state);
   next.simulation.bitter_path_taken = "refused";
   next.simulation.pending_event_hash = null;
+  next.simulation.pending_event_trigger = null;
   next.simulation.days_since_last_event = 0;
 
   // Skip-specific journal beat — does not reveal scene content to players who
