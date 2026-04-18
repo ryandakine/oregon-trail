@@ -262,6 +262,8 @@ export interface ChallengeConstraints {
   no_hunting: boolean;
 }
 
+export type BitterPathOutcome = "none" | "dignified" | "hopeful" | "taken";
+
 export interface SimulationState {
   starvation_days: number;
   days_since_last_event: number;
@@ -269,6 +271,7 @@ export interface SimulationState {
   visited_landmarks: string[];
   pending_event_hash: string | null;
   landmark_rest_used: string[];
+  bitter_path_taken: BitterPathOutcome;
 }
 
 export interface GameState {
@@ -354,7 +357,7 @@ export interface AdvanceRequest {
   signed_state: SignedGameState;
 }
 
-export type TriggerType = "event" | "landmark" | "river" | "death" | "arrival" | "wipe" | null;
+export type TriggerType = "event" | "landmark" | "river" | "death" | "arrival" | "wipe" | "bitter_path" | null;
 
 export interface DaySummary {
   date: string;

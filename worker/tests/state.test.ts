@@ -64,8 +64,48 @@ describe("createInitialState", () => {
     expect(state.simulation.visited_landmarks).toEqual([]);
     expect(state.simulation.pending_event_hash).toBeNull();
     expect(state.simulation.landmark_rest_used).toEqual([]);
+    expect(state.simulation.bitter_path_taken).toBe("none");
     expect(state.meta.event_count).toBe(0);
     expect(state.meta.run_id).toBeTruthy();
+  });
+});
+
+describe("bitter_path_taken field + HMAC back-compat", () => {
+  it("is initialized to 'none' on createInitialState", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "high", SECRET);
+    expect(state.simulation.bitter_path_taken).toBe("none");
+  });
+
+  it("verifyIncomingState accepts legacy state missing bitter_path_taken", async () => {
+    // Simulate a signed state from before the Bitter Path field was added.
+    // Build the state object without the field, sign it, then verify.
+    const { signState } = await import("../src/hmac");
+    const { state: freshState } = await createInitialState("Alice", MEMBERS, "farmer", "high", SECRET);
+    const legacyState: Record<string, unknown> = JSON.parse(JSON.stringify(freshState));
+    // Strip the new field to simulate pre-v3 shape
+    delete (legacyState.simulation as Record<string, unknown>).bitter_path_taken;
+    const legacySig = await signState(legacyState, SECRET);
+
+    const verified = await verifyIncomingState({ state: legacyState as never, signature: legacySig }, SECRET);
+    expect(verified.valid).toBe(true);
+    if (verified.valid) {
+      // Default injected after HMAC verify
+      expect(verified.state.simulation.bitter_path_taken).toBe("none");
+    }
+  });
+
+  it("verifyIncomingState rejects state with tampered bitter_path_taken", async () => {
+    const signed = await createInitialState("Alice", MEMBERS, "farmer", "high", SECRET);
+    // Mutate the field without re-signing — signature should no longer match
+    const tampered: SignedGameState = {
+      state: { ...signed.state, simulation: { ...signed.state.simulation, bitter_path_taken: "taken" } },
+      signature: signed.signature,
+    };
+    const verified = await verifyIncomingState(tampered, SECRET);
+    expect(verified.valid).toBe(false);
+    if (!verified.valid) {
+      expect(verified.error).toBe("invalid_signature");
+    }
   });
 });
 

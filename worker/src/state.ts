@@ -105,6 +105,7 @@ export async function createInitialState(
       visited_landmarks: [],
       pending_event_hash: null,
       landmark_rest_used: [],
+      bitter_path_taken: "none",
     },
     meta: {
       run_id: crypto.randomUUID(),
@@ -124,7 +125,15 @@ export async function verifyIncomingState(
   if (!ok) {
     return { valid: false, error: "invalid_signature" };
   }
-  return { valid: true, state: signed.state };
+  // Back-compat: legacy signed states from before the Bitter Path mechanic
+  // (pre-2026-04-18) did not have `simulation.bitter_path_taken`. Inject the
+  // default AFTER HMAC verify (the signature covers the legacy shape). The
+  // next re-sign will include the field.
+  const state = structuredClone(signed.state);
+  if (state.simulation && (state.simulation as { bitter_path_taken?: unknown }).bitter_path_taken === undefined) {
+    state.simulation.bitter_path_taken = "none";
+  }
+  return { valid: true, state };
 }
 
 export async function applyEventAndSign(
