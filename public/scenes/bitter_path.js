@@ -12,7 +12,9 @@ import { addTopHud, addBottomHud } from "../lib/hud.mjs";
 const CW_ACK_KEY = "ot_bitter_path_cw_acked";
 const TYPE_SPEED_MS = 25;
 const TYPE_MAX_WAIT_MS = 10000;
-const BEAT_HOLD_MS = 1500;
+// Post-choice outcome hold is enforced by engine.resolveBitterPath's
+// 1500ms setTimeout before transition('TRAVEL'). Scene only needs to render
+// the OUTCOME_LINE on bitterPathResolved; engine keeps the scene mounted.
 const OUTCOME_LINE = {
   dignified: "They rest, and continue.",
   hopeful: "They continue.",
@@ -30,7 +32,18 @@ export default function register(k, engine) {
     const motionOk = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     let typeTimer = null;
     let maxWaitTimer = null;
-    let beatTimer = null;
+    // Tracks whether the CW modal is currently mounted. Prevents the
+    // CW-modal keyboard handlers from firing click() on detached buttons
+    // after the user has progressed into the scene body.
+    let cwOpen = false;
+    // CW keyboard handler refs — cancel explicitly when Continue transitions
+    // from modal to scene body, not just on scene-leave.
+    const cwKeyHandlers = [];
+    // Scene-body keyboard handler refs (1/2/3) — cancelled on scene-leave.
+    const choiceKeyHandlers = [];
+    // Overlay click listener for typewriter skip — stored so cleanup() can
+    // remove it even if the user clicked a choice before typewriter finished.
+    let overlayClickHandler = null;
 
     // Dim canvas backdrop — 0.75 (vs event.js 0.6) so the scene reads heavier.
     // Avoid stacking past 0.85 — high-tier tone.mjs already applies vignette +
@@ -89,30 +102,35 @@ export default function register(k, engine) {
       const skipBtn = document.getElementById("bp-cw-skip");
       const contBtn = document.getElementById("bp-cw-continue");
 
+      cwOpen = true;
+
       skipBtn?.addEventListener("click", () => {
         disableCwButtons();
         engine.skipBitterPath();
       });
       contBtn?.addEventListener("click", () => {
         safeSetLocalStorage(CW_ACK_KEY, "true");
+        cwOpen = false;
+        cancelCwKeyHandlers();
         renderScene();
       });
 
-      // Keyboard: S skip, C/Enter continue
-      const onKeyS = k.onKeyPress("s", () => { skipBtn?.click(); });
-      const onKeyC = k.onKeyPress("c", () => { contBtn?.click(); });
-      const onKeyEnter = k.onKeyPress("enter", () => { contBtn?.click(); });
+      // Keyboard: S skip, C/Enter continue. Gated on cwOpen so the handlers
+      // can't fire click() on detached buttons after Continue transitions to
+      // the scene body. Also explicitly cancelled on transition + scene-leave.
+      cwKeyHandlers.push(k.onKeyPress("s", () => { if (cwOpen) skipBtn?.click(); }));
+      cwKeyHandlers.push(k.onKeyPress("c", () => { if (cwOpen) contBtn?.click(); }));
+      cwKeyHandlers.push(k.onKeyPress("enter", () => { if (cwOpen) contBtn?.click(); }));
 
       // Focus safer action first (Skip left, LTR scan)
       requestAnimationFrame(() => skipBtn?.focus?.());
 
       announce("Content warning. Press S to skip, C or Enter to continue.");
+    }
 
-      k.onSceneLeave(() => {
-        onKeyS?.cancel?.();
-        onKeyC?.cancel?.();
-        onKeyEnter?.cancel?.();
-      });
+    function cancelCwKeyHandlers() {
+      for (const h of cwKeyHandlers) h?.cancel?.();
+      cwKeyHandlers.length = 0;
     }
 
     function disableCwButtons() {
@@ -125,7 +143,14 @@ export default function register(k, engine) {
       const description = eventData.description || "";
       const choices = eventData.choices || [];
       const deadName = meta?.dead_member_name || null;
-      const daysAgo = meta?.days_since_death ?? null;
+      // Coerce days_since_death to a finite integer before it reaches any
+      // template literal. trigger_meta is persisted through localStorage and
+      // can be tampered — an attacker-supplied string would otherwise
+      // interpolate raw into innerHTML below.
+      const rawDays = meta?.days_since_death;
+      const daysAgo = typeof rawDays === "number" && Number.isFinite(rawDays)
+        ? Math.max(0, Math.floor(rawDays))
+        : null;
 
       let subheadingHtml = "";
       if (deadName) {
@@ -169,7 +194,10 @@ export default function register(k, engine) {
         if (typeTimer) { clearTimeout(typeTimer); typeTimer = null; }
         if (maxWaitTimer) { clearTimeout(maxWaitTimer); maxWaitTimer = null; }
         el.textContent = text;
-        overlay.removeEventListener("click", finish);
+        if (overlayClickHandler) {
+          overlay.removeEventListener("click", overlayClickHandler);
+          overlayClickHandler = null;
+        }
         onDone();
       };
       const step = () => {
@@ -181,7 +209,11 @@ export default function register(k, engine) {
           finish();
         }
       };
-      overlay.addEventListener("click", finish);
+      // Listener reference stored at module scope so cleanup() can remove it
+      // if the user clicks a choice before the typewriter finishes (finish
+      // would never run, leaking the listener onto the persistent overlay).
+      overlayClickHandler = finish;
+      overlay.addEventListener("click", overlayClickHandler);
       // Defensive cap: if description is long enough that 25ms/char runs past
       // 10s, auto-show the rest so the player isn't stuck on a slow reveal.
       maxWaitTimer = setTimeout(finish, TYPE_MAX_WAIT_MS);
@@ -208,21 +240,19 @@ export default function register(k, engine) {
 
       requestAnimationFrame(() => buttons[0]?.focus?.());
 
-      k.onKeyPress("1", () => { if (choices.length >= 1) buttons[0]?.click(); });
-      k.onKeyPress("2", () => { if (choices.length >= 2) buttons[1]?.click(); });
-      k.onKeyPress("3", () => { if (choices.length >= 3) buttons[2]?.click(); });
+      choiceKeyHandlers.push(k.onKeyPress("1", () => { if (choices.length >= 1) buttons[0]?.click(); }));
+      choiceKeyHandlers.push(k.onKeyPress("2", () => { if (choices.length >= 2) buttons[1]?.click(); }));
+      choiceKeyHandlers.push(k.onKeyPress("3", () => { if (choices.length >= 3) buttons[2]?.click(); }));
     }
 
     function disableChoices(buttons) {
       buttons.forEach((b) => b.setAttribute("disabled", "true"));
     }
 
-    // Post-choice beat: one-liner while the engine resolves + transitions.
-    // Engine emits bitterPathResolved before it calls transition('TRAVEL'),
-    // but the scene-leave hook fires the moment kaplay swaps scenes — so we
-    // hold TRAVEL by starting the beat here and calling transition after.
-    // Because resolveBitterPath/skipBitterPath transition internally, the
-    // beat is visible in the short window before cleanup() runs.
+    // Post-choice beat: one-liner shown for 1.5s after resolution. Engine
+    // delays its transition('TRAVEL') by BEAT_HOLD_MS so the scene stays
+    // mounted long enough to render this content. Without the engine delay,
+    // scene-leave would wipe content.innerHTML within one frame.
     const onResolved = ({ outcome }) => {
       const line = OUTCOME_LINE[outcome] || "";
       if (line && content) {
@@ -233,12 +263,34 @@ export default function register(k, engine) {
         `;
         announce(line);
       }
-      if (beatTimer) clearTimeout(beatTimer);
-      beatTimer = setTimeout(() => {}, BEAT_HOLD_MS);
     };
     engine.on("bitterPathResolved", onResolved);
 
     const onError = ({ message }) => {
+      // If the error arrives while the CW modal is still mounted (e.g. Skip
+      // failed), re-enable its buttons and surface the error there. Otherwise
+      // fall through to the scene-body branch.
+      if (cwOpen) {
+        const skipBtn = document.getElementById("bp-cw-skip");
+        const contBtn = document.getElementById("bp-cw-continue");
+        skipBtn?.removeAttribute("disabled");
+        contBtn?.removeAttribute("disabled");
+        const btnsEl = document.getElementById("bp-cw-buttons");
+        if (btnsEl) {
+          const existing = btnsEl.parentElement?.querySelector(".bp-cw-error");
+          if (!existing) {
+            const errP = document.createElement("p");
+            errP.className = "bp-cw-error";
+            errP.style.color = "#cc4444";
+            errP.style.marginTop = "12px";
+            errP.textContent = message === "already_resolved"
+              ? "This moment has already passed."
+              : message || "Something went wrong. Try again.";
+            btnsEl.parentElement?.appendChild(errP);
+          }
+        }
+        return;
+      }
       const choicesEl = document.getElementById("bp-choices");
       if (choicesEl) {
         // Re-enable any disabled buttons
@@ -246,11 +298,17 @@ export default function register(k, engine) {
         const errP = document.createElement("p");
         errP.style.color = "#cc4444";
         errP.style.marginTop = "12px";
+        // already_resolved, wrong_trigger_kind, and event_hash_mismatch all
+        // indicate server state that can't be recovered by retrying this
+        // scene. The engine clears currentBitterPath on these; we route to
+        // TRAVEL after a short read beat. Transient/network errors fall
+        // through to the generic message and stay retryable.
         if (message === "already_resolved") {
           errP.textContent = "This moment has already passed.";
           setTimeout(() => engine.transition("TRAVEL"), 2000);
-        } else if (message === "event_hash_mismatch") {
-          errP.textContent = "State out of sync. Please reload.";
+        } else if (message === "event_hash_mismatch" || message === "wrong_trigger_kind") {
+          errP.textContent = "State out of sync. Returning to the trail.";
+          setTimeout(() => engine.transition("TRAVEL"), 2000);
         } else {
           errP.textContent = message || "Something went wrong. Try again.";
         }
@@ -262,7 +320,14 @@ export default function register(k, engine) {
     function cleanup() {
       if (typeTimer) { clearTimeout(typeTimer); typeTimer = null; }
       if (maxWaitTimer) { clearTimeout(maxWaitTimer); maxWaitTimer = null; }
-      if (beatTimer) { clearTimeout(beatTimer); beatTimer = null; }
+      if (overlayClickHandler) {
+        overlay.removeEventListener("click", overlayClickHandler);
+        overlayClickHandler = null;
+      }
+      cancelCwKeyHandlers();
+      for (const h of choiceKeyHandlers) h?.cancel?.();
+      choiceKeyHandlers.length = 0;
+      cwOpen = false;
       overlay.classList.remove("active");
       content.innerHTML = "";
     }

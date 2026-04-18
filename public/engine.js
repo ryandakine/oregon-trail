@@ -251,6 +251,8 @@ class GameEngine {
         currentLandmark: this.currentLandmark,
         currentBitterPath: this.currentBitterPath,
         currentBitterPathMeta: this.currentBitterPathMeta,
+        dailyMode: this.dailyMode,
+        dailyTrailNumber: this.dailyTrailNumber,
       }));
     } catch (_) {}
   }
@@ -552,9 +554,12 @@ class GameEngine {
 
   // Bitter Path resolution — mirrors makeChoice but routes to /api/bitter_path
   // and uses a spam-click guard since the scene disables buttons on click.
-  // On error, currentBitterPath is NOT cleared so a retry via button re-enable
-  // can re-POST. If the server already resolved it in a prior attempt we get
-  // `already_resolved` and the scene transitions to TRAVEL.
+  // On 400 errors from unrecoverable server states (already_resolved,
+  // wrong_trigger_kind, event_hash_mismatch) we clear currentBitterPath so
+  // the scene doesn't resume into a permanent loop. On network-level errors
+  // we leave currentBitterPath set so retry works via button re-enable.
+  // On success: emit bitterPathResolved, hold 1500ms for the scene to show
+  // its outcome beat, then transition to TRAVEL.
   async resolveBitterPath(choiceIndex) {
     if (this._resolvingBitterPath) return;
     if (choiceIndex < 0 || choiceIndex > 2) return;
@@ -574,9 +579,14 @@ class GameEngine {
       this._saveRun();
       this.emit('loading', false);
       this.emit('bitterPathResolved', { outcome, choiceIndex });
-      this.transition('TRAVEL');
+      setTimeout(() => this.transition('TRAVEL'), 1500);
     } catch (e) {
       this.emit('loading', false);
+      if (this._isUnrecoverableBitterPathError(e.message)) {
+        this.currentBitterPath = null;
+        this.currentBitterPathMeta = null;
+        this._saveRun();
+      }
       this.emit('error', { message: e.message, recoverable: true });
     } finally {
       this._resolvingBitterPath = false;
@@ -602,13 +612,27 @@ class GameEngine {
       this._saveRun();
       this.emit('loading', false);
       this.emit('bitterPathResolved', { outcome: 'refused', choiceIndex: -1 });
-      this.transition('TRAVEL');
+      setTimeout(() => this.transition('TRAVEL'), 1500);
     } catch (e) {
       this.emit('loading', false);
+      if (this._isUnrecoverableBitterPathError(e.message)) {
+        this.currentBitterPath = null;
+        this.currentBitterPathMeta = null;
+        this._saveRun();
+      }
       this.emit('error', { message: e.message, recoverable: true });
     } finally {
       this._resolvingBitterPath = false;
     }
+  }
+
+  _isUnrecoverableBitterPathError(message) {
+    if (!message || typeof message !== 'string') return false;
+    return (
+      message.includes('already_resolved') ||
+      message.includes('wrong_trigger_kind') ||
+      message.includes('event_hash_mismatch')
+    );
   }
 
   async resolveRiver(choice) {
