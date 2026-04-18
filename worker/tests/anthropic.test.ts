@@ -4,6 +4,7 @@ import {
   interpolateLongNightFallback,
   buildLongNightFallback,
   bitterPathConsequences,
+  isLongNightForbidden,
 } from "../src/anthropic";
 
 describe("pickFallbackKey — cause-keyed Bitter Path fallback dispatch", () => {
@@ -71,13 +72,18 @@ describe("buildLongNightFallback — full event shape", () => {
     expect(ev.description).toContain("Martha");
   });
 
-  it("never contains forbidden words", () => {
-    const FORBIDDEN = /\b(eat|eaten|ate|flesh|meat|feast|consume|consuming|consumed|devour)\b/i;
+  it("fallback output passes the multi-category forbidden guard for every cause", () => {
     for (const cause of ["exhaustion", "cholera", "drowning", "accidental_injury", "Stampede", "custom_event"]) {
       const ev = buildLongNightFallback("Jacob", cause, 2, "Ellen");
-      expect(FORBIDDEN.test(ev.description), `description for cause=${cause}`).toBe(false);
-      expect(FORBIDDEN.test(ev.journal_entry), `journal for cause=${cause}`).toBe(false);
+      expect(isLongNightForbidden(ev.description), `description for cause=${cause}`).toBe(false);
+      expect(isLongNightForbidden(ev.journal_entry), `journal for cause=${cause}`).toBe(false);
     }
+  });
+
+  it("fallback journal entry is cause-keyed, not a generic template", () => {
+    const drowning = buildLongNightFallback("Kate", "drowning", 1, "Owen");
+    const starvation = buildLongNightFallback("Moss", "exhaustion", 1, "Owen");
+    expect(drowning.journal_entry).not.toBe(starvation.journal_entry);
   });
 
   it("routes cause to the correct physical setting", () => {
@@ -89,6 +95,44 @@ describe("buildLongNightFallback — full event shape", () => {
 
     const starvation = buildLongNightFallback("Moss", "exhaustion", 1, "Owen");
     expect(starvation.description).toContain("oxen");
+  });
+});
+
+describe("isLongNightForbidden — multi-category guard (slurs/sexual/modern/child-butcher/self-harm)", () => {
+  it("allows the act to be named — 'eat', 'flesh', 'meat', 'butchered' are NOT forbidden", () => {
+    // Behavior change from v1: the old guard rejected these words. T2 visceral
+    // register needs them. Other forbidden categories still block.
+    expect(isLongNightForbidden("They ate in silence.")).toBe(false);
+    expect(isLongNightForbidden("The flesh was cold.")).toBe(false);
+    expect(isLongNightForbidden("Martha held the liver in both hands.")).toBe(false);
+    expect(isLongNightForbidden("Thomas butchered the body behind the wagon.")).toBe(false);
+  });
+
+  it("blocks sexual content", () => {
+    expect(isLongNightForbidden("Sexual overtones lingered at the wagon.")).toBe(true);
+    expect(isLongNightForbidden("She was raped before she died.")).toBe(true);
+  });
+
+  it("blocks slurs", () => {
+    // Period slurs that might plausibly land in a bad generation
+    expect(isLongNightForbidden("The savages came at dusk.")).toBe(true);
+    expect(isLongNightForbidden("An injun stood at the ridge.")).toBe(true);
+  });
+
+  it("blocks modern-era breaks", () => {
+    expect(isLongNightForbidden("She moved like a zombie through the grass.")).toBe(true);
+    expect(isLongNightForbidden("It was like a scene from a horror movie.")).toBe(true);
+    expect(isLongNightForbidden("Thomas became a serial killer that night.")).toBe(true);
+  });
+
+  it("blocks children as butchers", () => {
+    expect(isLongNightForbidden("The children butchered the body.")).toBe(true);
+    expect(isLongNightForbidden("Kids cut up their father.")).toBe(true);
+  });
+
+  it("blocks self-harm framing as resolution", () => {
+    expect(isLongNightForbidden("Martha hanged herself in the night.")).toBe(true);
+    expect(isLongNightForbidden("He took his own life to spare them.")).toBe(true);
   });
 });
 

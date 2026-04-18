@@ -371,6 +371,11 @@ export interface AdvanceResponse {
   summaries: DaySummary[];
   trigger: TriggerType;
   trigger_data: unknown;
+  // Secondary payload used by the bitter_path trigger to carry the simulation
+  // metadata (dead_member_name, trigger_variant, days_since_death) alongside
+  // the EventResponse body that the client must echo back to /api/bitter_path
+  // for hash binding. Other triggers leave this undefined.
+  trigger_meta?: unknown;
   signed_state: SignedGameState;
 }
 

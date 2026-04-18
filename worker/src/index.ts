@@ -346,11 +346,27 @@ async function handleAdvance(
     }
   }
 
+  // For the bitter_path trigger, the client needs BOTH the EventResponse body
+  // (so it can echo it back to /api/bitter_path for the event-hash check) AND
+  // the simulation metadata (dead_member_name, trigger_variant,
+  // days_since_death) for display tuning. Ship them in separate fields.
+  let triggerData: unknown;
+  let triggerMeta: unknown;
+  if (result.trigger === "event") {
+    triggerData = eventData;
+  } else if (result.trigger === "bitter_path") {
+    triggerData = eventData;
+    triggerMeta = result.triggerData;
+  } else {
+    triggerData = result.triggerData;
+  }
+
   const response: AdvanceResponse = {
     days_advanced: result.summaries.length,
     summaries: result.summaries,
     trigger: result.trigger,
-    trigger_data: result.trigger === "event" ? eventData : result.triggerData,
+    trigger_data: triggerData,
+    trigger_meta: triggerMeta,
     signed_state,
   };
 

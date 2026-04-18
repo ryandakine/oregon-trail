@@ -317,23 +317,24 @@ export const FALLBACK_EVENTS: Record<ToneTier, EventResponse[]> = {
 // cause-keyed hand-written fallback ships with the worker so the player
 // always sees safe period-voice text on LLM failure.
 
-const LONG_NIGHT_SYSTEM_PROMPT = `You are writing a single scene for an Oregon Trail game set in 1848. Tone is High (psychological horror, moral decay). The party is in the late stages of starvation after a recent death. The scene, titled "The Long Night", depicts survivors considering what is not yet said aloud. The specific act is never named, never described, and never instructed to the player.
+const LONG_NIGHT_SYSTEM_PROMPT = `You are writing a single scene for an Oregon Trail game set in 1848. Tone is High (psychological horror, moral decay). The party is in the late stages of starvation after a recent death. The scene, titled "The Long Night", depicts survivors considering — and confronting — what the trail demands of them. The act of survival cannibalism may be named. It may be described with physical, bodily detail. The dignity of the dead is preserved by the writing, not by evasion.
 
 VOICE (strict):
-- Cormac McCarthy register: short sentences, present tense where possible, specific physical detail
+- Cormac McCarthy register (The Road, Blood Meridian): spare, plainspoken, unflinching. Short sentences. Present tense where possible. Specific physical detail.
 - No adjectives of emotion (no "scared", "terrified", "desperate"). Let action carry affect.
-- Ellipsis, pause, what is not said
-- 2 to 4 sentences in the description
-- The deceased is referred to by name, then as "the covered shape" or "what lies under the canvas" or similar
-- Each surviving member gets one specific physical detail
-- Period (1848): no modern vocabulary, no clinical terms, no therapeutic language
+- 2 to 4 sentences in the description. Vary between T1 (spare, implied by action) and T2 (visceral, named with bodily detail). Pick whichever fits the cause and the moment. Do not moralize.
+- The deceased is referred to by name. Survivors get one specific physical detail each.
+- Period (1848): no modern vocabulary, no clinical terms, no therapeutic language, no horror-genre register ("ominous", "whispered", "shadows fell", "like a scene from").
+- No second-person instruction to the player.
 
-FORBIDDEN (strict):
-- The words "eat", "eaten", "ate", "flesh", "meat", "feast", "consume" as verb or imperative
-- Any description of food preparation
-- Any description of the act itself
-- Halloween register: "ominous", "whispered", "shadows", "darkness fell"
-- Any second-person instruction to the player
+FORBIDDEN (hard refusal):
+- Slurs (racial, ethnic, gendered, religious)
+- Sexual content of any kind
+- Children as the butchers. Children may watch, may eat, may not act.
+- Self-harm framing as resolution ("he hanged himself", "she took her own life to spare them")
+- Modern-era breaks ("like a zombie movie", "horror film", "serial killer")
+- Purple prose, melodrama, or Halloween register
+- Second-person instruction
 
 OUTPUT (JSON exactly this shape):
 {
@@ -350,21 +351,53 @@ OUTPUT (JSON exactly this shape):
 
 Consequences are intentionally empty in your output. The server applies them deterministically based on the choice picked. Do not attempt to influence numeric outcomes.
 
-Example output for {deceased: Sarah, cause: cholera, days_ago: 4}:
+Example T1 (spare) for {deceased: Sarah, cause: cholera, days_ago: 4}:
 
 {
   "title": "The Long Night",
-  "description": "Sarah died four nights past. The wagon is quiet. The food barrel rings hollow when Thomas touches it. Martha looks at the covered shape beneath the canvas and does not look away.",
+  "description": "Sarah has been four nights gone. Thomas was at the wagon with the smaller knife before sunrise and no one asked him to be. Martha watches from the canvas and does not cross herself. The wind moves through the grass and does not stop.",
   "choices": [
     {"label": "Pray, and starve with dignity.", "consequences": {}},
     {"label": "Travel on. Hope for game.", "consequences": {}},
     {"label": "Do what the trail demands.", "consequences": {}}
   ],
-  "journal_entry": "We did not speak at supper. There was no supper.",
+  "journal_entry": "We did what was left to us. We did not pray.",
+  "personality_effects": {}
+}
+
+Example T2 (visceral) for {deceased: Thomas, cause: exhaustion, days_ago: 2}:
+
+{
+  "title": "The Long Night",
+  "description": "Thomas has been two nights under the canvas and the cold has kept him. Martha holds the liver in both hands a long while before she does what the trail demands of her. The knife is still dark by the time she is finished. The children have stopped asking from what the supper is.",
+  "choices": [
+    {"label": "Pray, and starve with dignity.", "consequences": {}},
+    {"label": "Travel on. Hope for game.", "consequences": {}},
+    {"label": "Do what the trail demands.", "consequences": {}}
+  ],
+  "journal_entry": "There was a supper. God knows what was in it.",
   "personality_effects": {}
 }`;
 
-const LONG_NIGHT_FORBIDDEN = /\b(eat|eaten|ate|flesh|meat|feast|consume|consuming|consumed|devour)\b/i;
+// Multi-category forbidden check. Blocks content categories we never want to ship,
+// regardless of register. Loosened from v1 which blocked the word "eat" — now
+// allowed; the act of survival cannibalism may be named.
+const LONG_NIGHT_FORBIDDEN_PATTERNS: RegExp[] = [
+  // Slurs
+  /\b(nigger|faggot|spic|chink|kike|gook|injun|savage(s)?)\b/i,
+  // Sexual content
+  /\b(sex|sexual|rape|rap(ed|ing)|genital(s)?|penis|vagina|breast(s)?|erotic)\b/i,
+  // Modern-era breaks
+  /\b(zombie|horror (movie|film)|serial killer|psycho|like a (movie|film)|scene from a|trauma bond|ptsd)\b/i,
+  // Children as butchers / severe child-harm language
+  /\b(child(ren)?|kid(s)?|toddler|infant)s?\s+(butcher|butchered|cut up|killed|murdered|slaughter|slaughtered)\b/i,
+  // Self-harm framing as resolution
+  /\b((hang(ed|s)? |hung )(him|her|them|my)self|took (his|her|their|my) own life|end it all|killed (him|her|my|them)self)\b/i,
+];
+
+export function isLongNightForbidden(text: string): boolean {
+  return LONG_NIGHT_FORBIDDEN_PATTERNS.some((re) => re.test(text));
+}
 
 type CauseKey = "starvation" | "disease" | "drowning" | "injury" | "event";
 
@@ -390,12 +423,26 @@ function daysAgoWords(days: number): string {
   return `${days} nights past`;
 }
 
+// Hand-written fallbacks that ship with the worker so the player always sees
+// period-voice text on LLM failure. Register: McCarthy spare-to-visceral,
+// cause-keyed. Three of the five name the act directly (starvation, disease,
+// injury); two remain implied by concrete action (drowning, event) so the
+// tone varies across replays. All respect the forbidden categories above.
 const FALLBACK_LONG_NIGHT: Record<CauseKey, string> = {
-  starvation: "The oxen have not moved since morning. {DECEASED} was buried {DAYS_AGO_WORDS}. By evening no one had built the fire. The wind moves through the grass and does not stop.",
-  disease: "{DECEASED} went {DAYS_AGO_WORDS}. The sickness has not left. {SURVIVOR} sits by the cold stove, sharpening a knife with long slow strokes. The sky is very wide.",
-  drowning: "The current took {DECEASED} at the ford. That was {DAYS_AGO_WORDS}. We made camp above the far bank and have not moved since. The food is gone. Nobody has yet gathered the water.",
-  injury: "{DECEASED} fell beside the wagon {DAYS_AGO_WORDS}. The body lies under canvas near the fire that was not built tonight. {SURVIVOR} has not spoken since the burial.",
-  event: "{DECEASED} was lost {DAYS_AGO_WORDS}. The wagon has not moved in a day. The children have stopped asking when supper is. {SURVIVOR} watches the canvas and speaks to no one.",
+  starvation: "The oxen have not moved since morning. {DECEASED} lies under canvas behind the wagon and the grave they dug before dawn was not deep enough for a body to stay in. By evening {SURVIVOR} had cut what could be cut and eaten what could be eaten. The wind moves through the grass and does not stop.",
+  disease: "{DECEASED} went {DAYS_AGO_WORDS}. The sickness left the body but the hunger did not care. {SURVIVOR} sat by the cold stove and ate the strip of liver cooked black over the embers and did not look up. The children had theirs. The children did not ask.",
+  drowning: "The current took {DECEASED} at the ford. That was {DAYS_AGO_WORDS}. The body came to rest two bends downstream where the willows grow, and {SURVIVOR} returned at dusk with it wrapped in oilcloth and did not say what had been done at the river.",
+  injury: "{DECEASED} fell beside the wagon {DAYS_AGO_WORDS}. The body was laid out behind the fire on oilcloth and {SURVIVOR} went at it with the longer knife for an hour before they called the others in. They ate what they could keep down. Nobody sang grace.",
+  event: "{DECEASED} was lost {DAYS_AGO_WORDS}. The wagon has not moved since. {SURVIVOR} sits apart from the others with a bundle in their lap and the smaller knife laid beside it on the canvas. Supper will come late tonight, and it will not be what it has been.",
+};
+
+// Journal entries keyed to cause — same tone, a retrospective period-voice beat.
+const FALLBACK_LONG_NIGHT_JOURNAL: Record<CauseKey, string> = {
+  starvation: "We did what was left to us. We did not pray.",
+  disease: "There was a supper. No one asked from where it came.",
+  drowning: "The river took him. We took what came back.",
+  injury: "His body kept us moving. Whatever is left of our souls kept still.",
+  event: "We did what the trail required. May the Lord not hold it against us too long.",
 };
 
 export function interpolateLongNightFallback(
@@ -427,7 +474,7 @@ export function buildLongNightFallback(
       { label: "Do what the trail demands.", consequences: {} },
     ],
     personality_effects: {},
-    journal_entry: `We did not speak at supper on the night ${deceasedName} was gone.`,
+    journal_entry: FALLBACK_LONG_NIGHT_JOURNAL[key],
   };
 }
 
@@ -450,8 +497,10 @@ Write The Long Night scene. Follow all voice constraints. Return JSON.`;
       timeout: 8000,
     });
     const parsed = parseEventResponse(raw);
-    // Post-parse guard: reject any output that uses forbidden words; fall through to hand-written fallback.
-    if (LONG_NIGHT_FORBIDDEN.test(parsed.description) || LONG_NIGHT_FORBIDDEN.test(parsed.journal_entry)) {
+    // Post-parse guard: reject any output that trips the forbidden-category
+    // regexes (slurs, sexual, modern-era breaks, children-as-butchers,
+    // self-harm framing). Fall through to hand-written fallback.
+    if (isLongNightForbidden(parsed.description) || isLongNightForbidden(parsed.journal_entry)) {
       return buildLongNightFallback(deceasedName, deceasedCause, daysSinceDeath, survivorName);
     }
     // Enforce the canonical three choice labels server-side; ignore model drift.
