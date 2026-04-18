@@ -22,6 +22,22 @@ const OUTCOME_LINE = {
   refused: "The party pressed on without deciding.",
 };
 
+// Plausible telemetry wrapper. Non-blocking and silent if analytics isn't
+// loaded (local dev, blocked by adblock, offline). Event names kept flat
+// so the Plausible dashboard groups them without custom goal config.
+function track(event, props) {
+  try {
+    if (typeof window.plausible === "function") {
+      window.plausible(event, props ? { props } : undefined);
+    }
+  } catch (_) {}
+}
+const CHOICE_EVENT = {
+  0: "bitter_path_choice_dignified",
+  1: "bitter_path_choice_hopeful",
+  2: "bitter_path_choice_taken",
+};
+
 export default function register(k, engine) {
   k.scene("bitter_path", (sceneData) => {
     const eventData = sceneData || engine.currentBitterPath;
@@ -78,10 +94,19 @@ export default function register(k, engine) {
       return;
     }
 
+    // Trigger telemetry fires on scene entry (once per run, since the
+    // scene is one-shot per run). trigger_variant lets us see which gate
+    // fired (wasting vs failing) in the Plausible dashboard.
+    track("bitter_path_triggered", {
+      variant: meta?.trigger_variant || "unknown",
+      cause: meta?.dead_member_cause || "unknown",
+    });
+
     const cwAcked = safeGetLocalStorage(CW_ACK_KEY) === "true";
     if (cwAcked) {
       renderScene();
     } else {
+      track("bitter_path_cw_shown");
       renderContentWarning();
     }
 
@@ -105,10 +130,12 @@ export default function register(k, engine) {
       cwOpen = true;
 
       skipBtn?.addEventListener("click", () => {
+        track("bitter_path_cw_skip");
         disableCwButtons();
         engine.skipBitterPath();
       });
       contBtn?.addEventListener("click", () => {
+        track("bitter_path_cw_continue");
         safeSetLocalStorage(CW_ACK_KEY, "true");
         cwOpen = false;
         cancelCwKeyHandlers();
@@ -231,6 +258,7 @@ export default function register(k, engine) {
         btn.className = "choice-btn";
         btn.textContent = `${idx + 1}. ${choice.label || choice.text || ""}`;
         btn.addEventListener("click", () => {
+          track(CHOICE_EVENT[idx] || "bitter_path_choice_unknown");
           disableChoices(buttons);
           engine.resolveBitterPath(idx);
         });

@@ -504,11 +504,13 @@ class GameEngine {
           this.transition('DEATH', res.trigger_data);
           break;
         case 'arrival':
+          this._trackBitterPathOutcome('arrival');
           this._clearSavedRun();
           if (this.dailyMode) this.completeDailyTrail();
           this.transition('ARRIVAL');
           break;
         case 'wipe':
+          this._trackBitterPathOutcome('wipe');
           this._clearSavedRun();
           if (this.dailyMode) this.completeDailyTrail();
           this.transition('WIPE');
@@ -633,6 +635,22 @@ class GameEngine {
       message.includes('wrong_trigger_kind') ||
       message.includes('event_hash_mismatch')
     );
+  }
+
+  // Fires on terminal trigger (arrival/wipe) when the run took any bitter-path
+  // branch. Lets the Plausible funnel compare bitter_path_choice_* counts
+  // against actual arrivals/wipes so we can measure which choices survive.
+  // Silent if plausible isn't loaded (local dev, adblock, offline).
+  _trackBitterPathOutcome(outcomeKind) {
+    try {
+      const taken = this.signedState?.state?.simulation?.bitter_path_taken;
+      if (!taken || taken === 'none') return;
+      if (typeof window.plausible !== 'function') return;
+      const event = outcomeKind === 'arrival'
+        ? 'bitter_path_outcome_arrival'
+        : 'bitter_path_outcome_wipe';
+      window.plausible(event, { props: { branch: taken } });
+    } catch (_) {}
   }
 
   async resolveRiver(choice) {
