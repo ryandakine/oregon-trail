@@ -51,6 +51,16 @@ export function buildLocationBlock(state: GameState, ctx: HistoricalContext): st
 
   if (nearbyLandmark) {
     parts.push(`Nearby: ${nearbyLandmark.name} — ${nearbyLandmark.description}`);
+    // Optional per-tone landmark flavor. In high tone tier, some landmarks
+    // (Fort Bridger, Chimney Rock) seed Donner Party references that point
+    // at the Bitter Path mechanic without naming it. If the current landmark
+    // has tone_flavor for the player's tier, surface it to the LLM as
+    // ambient material it may weave into the scene.
+    const toneTier = state.settings.tone_tier;
+    const landmarkFlavor = nearbyLandmark.tone_flavor?.[toneTier];
+    if (landmarkFlavor) {
+      parts.push(`Ambient (${toneTier}): ${landmarkFlavor}`);
+    }
   }
 
   if (weather) {

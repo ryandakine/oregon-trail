@@ -75,6 +75,12 @@ export interface Landmark {
   trade_inventory: TradeItem[];
   services: string[];
   event_hooks: string[];
+  // Optional per-tone flavor text. When set for the current tone_tier, the
+  // prompt-assembly location block appends this after the description so the
+  // LLM has period-voice ambient material to draw on. Bitter Path uses high-
+  // tier flavor to seed Donner Party references in Fort Bridger and Chimney
+  // Rock without ever naming the mechanic.
+  tone_flavor?: Partial<Record<ToneTier, string>>;
 }
 
 export interface WeatherProfile {
