@@ -20,7 +20,7 @@ See `DIFFICULTY_SYSTEM_PLAN.md` for the full plan. Phase C deferred until real u
 
 | Phase | State | Result | Commit | Date |
 |---|---|---|---|---|
-| **A** — Measure 30 playthroughs, decide STOP/B | 🟢 done | PHASE_B | see calibration JSON | 2026-04-18 |
+| **A** — Measure 30 playthroughs, decide STOP/B | 🟢 done | PHASE_B_BORDERLINE | see calibration JSON | 2026-04-18 |
 | **B** — Disease ×0.7, starvation grace 3→4 | 🟡 triggered — implementing | — | — | 2026-04-18 |
 | **C** — Live-state adaptive difficulty | ⛔ deferred | — | — | waiting for real user data |
 
@@ -42,7 +42,7 @@ _(appended to as decisions are made)_
 
 _(filled in after Phase A completes)_
 
-**Calibration JSON:** `.gstack/qa-reports/difficulty-calibration-v3.json`
+**Calibration JSON:** `.gstack/qa-reports/difficulty-calibration-v3-postB.json`
 **Worker version:** pending
 **Scenarios run:** 30 / 30
 
@@ -50,10 +50,10 @@ _(filled in after Phase A completes)_
 
 | Scenario | N | Wipe rate | 95% CI | Median miles | First-death day |
 |---|---|---|---|---|---|
-| farmer-steady-medium | 15 | 100.0% | [79.6%–100.0%] | 227 | 22 |
-| carpenter-steady-medium | 5 | 100.0% | [56.6%–100.0%] | 271 | 17 |
-| farmer-steady-high | 5 | 80.0% | [37.6%–96.4%] | 148 | 22.5 |
-| banker-steady-medium | 5 | 100.0% | [56.6%–100.0%] | 315 | 32 |
+| farmer-steady-medium | 15 | 66.7% | [41.7%–84.8%] | 176 | 22.5 |
+| carpenter-steady-medium | 5 | 100.0% | [56.6%–100.0%] | 315 | 18 |
+| farmer-steady-high | 5 | 100.0% | [56.6%–100.0%] | 211 | 25 |
+| banker-steady-medium | 5 | 80.0% | [37.6%–96.4%] | 370 | 38 |
 
 ---
 
@@ -66,7 +66,7 @@ cd /home/ryan/code/oregon-trail
 node scripts/measure-calibration.mjs --runs=30 --url=https://trail.osi-cyber.com
 ```
 
-Script produces `.gstack/qa-reports/difficulty-calibration-v3.json` + updates this file's "Last measurement" section.
+Script produces `scripts/calibration-history/2026-04-17-phaseA-preB.json` + updates this file's "Last measurement" section.
 
 ---
 

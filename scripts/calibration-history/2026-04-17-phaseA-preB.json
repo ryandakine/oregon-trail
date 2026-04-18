@@ -1,0 +1,575 @@
+{
+  "run_date": "2026-04-18T01:26:59.018Z",
+  "url": "https://trail.osi-cyber.com",
+  "scenarios": {
+    "farmer-steady-medium": {
+      "n": 15,
+      "wipes": 15,
+      "arrivals": 0,
+      "wipe_rate": 1,
+      "wipe_rate_ci95": [
+        0.796,
+        1
+      ],
+      "median_miles": 227,
+      "median_first_death_day": 22,
+      "first_10_days_fatality_rate": 0,
+      "cause_counts": {
+        "cholera": 4,
+        "mountain_fever": 3,
+        "dysentery": 9,
+        "Stampede": 5,
+        "exhaustion": 36,
+        "measles": 5,
+        "drowning": 2,
+        "typhoid": 8,
+        "scurvy": 2
+      }
+    },
+    "carpenter-steady-medium": {
+      "n": 5,
+      "wipes": 5,
+      "arrivals": 0,
+      "wipe_rate": 1,
+      "wipe_rate_ci95": [
+        0.566,
+        1
+      ],
+      "median_miles": 271,
+      "median_first_death_day": 17,
+      "first_10_days_fatality_rate": 0,
+      "cause_counts": {
+        "cholera": 4,
+        "measles": 3,
+        "mountain_fever": 1,
+        "dysentery": 3,
+        "exhaustion": 11,
+        "drowning": 1,
+        "typhoid": 1
+      }
+    },
+    "farmer-steady-high": {
+      "n": 5,
+      "wipes": 4,
+      "arrivals": 0,
+      "wipe_rate": 0.8,
+      "wipe_rate_ci95": [
+        0.376,
+        0.964
+      ],
+      "median_miles": 148,
+      "median_first_death_day": 22.5,
+      "first_10_days_fatality_rate": 0,
+      "cause_counts": {
+        "exhaustion": 8,
+        "cholera": 3,
+        "dysentery": 4,
+        "typhoid": 2,
+        "scurvy": 1,
+        "accidental_injury": 1,
+        "measles": 1
+      }
+    },
+    "banker-steady-medium": {
+      "n": 5,
+      "wipes": 5,
+      "arrivals": 0,
+      "wipe_rate": 1,
+      "wipe_rate_ci95": [
+        0.566,
+        1
+      ],
+      "median_miles": 315,
+      "median_first_death_day": 32,
+      "first_10_days_fatality_rate": 0,
+      "cause_counts": {
+        "exhaustion": 13,
+        "typhoid": 1,
+        "measles": 1,
+        "accidental_injury": 1,
+        "dysentery": 2,
+        "cholera": 3,
+        "scurvy": 1,
+        "drowning": 1,
+        "mountain_fever": 1
+      }
+    }
+  },
+  "gate": {
+    "decision": "PHASE_B",
+    "reason": "farmer-medium wipe_rate_LB 79.6% ≥ 70%. Medium is clearly broken. Ship Phase B tune."
+  },
+  "all_runs": [
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 1,
+      "outcome": "WIPE",
+      "miles": 257,
+      "survivors": 0,
+      "eventsHandled": 7,
+      "firstDeathDay": 23,
+      "deaths": [
+        "Carl — cholera (1848-05-08)",
+        "Ryan — mountain_fever (1848-05-10)",
+        "Beth — cholera (1848-05-10)",
+        "Earl — dysentery (1848-05-11)",
+        "Dana — Stampede (1848-05-21)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 2,
+      "outcome": "WIPE",
+      "miles": 249,
+      "survivors": 0,
+      "eventsHandled": 6,
+      "firstDeathDay": 22,
+      "deaths": [
+        "Carl — exhaustion (1848-05-07)",
+        "Ryan — cholera (1848-05-08)",
+        "Earl — exhaustion (1848-05-12)",
+        "Beth — dysentery (1848-05-13)",
+        "Dana — exhaustion (1848-05-16)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 3,
+      "outcome": "WIPE",
+      "miles": 179,
+      "survivors": 0,
+      "eventsHandled": 6,
+      "firstDeathDay": 22,
+      "deaths": [
+        "Dana — dysentery (1848-05-07)",
+        "Beth — measles (1848-05-08)",
+        "Carl — dysentery (1848-05-10)",
+        "Earl — exhaustion (1848-05-11)",
+        "Ryan — exhaustion (1848-05-12)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 4,
+      "outcome": "WIPE",
+      "miles": 188,
+      "survivors": 0,
+      "eventsHandled": 7,
+      "firstDeathDay": 23,
+      "deaths": [
+        "Ryan — exhaustion (1848-05-08)",
+        "Carl — exhaustion (1848-05-08)",
+        "Beth — exhaustion (1848-05-09)",
+        "Earl — measles (1848-05-09)",
+        "Dana — Stampede (1848-05-14)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 5,
+      "outcome": "WIPE",
+      "miles": 227,
+      "survivors": 0,
+      "eventsHandled": 6,
+      "firstDeathDay": 21,
+      "deaths": [
+        "Beth — exhaustion (1848-05-06)",
+        "Earl — exhaustion (1848-05-06)",
+        "Carl — dysentery (1848-05-11)",
+        "Ryan — exhaustion (1848-05-14)",
+        "Dana — exhaustion (1848-05-14)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 6,
+      "outcome": "WIPE",
+      "miles": 209,
+      "survivors": 0,
+      "eventsHandled": 5,
+      "firstDeathDay": 18,
+      "deaths": [
+        "Earl — exhaustion (1848-05-03)",
+        "Dana — exhaustion (1848-05-05)",
+        "Ryan — dysentery (1848-05-12)",
+        "Beth — exhaustion (1848-05-12)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 7,
+      "outcome": "WIPE",
+      "miles": 156,
+      "survivors": 0,
+      "eventsHandled": 5,
+      "firstDeathDay": 13,
+      "deaths": [
+        "Beth — exhaustion (1848-04-28)",
+        "Ryan — drowning (1848-05-03)",
+        "Earl — mountain_fever (1848-05-09)",
+        "Carl — exhaustion (1848-05-10)",
+        "Dana — exhaustion (1848-05-10)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 8,
+      "outcome": "WIPE",
+      "miles": 227,
+      "survivors": 0,
+      "eventsHandled": 4,
+      "firstDeathDay": 25,
+      "deaths": [
+        "Earl — exhaustion (1848-05-10)",
+        "Dana — typhoid (1848-05-12)",
+        "Ryan — dysentery (1848-05-13)",
+        "Beth — exhaustion (1848-05-13)",
+        "Carl — typhoid (1848-05-14)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 9,
+      "outcome": "WIPE",
+      "miles": 249,
+      "survivors": 0,
+      "eventsHandled": 7,
+      "firstDeathDay": 25,
+      "deaths": [
+        "Carl — measles (1848-05-10)",
+        "Ryan — dysentery (1848-05-14)",
+        "Dana — exhaustion (1848-05-14)",
+        "Earl — exhaustion (1848-05-15)",
+        "Beth — exhaustion (1848-05-17)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 10,
+      "outcome": "WIPE",
+      "miles": 181,
+      "survivors": 0,
+      "eventsHandled": 5,
+      "firstDeathDay": 22,
+      "deaths": [
+        "Earl — exhaustion (1848-05-07)",
+        "Dana — typhoid (1848-05-08)",
+        "Ryan — typhoid (1848-05-09)",
+        "Beth — exhaustion (1848-05-09)",
+        "Carl — exhaustion (1848-05-10)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 11,
+      "outcome": "WIPE",
+      "miles": 227,
+      "survivors": 0,
+      "eventsHandled": 4,
+      "firstDeathDay": 20,
+      "deaths": [
+        "Ryan — exhaustion (1848-05-05)",
+        "Earl — cholera (1848-05-05)",
+        "Beth — exhaustion (1848-05-11)",
+        "Carl — measles (1848-05-13)",
+        "Dana — exhaustion (1848-05-14)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 12,
+      "outcome": "WIPE",
+      "miles": 143,
+      "survivors": 0,
+      "eventsHandled": 4,
+      "firstDeathDay": 20,
+      "deaths": [
+        "Beth — exhaustion (1848-05-05)",
+        "Earl — exhaustion (1848-05-05)",
+        "Ryan — measles (1848-05-06)",
+        "Carl — exhaustion (1848-05-06)",
+        "Dana — exhaustion (1848-05-06)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 13,
+      "outcome": "WIPE",
+      "miles": 236,
+      "survivors": 0,
+      "eventsHandled": 8,
+      "firstDeathDay": 24,
+      "deaths": [
+        "Carl — mountain_fever (1848-05-09)",
+        "Ryan — dysentery (1848-05-10)",
+        "Beth — scurvy (1848-05-10)",
+        "Earl — drowning (1848-05-13)",
+        "Dana — Stampede (1848-05-15)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 14,
+      "outcome": "WIPE",
+      "miles": 295,
+      "survivors": 0,
+      "eventsHandled": 9,
+      "firstDeathDay": 22,
+      "deaths": [
+        "Dana — exhaustion (1848-05-07)",
+        "Ryan — typhoid (1848-05-20)",
+        "Carl — typhoid (1848-05-20)",
+        "Beth — scurvy (1848-05-21)",
+        "Earl — exhaustion (1848-05-22)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-medium",
+      "run": 15,
+      "outcome": "WIPE",
+      "miles": 185,
+      "survivors": 0,
+      "eventsHandled": 6,
+      "firstDeathDay": 19,
+      "deaths": [
+        "Carl — exhaustion (1848-05-04)",
+        "Dana — typhoid (1848-05-04)",
+        "Ryan — Stampede (1848-05-06)",
+        "Earl — typhoid (1848-05-09)",
+        "Beth — Stampede (1848-05-11)"
+      ]
+    },
+    {
+      "scenario": "carpenter-steady-medium",
+      "run": 1,
+      "outcome": "WIPE",
+      "miles": 299,
+      "survivors": 0,
+      "eventsHandled": 8,
+      "firstDeathDay": 17,
+      "deaths": [
+        "Beth — cholera (1848-05-02)",
+        "Ryan — measles (1848-05-25)",
+        "Dana — mountain_fever (1848-05-26)",
+        "Earl — dysentery (1848-05-27)",
+        "Carl — measles (1848-05-28)"
+      ]
+    },
+    {
+      "scenario": "carpenter-steady-medium",
+      "run": 2,
+      "outcome": "WIPE",
+      "miles": 256,
+      "survivors": 0,
+      "eventsHandled": 7,
+      "firstDeathDay": 11,
+      "deaths": [
+        "Ryan — exhaustion (1848-04-26)",
+        "Beth — cholera (1848-05-07)",
+        "Earl — cholera (1848-05-07)",
+        "Dana — exhaustion (1848-05-18)"
+      ]
+    },
+    {
+      "scenario": "carpenter-steady-medium",
+      "run": 3,
+      "outcome": "WIPE",
+      "miles": 271,
+      "survivors": 0,
+      "eventsHandled": 6,
+      "firstDeathDay": 16,
+      "deaths": [
+        "Earl — drowning (1848-05-01)",
+        "Beth — cholera (1848-05-11)",
+        "Carl — exhaustion (1848-05-19)",
+        "Dana — exhaustion (1848-05-19)",
+        "Ryan — exhaustion (1848-05-20)"
+      ]
+    },
+    {
+      "scenario": "carpenter-steady-medium",
+      "run": 4,
+      "outcome": "WIPE",
+      "miles": 201,
+      "survivors": 0,
+      "eventsHandled": 6,
+      "firstDeathDay": 19,
+      "deaths": [
+        "Earl — dysentery (1848-05-04)",
+        "Ryan — exhaustion (1848-05-11)",
+        "Beth — exhaustion (1848-05-17)",
+        "Carl — exhaustion (1848-05-18)",
+        "Dana — measles (1848-05-18)"
+      ]
+    },
+    {
+      "scenario": "carpenter-steady-medium",
+      "run": 5,
+      "outcome": "WIPE",
+      "miles": 304,
+      "survivors": 0,
+      "eventsHandled": 6,
+      "firstDeathDay": 40,
+      "deaths": [
+        "Beth — dysentery (1848-05-25)",
+        "Dana — typhoid (1848-05-25)",
+        "Ryan — exhaustion (1848-05-26)",
+        "Earl — exhaustion (1848-05-26)",
+        "Carl — exhaustion (1848-05-27)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-high",
+      "run": 1,
+      "outcome": "WIPE",
+      "miles": 148,
+      "survivors": 0,
+      "eventsHandled": 5,
+      "firstDeathDay": 23,
+      "deaths": [
+        "Carl — exhaustion (1848-05-08)",
+        "Earl — exhaustion (1848-05-08)",
+        "Ryan — cholera (1848-05-10)",
+        "Beth — exhaustion (1848-05-11)",
+        "Dana — dysentery (1848-05-12)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-high",
+      "run": 2,
+      "outcome": "WIPE",
+      "miles": 266,
+      "survivors": 0,
+      "eventsHandled": 8,
+      "firstDeathDay": 20,
+      "deaths": [
+        "Earl — exhaustion (1848-05-05)",
+        "Carl — cholera (1848-05-09)",
+        "Beth — exhaustion (1848-05-15)",
+        "Dana — typhoid (1848-05-15)",
+        "Ryan — scurvy (1848-05-17)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-high",
+      "run": 3,
+      "outcome": "WIPE",
+      "miles": 199,
+      "survivors": 0,
+      "eventsHandled": 13,
+      "firstDeathDay": 25,
+      "deaths": [
+        "Dana — exhaustion (1848-05-10)",
+        "Earl — typhoid (1848-05-10)",
+        "Ryan — cholera (1848-05-18)",
+        "Beth — dysentery (1848-05-28)",
+        "Carl — accidental_injury (1848-05-30)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-high",
+      "run": 4,
+      "outcome": "WIPE",
+      "miles": 134,
+      "survivors": 0,
+      "eventsHandled": 7,
+      "firstDeathDay": 22,
+      "deaths": [
+        "Carl — dysentery (1848-05-07)",
+        "Earl — exhaustion (1848-05-14)",
+        "Ryan — measles (1848-05-16)",
+        "Beth — dysentery (1848-05-16)",
+        "Dana — exhaustion (1848-05-17)"
+      ]
+    },
+    {
+      "scenario": "farmer-steady-high",
+      "run": 5,
+      "outcome": "UNKNOWN",
+      "miles": 0,
+      "survivors": 0,
+      "eventsHandled": 0,
+      "firstDeathDay": null,
+      "deaths": []
+    },
+    {
+      "scenario": "banker-steady-medium",
+      "run": 1,
+      "outcome": "WIPE",
+      "miles": 315,
+      "survivors": 0,
+      "eventsHandled": 8,
+      "firstDeathDay": 33,
+      "deaths": [
+        "Dana — exhaustion (1848-05-18)",
+        "Beth — typhoid (1848-05-20)",
+        "Carl — measles (1848-05-20)",
+        "Ryan — exhaustion (1848-05-21)",
+        "Earl — exhaustion (1848-05-22)"
+      ]
+    },
+    {
+      "scenario": "banker-steady-medium",
+      "run": 2,
+      "outcome": "WIPE",
+      "miles": 282,
+      "survivors": 0,
+      "eventsHandled": 7,
+      "firstDeathDay": 26,
+      "deaths": [
+        "Ryan — accidental_injury (1848-05-11)",
+        "Dana — dysentery (1848-05-14)",
+        "Earl — exhaustion (1848-05-14)",
+        "Beth — exhaustion (1848-05-18)"
+      ]
+    },
+    {
+      "scenario": "banker-steady-medium",
+      "run": 3,
+      "outcome": "WIPE",
+      "miles": 392,
+      "survivors": 0,
+      "eventsHandled": 6,
+      "firstDeathDay": 22,
+      "deaths": [
+        "Ryan — cholera (1848-05-07)",
+        "Beth — exhaustion (1848-05-08)",
+        "Dana — exhaustion (1848-05-31)",
+        "Earl — scurvy (1848-05-31)",
+        "Carl — drowning (1848-06-02)"
+      ]
+    },
+    {
+      "scenario": "banker-steady-medium",
+      "run": 4,
+      "outcome": "WIPE",
+      "miles": 370,
+      "survivors": 0,
+      "eventsHandled": 8,
+      "firstDeathDay": 39,
+      "deaths": [
+        "Ryan — exhaustion (1848-05-24)",
+        "Carl — dysentery (1848-05-24)",
+        "Dana — exhaustion (1848-05-28)",
+        "Beth — exhaustion (1848-05-29)",
+        "Earl — exhaustion (1848-05-31)"
+      ]
+    },
+    {
+      "scenario": "banker-steady-medium",
+      "run": 5,
+      "outcome": "WIPE",
+      "miles": 304,
+      "survivors": 0,
+      "eventsHandled": 8,
+      "firstDeathDay": 32,
+      "deaths": [
+        "Dana — cholera (1848-05-17)",
+        "Beth — exhaustion (1848-05-23)",
+        "Carl — cholera (1848-05-23)",
+        "Earl — exhaustion (1848-05-23)",
+        "Ryan — mountain_fever (1848-05-24)"
+      ]
+    }
+  ]
+}
