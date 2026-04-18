@@ -5,7 +5,7 @@ import { signState } from "../src/hmac";
 import type { EventResponse, GameState, SignedGameState } from "../src/types";
 
 const SECRET = "test-secret-for-handler-suite";
-const MEMBERS = ["Bob", "Cara", "Dan"];
+const MEMBERS: [string, string, string, string] = ["Bob", "Cara", "Dan", "Ellen"];
 const ORIGIN = "*";
 
 // Minimal env shape used by the handlers. No ANTHROPIC_API_KEY needed since
