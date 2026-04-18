@@ -308,3 +308,203 @@ export const FALLBACK_EVENTS: Record<ToneTier, EventResponse[]> = {
     },
   ],
 };
+
+// ── Bitter Path ("The Long Night") ────────────────────────────────────
+//
+// Hidden horror-tier mechanic fired by the simulation when a party is late-
+// stage starving with a recent death. LLM-generated in McCarthy register
+// with strict constraints. Forbidden-word check rejects bad generations; a
+// cause-keyed hand-written fallback ships with the worker so the player
+// always sees safe period-voice text on LLM failure.
+
+const LONG_NIGHT_SYSTEM_PROMPT = `You are writing a single scene for an Oregon Trail game set in 1848. Tone is High (psychological horror, moral decay). The party is in the late stages of starvation after a recent death. The scene, titled "The Long Night", depicts survivors considering what is not yet said aloud. The specific act is never named, never described, and never instructed to the player.
+
+VOICE (strict):
+- Cormac McCarthy register: short sentences, present tense where possible, specific physical detail
+- No adjectives of emotion (no "scared", "terrified", "desperate"). Let action carry affect.
+- Ellipsis, pause, what is not said
+- 2 to 4 sentences in the description
+- The deceased is referred to by name, then as "the covered shape" or "what lies under the canvas" or similar
+- Each surviving member gets one specific physical detail
+- Period (1848): no modern vocabulary, no clinical terms, no therapeutic language
+
+FORBIDDEN (strict):
+- The words "eat", "eaten", "ate", "flesh", "meat", "feast", "consume" as verb or imperative
+- Any description of food preparation
+- Any description of the act itself
+- Halloween register: "ominous", "whispered", "shadows", "darkness fell"
+- Any second-person instruction to the player
+
+OUTPUT (JSON exactly this shape):
+{
+  "title": "The Long Night",
+  "description": "<2-4 sentences, voice constraints above>",
+  "choices": [
+    {"label": "Pray, and starve with dignity.", "consequences": {}},
+    {"label": "Travel on. Hope for game.", "consequences": {}},
+    {"label": "Do what the trail demands.", "consequences": {}}
+  ],
+  "journal_entry": "<1-2 sentence retrospective period-voice note>",
+  "personality_effects": {}
+}
+
+Consequences are intentionally empty in your output. The server applies them deterministically based on the choice picked. Do not attempt to influence numeric outcomes.
+
+Example output for {deceased: Sarah, cause: cholera, days_ago: 4}:
+
+{
+  "title": "The Long Night",
+  "description": "Sarah died four nights past. The wagon is quiet. The food barrel rings hollow when Thomas touches it. Martha looks at the covered shape beneath the canvas and does not look away.",
+  "choices": [
+    {"label": "Pray, and starve with dignity.", "consequences": {}},
+    {"label": "Travel on. Hope for game.", "consequences": {}},
+    {"label": "Do what the trail demands.", "consequences": {}}
+  ],
+  "journal_entry": "We did not speak at supper. There was no supper.",
+  "personality_effects": {}
+}`;
+
+const LONG_NIGHT_FORBIDDEN = /\b(eat|eaten|ate|flesh|meat|feast|consume|consuming|consumed|devour)\b/i;
+
+type CauseKey = "starvation" | "disease" | "drowning" | "injury" | "event";
+
+const DISEASE_CAUSES = new Set([
+  "cholera", "dysentery", "typhoid", "mountain_fever", "measles", "scurvy",
+]);
+const INJURY_CAUSES = new Set([
+  "accidental_injury", "Stampede",
+]);
+
+export function pickFallbackKey(cause: string): CauseKey {
+  if (cause === "exhaustion") return "starvation";
+  if (DISEASE_CAUSES.has(cause)) return "disease";
+  if (cause === "drowning") return "drowning";
+  if (INJURY_CAUSES.has(cause)) return "injury";
+  return "event";
+}
+
+function daysAgoWords(days: number): string {
+  if (days <= 1) return "yesterday";
+  if (days === 2) return "two nights past";
+  if (days === 3) return "three nights past";
+  return `${days} nights past`;
+}
+
+const FALLBACK_LONG_NIGHT: Record<CauseKey, string> = {
+  starvation: "The oxen have not moved since morning. {DECEASED} was buried {DAYS_AGO_WORDS}. By evening no one had built the fire. The wind moves through the grass and does not stop.",
+  disease: "{DECEASED} went {DAYS_AGO_WORDS}. The sickness has not left. {SURVIVOR} sits by the cold stove, sharpening a knife with long slow strokes. The sky is very wide.",
+  drowning: "The current took {DECEASED} at the ford. That was {DAYS_AGO_WORDS}. We made camp above the far bank and have not moved since. The food is gone. Nobody has yet gathered the water.",
+  injury: "{DECEASED} fell beside the wagon {DAYS_AGO_WORDS}. The body lies under canvas near the fire that was not built tonight. {SURVIVOR} has not spoken since the burial.",
+  event: "{DECEASED} was lost {DAYS_AGO_WORDS}. The wagon has not moved in a day. The children have stopped asking when supper is. {SURVIVOR} watches the canvas and speaks to no one.",
+};
+
+export function interpolateLongNightFallback(
+  template: string,
+  ctx: { deceasedName: string; daysSinceDeath: number; survivorName: string },
+): string {
+  return template
+    .replaceAll("{DECEASED}", ctx.deceasedName)
+    .replaceAll("{DAYS_AGO_WORDS}", daysAgoWords(ctx.daysSinceDeath))
+    .replaceAll("{SURVIVOR}", ctx.survivorName);
+}
+
+export function buildLongNightFallback(
+  deceasedName: string,
+  deceasedCause: string,
+  daysSinceDeath: number,
+  survivorName: string,
+): EventResponse {
+  const key = pickFallbackKey(deceasedCause);
+  const description = interpolateLongNightFallback(FALLBACK_LONG_NIGHT[key], {
+    deceasedName, daysSinceDeath, survivorName,
+  });
+  return {
+    title: "The Long Night",
+    description,
+    choices: [
+      { label: "Pray, and starve with dignity.", consequences: {} },
+      { label: "Travel on. Hope for game.", consequences: {} },
+      { label: "Do what the trail demands.", consequences: {} },
+    ],
+    personality_effects: {},
+    journal_entry: `We did not speak at supper on the night ${deceasedName} was gone.`,
+  };
+}
+
+export async function generateLongNight(
+  deceasedName: string,
+  deceasedCause: string,
+  daysSinceDeath: number,
+  survivorName: string,
+  apiKey: string,
+): Promise<EventResponse> {
+  const user = `Context:
+- deceased_member: {"name": "${deceasedName}", "cause": "${deceasedCause}", "days_ago": ${daysSinceDeath}}
+- survivors_include: ["${survivorName}"]
+
+Write The Long Night scene. Follow all voice constraints. Return JSON.`;
+
+  try {
+    const raw = await callAnthropic(LONG_NIGHT_SYSTEM_PROMPT, user, apiKey, {
+      maxTokens: 500,
+      timeout: 8000,
+    });
+    const parsed = parseEventResponse(raw);
+    // Post-parse guard: reject any output that uses forbidden words; fall through to hand-written fallback.
+    if (LONG_NIGHT_FORBIDDEN.test(parsed.description) || LONG_NIGHT_FORBIDDEN.test(parsed.journal_entry)) {
+      return buildLongNightFallback(deceasedName, deceasedCause, daysSinceDeath, survivorName);
+    }
+    // Enforce the canonical three choice labels server-side; ignore model drift.
+    parsed.title = "The Long Night";
+    parsed.choices = [
+      { label: "Pray, and starve with dignity.", consequences: {} },
+      { label: "Travel on. Hope for game.", consequences: {} },
+      { label: "Do what the trail demands.", consequences: {} },
+    ];
+    return parsed;
+  } catch {
+    return buildLongNightFallback(deceasedName, deceasedCause, daysSinceDeath, survivorName);
+  }
+}
+
+/**
+ * Asymmetric consequences for the three Long Night choices.
+ * Returned as a partial GameState delta the API handler can apply directly.
+ */
+export function bitterPathConsequences(choiceIndex: 0 | 1 | 2): {
+  bitter_path_taken: "dignified" | "hopeful" | "taken";
+  food_delta: number;
+  starvation_days_reset: boolean;
+  morale_delta_per_member: number;
+  sanity_delta_per_member: number;
+  days_delta: number;
+} {
+  if (choiceIndex === 0) {
+    return {
+      bitter_path_taken: "dignified",
+      food_delta: 0,
+      starvation_days_reset: false,
+      morale_delta_per_member: 8,
+      sanity_delta_per_member: 0,
+      days_delta: 0,
+    };
+  }
+  if (choiceIndex === 1) {
+    return {
+      bitter_path_taken: "hopeful",
+      food_delta: 0,
+      starvation_days_reset: false,
+      morale_delta_per_member: 5,
+      sanity_delta_per_member: 0,
+      days_delta: 1,
+    };
+  }
+  return {
+    bitter_path_taken: "taken",
+    food_delta: 60,
+    starvation_days_reset: true,
+    morale_delta_per_member: -20,
+    sanity_delta_per_member: -30,
+    days_delta: 0,
+  };
+}
