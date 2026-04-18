@@ -64,13 +64,19 @@ function aliveCount(state: GameState): number {
   return state.party.members.filter((m) => m.alive).length;
 }
 
+export interface AdvanceOptions {
+  bitterPathEnabled?: boolean; // server kill switch; defaults true
+}
+
 export function advanceDays(
   state: GameState,
   ctx: HistoricalContext,
+  opts: AdvanceOptions = {},
 ): AdvanceResult {
   const next = structuredClone(state);
   const summaries: DaySummary[] = [];
   const totalDistance = getTotalTrailDistance(ctx);
+  const bitterPathEnabled = opts.bitterPathEnabled !== false; // default true
 
   for (let day = 0; day < 5; day++) {
     const alive = aliveCount(next);
@@ -284,6 +290,56 @@ export function advanceDays(
         trigger: "river",
         triggerData: river,
       };
+    }
+
+    // 12.5 Bitter Path check — horror tier, late-stage, not yet resolved.
+    // Fires ONLY when party is demonstrably dying: either 5+ starvation days
+    // or food=0 + 2+ starving + avg alive health < 40. Requires a recent
+    // death (within 3 game-days) to ground the event narratively.
+    if (
+      bitterPathEnabled &&
+      next.settings.tone_tier === "high" &&
+      next.simulation.bitter_path_taken === "none" &&
+      next.deaths.length >= 1
+    ) {
+      const aliveMembers = next.party.members.filter((m) => m.alive);
+      const avgAliveHealth =
+        aliveMembers.length > 0
+          ? aliveMembers.reduce((s, m) => s + m.health, 0) / aliveMembers.length
+          : 0;
+      const wasting = next.simulation.starvation_days >= 5;
+      const failing =
+        next.supplies.food === 0 &&
+        next.simulation.starvation_days >= 2 &&
+        avgAliveHealth < 40;
+      if (wasting || failing) {
+        // Find the most recent death within the last 3 game-days.
+        const currentDateMs = new Date(next.position.date + "T00:00:00Z").getTime();
+        const recent = next.deaths
+          .map((d) => ({
+            ...d,
+            daysAgo: Math.round(
+              (currentDateMs - new Date(d.date + "T00:00:00Z").getTime()) / 86400000,
+            ),
+          }))
+          .filter((d) => d.daysAgo >= 0 && d.daysAgo <= 3)
+          .sort((a, b) => a.daysAgo - b.daysAgo);
+
+        if (recent.length > 0) {
+          const dead = recent[0];
+          return {
+            state: next,
+            summaries,
+            trigger: "bitter_path",
+            triggerData: {
+              dead_member_name: dead.name,
+              dead_member_cause: dead.cause,
+              days_since_death: dead.daysAgo,
+              trigger_variant: wasting ? "wasting" : "failing",
+            },
+          };
+        }
+      }
     }
 
     // 13. Event check

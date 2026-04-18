@@ -159,6 +159,8 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
       resolved_crossings: [],
       visited_landmarks: [],
       pending_event_hash: null,
+      landmark_rest_used: [],
+      bitter_path_taken: "none",
     },
     meta: {
       run_id: 'test-run-001',
