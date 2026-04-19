@@ -101,10 +101,12 @@ export default function register(k, engine) {
     };
     const fordC = fordColors[difficulty] || fordColors.moderate;
 
+    // Button labels use (N) parens, not [N]. Kaplay's styled-text parser
+    // treats `[1]` as an unclosed style tag and throws. Matches landmark.js.
     const buttons = [
-      { label: "[1] Ford River", color: fordC, key: "1", choice: "ford" },
-      { label: "[2] Caulk & Float", color: [222, 184, 135], key: "2", choice: "caulk" },
-      { label: `[3] Ferry ${engine.formatMoney(ferryCost)}`, color: [46, 139, 87], key: "3", choice: "ferry" },
+      { label: "(1) Ford River", color: fordC, key: "1", choice: "ford" },
+      { label: "(2) Caulk & Float", color: [222, 184, 135], key: "2", choice: "caulk" },
+      { label: `(3) Ferry ${engine.formatMoney(ferryCost)}`, color: [46, 139, 87], key: "3", choice: "ferry" },
     ];
 
     // Gray out ferry if not enough money

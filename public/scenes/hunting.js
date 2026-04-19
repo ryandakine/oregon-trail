@@ -66,12 +66,14 @@ export default function register(k, engine) {
       k.color(222, 184, 135),
     ]);
 
-    // Buttons
+    // Buttons — parens not brackets: kaplay's styled-text parser treats
+    // `[1]` as an unclosed style tag (`[name]...[/name]`) and throws.
+    // Matches landmark.js.
     const options = [
-      { label: "[1] 5 rounds", key: "1", ammo: 5 },
-      { label: "[2] 10 rounds", key: "2", ammo: 10 },
-      { label: "[3] 20 rounds", key: "3", ammo: 20 },
-      { label: "[0] Cancel", key: "0", ammo: 0 },
+      { label: "(1) 5 rounds", key: "1", ammo: 5 },
+      { label: "(2) 10 rounds", key: "2", ammo: 10 },
+      { label: "(3) 20 rounds", key: "3", ammo: 20 },
+      { label: "(0) Cancel", key: "0", ammo: 0 },
     ];
 
     const btnW = 130;
