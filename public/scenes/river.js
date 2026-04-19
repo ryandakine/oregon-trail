@@ -6,7 +6,15 @@ export default function register(k, engine) {
     const name = river.name || "Unknown River";
     const width = river.width_ft || river.width || "medium";
     const depth = river.depth_ft_summer || river.depth_ft_spring || river.depth || "medium";
-    const difficulty = river.ford_difficulty || river.difficulty || "moderate";
+    // ford_difficulty is a 1-5 number per the server schema. Map to the
+    // string label the color lookup + label render expect. Without this the
+    // scene throws "toUpperCase is not a function" and kaplay's blue error
+    // overlay strands the player on any real river crossing.
+    const rawDifficulty = river.ford_difficulty ?? river.difficulty ?? "moderate";
+    const DIFFICULTY_LABELS = { 1: "easy", 2: "easy", 3: "moderate", 4: "hard", 5: "dangerous" };
+    const difficulty = typeof rawDifficulty === "number"
+      ? (DIFFICULTY_LABELS[rawDifficulty] || "moderate")
+      : String(rawDifficulty);
     const ferryCost = river.ferry_cost_1848_dollars || river.ferry_cost || 500;
 
     // Sky
