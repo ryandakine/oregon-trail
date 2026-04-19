@@ -1,6 +1,8 @@
 # The Bitter Path — Hidden Horror Win Condition (v3)
 
-**Status:** v3 rewritten 2026-04-18 after v2 CEO single-voice review (Codex auth scope-broken, second voice unavailable). v1→v2 addressed 7 mods; v2→v3 addresses 4 more. See § 0.v3 for diffs.
+**Status:** SHIPPED 2026-04-18 — all 5 slices (C1 through C5) live on trail.osi-cyber.com. See `BITTER_PATH_C3_PLAN.md` for the implementation-time plan + autoplan review outcomes (Codex + CEO/Eng/Design subagents). See CLAUDE.md § 3.8 for the canonical mechanic description.
+
+**Plan history:** v3 rewritten 2026-04-18 after v2 CEO single-voice review. v1→v2 addressed 7 mods; v2→v3 addresses 4 more. See § 0.v3 for diffs.
 
 **Scope:** Make High tone (horror) beatable via one hidden mechanic: cannibalism at a specific moment. Discoverable through in-game hints. Carries a content-warning gate, server-side kill switch, telemetry on every branch, and full asymmetric mechanical payoff for all three choices so option 3 doesn't telegraph.
 

@@ -4,7 +4,7 @@
 **Parent:** `BITTER_PATH_PLAN.md` (v3, § 7 C3)
 **Predecessors:** C1 shipped (state schema + HMAC), C2 shipped (simulation trigger + `/api/bitter_path` endpoint + fallbacks)
 **Estimate:** 3-4 hr after revisions
-**Status:** LOCKED after autoplan gauntlet 2026-04-18. Ready to implement.
+**Status:** SHIPPED 2026-04-18 — C3.a through C3.f (+ C4 + C5) all live on trail.osi-cyber.com. 175 worker tests, autoplan gauntlet + post-implementation review both cleared, prod smoke QA passed 96/100. This doc is the historical plan-of-record for C3; CLAUDE.md § 3.8 is the canonical mechanic description going forward.
 
 ---
 
