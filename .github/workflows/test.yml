@@ -1,0 +1,30 @@
+name: test
+
+on:
+  push:
+    branches: [kaplay-rebuild, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+      - name: Install Playwright browsers (chromium only)
+        run: npx playwright install --with-deps chromium
+      - name: Run tests (worker + frontend)
+        run: npx vitest run
+      # Playthrough smoke hits the real worker + Anthropic — opt-in on PR
+      # only to avoid flaking CI on normal push traffic and to keep the
+      # token cost near zero.
+      - name: Playthrough E2E (PR only)
+        if: github.event_name == 'pull_request'
+        env:
+          PLAYTHROUGH_E2E: "1"
+        run: npx vitest run --project frontend test/frontend/playthrough-smoke.test.ts
