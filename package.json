@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "npm run deploy:worker && npm run deploy:pages",
+    "deploy:worker": "wrangler deploy",
+    "deploy:pages": "./scripts/deploy-pages.sh",
+    "deploy:smoke": "node scripts/deploy-smoke.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

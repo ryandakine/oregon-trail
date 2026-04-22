@@ -297,12 +297,42 @@ Total input target: ~1,500 tokens. Output: max 800 tokens (events), 600 tokens (
 ## 9. Operational Rules
 
 - **Secrets:** `HMAC_SECRET` and `ANTHROPIC_API_KEY` set via `wrangler secret put`. Never in code, never in `.dev.vars` committed. `.dev.vars` is in `.gitignore`.
-- **Deploy frontend:** CF Pages project has NO git provider — deploys are manual via `npx wrangler pages deploy public --project-name=oregon-trail --branch=master --commit-dirty=true`. The `--branch` flag must match CF Pages `production_branch` (which is `master`, NOT `production`) to hit trail.osi-cyber.com. Deploying with `--branch=production` creates a preview only; trail.osi-cyber.com will keep serving old code.
-- **Deploy worker:** `npx wrangler deploy` from repo root.
-- **Tests:** `npx vitest run` — must see 175 tests pass before committing worker changes.
+- **Deploy:** `bun run deploy` from the repo root — worker first, then pages via the gated script. See § Deploy Configuration below for the full pipeline.
+- **Tests:** `bun run test` (alias for `npx vitest run`) — must see 175+ tests pass before committing worker changes.
 - **Local dev:** `npx wrangler dev` starts worker locally. Frontend needs a local HTTP server for `public/` (e.g., `npx serve public`). **Note:** `engine.js` hardcodes the production worker URL — you must manually override it to `http://localhost:8787` for local development.
 - **CORS:** Worker reads `ALLOWED_ORIGIN` env var but it is not set in `wrangler.toml` — defaults to `*` (all origins). Set it explicitly if origin restriction is needed.
 - **Active branch:** `kaplay-rebuild` — this is the working branch. `master` has the old ASCII terminal UI.
+
+## Deploy Configuration (configured by /setup-deploy)
+- Platform: Cloudflare Workers (`oregon-trail-api`) + Cloudflare Pages (project `oregon-trail`, production_branch `master`)
+- Production URL: https://trail.osi-cyber.com
+- Worker URL: https://oregon-trail-api.trails710.workers.dev
+- Deploy workflow: manual — no CI, no git-provider auto-deploy
+- Deploy command: `bun run deploy`
+- Project type: Web app (Kaplay canvas game + Cloudflare Worker API)
+- Post-deploy health check: `curl -sf https://trail.osi-cyber.com` returns 200
+
+### Deploy pipeline (bun run deploy)
+1. Worker unit tests (`npx vitest run`) — must pass
+2. `wrangler deploy` — deploys the worker to oregon-trail-api.trails710.workers.dev
+3. `scripts/deploy-pages.sh` — runs the gated pages flow:
+   - pushes to a CF Pages preview branch first
+   - runs `scripts/deploy-smoke.mjs` against the preview (force-renders river with `ford_difficulty: 5`, hunting, bitter_path CW modal, landmark — refuses to promote if any scene throws)
+   - promotes to `--branch=master` (→ trail.osi-cyber.com) only on a clean smoke
+
+### Custom deploy hooks
+- Pre-merge: `bun run test` (worker tests) — blocks the deploy if red
+- Deploy trigger: `bun run deploy` (user runs it manually from repo root)
+- Deploy status: wrangler prints the deploy URL + version id on each step
+- Health check: `bun run deploy:smoke` (Playwright probe, ~15s) or `curl -sf https://trail.osi-cyber.com`
+
+### Partial deploys
+- Worker only: `bun run deploy:worker`
+- Pages only (with smoke gate): `bun run deploy:pages`
+- Smoke only (no deploy): `bun run deploy:smoke` — useful for post-deploy verification
+
+### Why the gate exists
+On 2026-04-18 two P0 scene-render bugs (river `ford_difficulty.toUpperCase()` + `[N]` styled-text labels in river/hunting) shipped to prod because the previous deploy flow was `npx wrangler pages deploy` with zero pre-checks. Any real river crossing or hunt trip blue-screened kaplay. `scripts/deploy-smoke.mjs` renders exactly those payloads against the preview URL before promotion.
 
 ---
 
