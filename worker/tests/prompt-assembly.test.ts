@@ -6,6 +6,7 @@ import {
   buildPartyBlock,
   buildRecentEventsBlock,
   buildConditionalBlock,
+  buildBitterPathSituationalHint,
   assembleEventPrompt,
 } from '../src/prompt-assembly';
 import { SYSTEM_PROMPTS } from '../src/prompt-templates';
@@ -159,6 +160,9 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
       resolved_crossings: [],
       visited_landmarks: [],
       pending_event_hash: null,
+      pending_event_trigger: null,
+      landmark_rest_used: [],
+      bitter_path_taken: "none",
     },
     meta: {
       run_id: 'test-run-001',
@@ -418,6 +422,63 @@ describe('buildConditionalBlock', () => {
     const ctx = makeContext();
     const block = buildConditionalBlock(state, ctx);
     expect(block).toBe('');
+  });
+});
+
+describe('buildBitterPathSituationalHint', () => {
+  function makeEligibleState(overrides: Partial<GameState> = {}): GameState {
+    const state = makeGameState({
+      settings: { challenge_id: null, pace: 'steady', rations: 'filling', tone_tier: 'high' },
+    });
+    state.supplies.food = 20;
+    state.simulation.starvation_days = 2;
+    return { ...state, ...overrides };
+  }
+
+  it('fires for horror tier with food<50 + active starvation', () => {
+    const hint = buildBitterPathSituationalHint(makeEligibleState());
+    expect(hint).toContain('Donner');
+    expect(hint).toContain('period voice');
+  });
+
+  it('fires for horror tier with food<50 + recent death (no starvation)', () => {
+    const state = makeEligibleState();
+    state.simulation.starvation_days = 0;
+    state.deaths = [{ name: 'Martha', date: '1848-06-01', cause: 'cholera', epitaph: null }];
+    expect(buildBitterPathSituationalHint(state)).toContain('Donner');
+  });
+
+  it('does NOT fire for low/medium tone tiers', () => {
+    for (const tier of ['low', 'medium'] as ToneTier[]) {
+      const state = makeEligibleState({
+        settings: { challenge_id: null, pace: 'steady', rations: 'filling', tone_tier: tier },
+      });
+      expect(buildBitterPathSituationalHint(state)).toBe('');
+    }
+  });
+
+  it('does NOT fire when food >= 50 even on horror tier', () => {
+    const state = makeEligibleState();
+    state.supplies.food = 100;
+    expect(buildBitterPathSituationalHint(state)).toBe('');
+  });
+
+  it('does NOT fire without recent death AND no starvation', () => {
+    const state = makeEligibleState();
+    state.simulation.starvation_days = 0;
+    state.deaths = [];
+    expect(buildBitterPathSituationalHint(state)).toBe('');
+  });
+
+  it('never instructs the player or names the act', () => {
+    const hint = buildBitterPathSituationalHint(makeEligibleState());
+    // Anti-spoiler invariants: don't tell the player what to do, don't name
+    // the mechanic or the act.
+    expect(hint.toLowerCase()).not.toContain('press');
+    expect(hint.toLowerCase()).not.toContain('click');
+    expect(hint.toLowerCase()).not.toContain('eat');
+    expect(hint.toLowerCase()).not.toContain('cannibal');
+    expect(hint.toLowerCase()).not.toContain('bitter path');
   });
 });
 

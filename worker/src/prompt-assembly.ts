@@ -51,6 +51,16 @@ export function buildLocationBlock(state: GameState, ctx: HistoricalContext): st
 
   if (nearbyLandmark) {
     parts.push(`Nearby: ${nearbyLandmark.name} — ${nearbyLandmark.description}`);
+    // Optional per-tone landmark flavor. In high tone tier, some landmarks
+    // (Fort Bridger, Chimney Rock) seed Donner Party references that point
+    // at the Bitter Path mechanic without naming it. If the current landmark
+    // has tone_flavor for the player's tier, surface it to the LLM as
+    // ambient material it may weave into the scene.
+    const toneTier = state.settings.tone_tier;
+    const landmarkFlavor = nearbyLandmark.tone_flavor?.[toneTier];
+    if (landmarkFlavor) {
+      parts.push(`Ambient (${toneTier}): ${landmarkFlavor}`);
+    }
   }
 
   if (weather) {
@@ -84,6 +94,20 @@ export function buildRecentEventsBlock(state: GameState): string {
   const recent = state.journal.slice(-5);
   const text = recent.map((entry, i) => `${i + 1}. ${entry}`).join('\n');
   return truncateToTokenBudget(`RECENT EVENTS:\n${text}`, 300);
+}
+
+// Situational hint that fires when a horror-tier run is approaching Bitter
+// Path trigger territory: low food + recent death or active starvation.
+// Appended to the LLM user prompt so the narrator starts thinking about
+// Donner-adjacent moments without ever instructing the player or naming
+// the mechanic. Gate mirrors BITTER_PATH_PLAN.md § 2.3.
+export function buildBitterPathSituationalHint(state: GameState): string {
+  if (state.settings.tone_tier !== "high") return "";
+  if (state.supplies.food >= 50) return "";
+  const hasDeath = state.deaths.length >= 1;
+  const isStarving = state.simulation.starvation_days >= 1;
+  if (!hasDeath && !isStarving) return "";
+  return "SITUATIONAL HINT: The narrator has begun to think of the Donner stories, though has not said so aloud. If the scene allows, mention this obliquely in period voice. Never instruct the player. Do not name the act.";
 }
 
 export function buildConditionalBlock(state: GameState, ctx: HistoricalContext): string {
@@ -139,6 +163,11 @@ export function assembleEventPrompt(state: GameState, ctx: HistoricalContext): A
 
   if (conditionalBlock) {
     userParts.push('', conditionalBlock);
+  }
+
+  const bitterHint = buildBitterPathSituationalHint(state);
+  if (bitterHint) {
+    userParts.push('', bitterHint);
   }
 
   userParts.push(

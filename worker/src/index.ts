@@ -1,6 +1,6 @@
 import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES, STORE_PRICES } from "./state";
 import { assembleEventPrompt } from "./prompt-assembly";
-import { callAnthropic, parseEventResponse, FALLBACK_EVENTS } from "./anthropic";
+import { callAnthropic, parseEventResponse, FALLBACK_EVENTS, generateLongNight, bitterPathConsequences } from "./anthropic";
 import { advanceDays } from "./simulation";
 import { signState, deepCanonicalize, bufferToHex } from "./hmac";
 import type {
@@ -25,6 +25,7 @@ export interface Env {
   HMAC_SECRET: string;
   ANTHROPIC_API_KEY: string;
   ALLOWED_ORIGIN: string;
+  BITTER_PATH_ENABLED?: string; // "true" | "false"; default "true". Kill switch for the horror-tier hidden path.
 }
 
 // Rate limiter: in-memory Map, 200 calls/min per IP
@@ -74,7 +75,7 @@ function sanitizeName(name: string): string {
   return name.replace(/[^a-zA-Z0-9 ]/g, "").trim().slice(0, 20);
 }
 
-async function hashEvent(event: EventResponse): Promise<string> {
+export async function hashEvent(event: EventResponse): Promise<string> {
   const encoder = new TextEncoder();
   const canonical = deepCanonicalize(event);
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode(canonical));
@@ -122,6 +123,10 @@ export default {
           return await handleLandmark(request, env, origin);
         case "/api/hunt":
           return await handleHunt(request, env, origin);
+        case "/api/bitter_path":
+          return await handleBitterPath(request, env, origin);
+        case "/api/bitter_path_skip":
+          return await handleBitterPathSkip(request, env, origin);
         case "/api/prices":
           if (request.method === "GET") {
             return jsonResponse({ prices: STORE_PRICES }, 200, origin);
@@ -283,7 +288,8 @@ async function handleAdvance(
   }
 
   const historical = ctx as unknown as HistoricalContext;
-  const result = advanceDays(stateToAdvance, historical);
+  const bitterPathEnabled = env.BITTER_PATH_ENABLED !== "false"; // default on
+  const result = advanceDays(stateToAdvance, historical, { bitterPathEnabled });
 
   let eventData: EventResponse | null = null;
 
@@ -302,12 +308,33 @@ async function handleAdvance(
       const fallbacks = FALLBACK_EVENTS[tier];
       eventData = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
+  } else if (result.trigger === "bitter_path") {
+    const td = result.triggerData as {
+      dead_member_name: string;
+      dead_member_cause: string;
+      days_since_death: number;
+    };
+    const firstAlive = result.state.party.members.find((m) => m.alive);
+    const survivorName = firstAlive ? firstAlive.name : "someone";
+    eventData = await generateLongNight(
+      td.dead_member_name,
+      td.dead_member_cause,
+      td.days_since_death,
+      survivorName,
+      env.ANTHROPIC_API_KEY,
+    );
   }
 
-  // If we have an event, hash it and embed in state
+  // If we have an event, hash it and embed in state along with the trigger
+  // kind. The trigger kind is critical: without it, a client could take a
+  // regular event's pending hash and post it to /api/bitter_path to claim
+  // bitter-path consequences for free. Each consumer handler verifies the
+  // trigger matches before applying effects.
   if (eventData) {
     const eventHash = await hashEvent(eventData);
     result.state.simulation.pending_event_hash = eventHash;
+    result.state.simulation.pending_event_trigger =
+      result.trigger === "bitter_path" ? "bitter_path" : "event";
   }
 
   // Re-sign the state
@@ -327,11 +354,27 @@ async function handleAdvance(
     }
   }
 
+  // For the bitter_path trigger, the client needs BOTH the EventResponse body
+  // (so it can echo it back to /api/bitter_path for the event-hash check) AND
+  // the simulation metadata (dead_member_name, trigger_variant,
+  // days_since_death) for display tuning. Ship them in separate fields.
+  let triggerData: unknown;
+  let triggerMeta: unknown;
+  if (result.trigger === "event") {
+    triggerData = eventData;
+  } else if (result.trigger === "bitter_path") {
+    triggerData = eventData;
+    triggerMeta = result.triggerData;
+  } else {
+    triggerData = result.triggerData;
+  }
+
   const response: AdvanceResponse = {
     days_advanced: result.summaries.length,
     summaries: result.summaries,
     trigger: result.trigger,
-    trigger_data: result.trigger === "event" ? eventData : result.triggerData,
+    trigger_data: triggerData,
+    trigger_meta: triggerMeta,
     signed_state,
   };
 
@@ -350,10 +393,16 @@ async function handleChoice(
     return jsonResponse({ error: verified.error }, 403, origin);
   }
 
-  // Verify event hash matches
+  // Verify event hash matches AND trigger kind is "event". Without the
+  // trigger check, a client could take a bitter_path pending hash and route
+  // it through /api/choice — different consequence application, same exploit
+  // shape as the reverse direction.
   const submittedHash = await hashEvent(body.event);
   if (verified.state.simulation.pending_event_hash !== submittedHash) {
     return jsonResponse({ error: "event_hash_mismatch" }, 400, origin);
+  }
+  if (verified.state.simulation.pending_event_trigger !== "event") {
+    return jsonResponse({ error: "wrong_trigger_kind" }, 400, origin);
   }
 
   if (
@@ -364,9 +413,10 @@ async function handleChoice(
     return jsonResponse({ error: "invalid_choice_index" }, 400, origin);
   }
 
-  // Clear pending event hash before applying
+  // Clear pending event hash + trigger before applying
   const stateForApply = structuredClone(verified.state);
   stateForApply.simulation.pending_event_hash = null;
+  stateForApply.simulation.pending_event_trigger = null;
   stateForApply.simulation.days_since_last_event = 0;
 
   const signed_state = await applyEventAndSign(
@@ -377,6 +427,138 @@ async function handleChoice(
   );
 
   return jsonResponse({ signed_state }, 200, origin);
+}
+
+export async function handleBitterPath(
+  request: Request,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const body = (await request.json()) as ChoiceRequest;
+
+  const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
+  if (!verified.valid) {
+    return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  // Event-hash binding AND trigger-kind check. Both are required: the hash
+  // stops clients from fabricating event bodies; the trigger check stops a
+  // client from routing a regular event's pending hash through this endpoint
+  // to claim bitter-path consequences (+60 food, starvation reset) for free.
+  const submittedHash = await hashEvent(body.event);
+  if (verified.state.simulation.pending_event_hash !== submittedHash) {
+    return jsonResponse({ error: "event_hash_mismatch" }, 400, origin);
+  }
+  if (verified.state.simulation.pending_event_trigger !== "bitter_path") {
+    return jsonResponse({ error: "wrong_trigger_kind" }, 400, origin);
+  }
+
+  // Integer check blocks fractional indices (e.g. 1.5) falling through to
+  // the "taken" consequence branch.
+  if (
+    !Number.isInteger(body.choice_index) ||
+    body.choice_index < 0 ||
+    body.choice_index > 2
+  ) {
+    return jsonResponse({ error: "invalid_choice_index" }, 400, origin);
+  }
+
+  // Refuse if the path has already been resolved this run — shouldn't happen
+  // because the trigger doesn't re-fire, but defend against replay.
+  if (verified.state.simulation.bitter_path_taken !== "none") {
+    return jsonResponse({ error: "already_resolved" }, 400, origin);
+  }
+
+  const next = structuredClone(verified.state);
+  const effects = bitterPathConsequences(body.choice_index as 0 | 1 | 2);
+
+  next.simulation.bitter_path_taken = effects.bitter_path_taken;
+  next.simulation.pending_event_hash = null;
+  next.simulation.pending_event_trigger = null;
+  next.simulation.days_since_last_event = 0;
+
+  if (effects.food_delta !== 0) {
+    next.supplies.food = Math.max(0, next.supplies.food + effects.food_delta);
+  }
+  if (effects.starvation_days_reset) {
+    next.simulation.starvation_days = 0;
+  }
+  for (const m of next.party.members) {
+    if (!m.alive) continue;
+    if (effects.morale_delta_per_member !== 0) {
+      m.morale = Math.max(0, Math.min(100, m.morale + effects.morale_delta_per_member));
+    }
+    if (effects.sanity_delta_per_member !== 0) {
+      m.sanity = Math.max(0, Math.min(100, m.sanity + effects.sanity_delta_per_member));
+    }
+  }
+  if (effects.days_delta > 0) {
+    const d = new Date(next.position.date + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() + effects.days_delta);
+    next.position.date = d.toISOString().split("T")[0];
+  }
+
+  next.journal.push(body.event.journal_entry);
+  if (next.journal.length > 5) next.journal = next.journal.slice(-5);
+  next.meta.event_count += 1;
+
+  const signature = await signState(next, env.HMAC_SECRET);
+  const signed_state: SignedGameState = { state: next, signature };
+  return jsonResponse({ signed_state, outcome: effects.bitter_path_taken }, 200, origin);
+}
+
+// Skip endpoint: fires when the player opts out of the Long Night scene via
+// the content-warning gate before seeing the scene body. Requires the same
+// event-hash echo as /api/bitter_path so a client cannot skip without first
+// having received a legitimate bitter_path trigger. Mechanically a no-op —
+// no food, morale, sanity, or days delta — so we are not rewarding skip.
+// The enum value "refused" lets newspaper copy + telemetry distinguish
+// opt-out from the dignified choice.
+export async function handleBitterPathSkip(
+  request: Request,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const body = (await request.json()) as {
+    signed_state: SignedGameState;
+    event: EventResponse;
+  };
+
+  const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
+  if (!verified.valid) {
+    return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  // Hash + trigger-kind check. Without the trigger check, a client could
+  // use a regular event's pending hash to hit this endpoint and erase the
+  // event at zero cost (no consequences applied, pending hash cleared).
+  const submittedHash = await hashEvent(body.event);
+  if (verified.state.simulation.pending_event_hash !== submittedHash) {
+    return jsonResponse({ error: "event_hash_mismatch" }, 400, origin);
+  }
+  if (verified.state.simulation.pending_event_trigger !== "bitter_path") {
+    return jsonResponse({ error: "wrong_trigger_kind" }, 400, origin);
+  }
+
+  if (verified.state.simulation.bitter_path_taken !== "none") {
+    return jsonResponse({ error: "already_resolved" }, 400, origin);
+  }
+
+  const next = structuredClone(verified.state);
+  next.simulation.bitter_path_taken = "refused";
+  next.simulation.pending_event_hash = null;
+  next.simulation.pending_event_trigger = null;
+  next.simulation.days_since_last_event = 0;
+
+  // Skip-specific journal beat — does not reveal scene content to players who
+  // opted out. Same 5-entry cap as other journal writes.
+  next.journal.push("We turned away from what the trail asked of us.");
+  if (next.journal.length > 5) next.journal = next.journal.slice(-5);
+  next.meta.event_count += 1;
+
+  const signature = await signState(next, env.HMAC_SECRET);
+  const signed_state: SignedGameState = { state: next, signature };
+  return jsonResponse({ signed_state, outcome: "refused" }, 200, origin);
 }
 
 async function handleNewspaper(

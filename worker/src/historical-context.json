@@ -819,7 +819,10 @@
         "landmark_sighting",
         "carve_names",
         "morale_boost"
-      ]
+      ],
+      "tone_flavor": {
+        "high": "The register at the base names forty-eight from the Donner company. Only half reached California. Those who did were changed."
+      }
     },
     {
       "id": "lm_scotts_bluff",
@@ -1002,7 +1005,10 @@
         "bridger_advice",
         "mormon_encounter",
         "greenwood_cutoff_decision"
-      ]
+      ],
+      "tone_flavor": {
+        "high": "An old trapper by the stove speaks without looking up: I rode the Sierra last winter. The party ahead of us made it through, but they did not come back whole. Had a brother who was with the Donners, before. He does not speak of it."
+      }
     },
     {
       "id": "lm_soda_springs",

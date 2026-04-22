@@ -237,14 +237,15 @@ export default function register(k, engine) {
         engine.currentEvent = savedRun.currentEvent;
         engine.currentRiver = savedRun.currentRiver;
         engine.currentLandmark = savedRun.currentLandmark;
+        engine.currentBitterPath = savedRun.currentBitterPath || null;
+        engine.currentBitterPathMeta = savedRun.currentBitterPathMeta || null;
         engine.dailyMode = savedRun.dailyMode || false;
         engine.dailyTrailNumber = savedRun.dailyTrailNumber || 0;
         if (engine.dailyMode) engine.dailyRng = mulberry32(getDailySeed());
-        // Resume to correct scene based on pending state
-        const resumeScene = engine.currentEvent ? "EVENT" :
-          engine.currentRiver ? "RIVER" :
-          engine.currentLandmark ? "LANDMARK" : "TRAVEL";
-        engine.transition(resumeScene);
+        // Resume to correct scene based on pending state. BITTER_PATH takes
+        // priority over EVENT so a mid-flow horror scene resumes to itself,
+        // not to the generic event screen.
+        engine.transition(engine.getResumeScene());
       });
     }
   });

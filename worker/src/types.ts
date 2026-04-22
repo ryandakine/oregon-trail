@@ -75,6 +75,12 @@ export interface Landmark {
   trade_inventory: TradeItem[];
   services: string[];
   event_hooks: string[];
+  // Optional per-tone flavor text. When set for the current tone_tier, the
+  // prompt-assembly location block appends this after the description so the
+  // LLM has period-voice ambient material to draw on. Bitter Path uses high-
+  // tier flavor to seed Donner Party references in Fort Bridger and Chimney
+  // Rock without ever naming the mechanic.
+  tone_flavor?: Partial<Record<ToneTier, string>>;
 }
 
 export interface WeatherProfile {
@@ -262,13 +268,25 @@ export interface ChallengeConstraints {
   no_hunting: boolean;
 }
 
+// "refused" = player opted out via the content-warning gate before seeing the
+// scene body. Mechanically a no-op (no food, morale, sanity, or days delta)
+// so we are not rewarding players for skipping. The flag lets the newspaper
+// and telemetry distinguish opt-out from dignified choice.
+export type BitterPathOutcome = "none" | "dignified" | "hopeful" | "taken" | "refused";
+
 export interface SimulationState {
   starvation_days: number;
   days_since_last_event: number;
   resolved_crossings: string[];
   visited_landmarks: string[];
   pending_event_hash: string | null;
+  // Discriminator for pending_event_hash. Without this, a client can take a
+  // regular event's pending hash and send it to /api/bitter_path to claim
+  // bitter-path consequences (e.g. +60 food) for free. Each handler verifies
+  // this matches its expected trigger.
+  pending_event_trigger: "event" | "bitter_path" | null;
   landmark_rest_used: string[];
+  bitter_path_taken: BitterPathOutcome;
 }
 
 export interface GameState {
@@ -354,7 +372,7 @@ export interface AdvanceRequest {
   signed_state: SignedGameState;
 }
 
-export type TriggerType = "event" | "landmark" | "river" | "death" | "arrival" | "wipe" | null;
+export type TriggerType = "event" | "landmark" | "river" | "death" | "arrival" | "wipe" | "bitter_path" | null;
 
 export interface DaySummary {
   date: string;
@@ -368,6 +386,11 @@ export interface AdvanceResponse {
   summaries: DaySummary[];
   trigger: TriggerType;
   trigger_data: unknown;
+  // Secondary payload used by the bitter_path trigger to carry the simulation
+  // metadata (dead_member_name, trigger_variant, days_since_death) alongside
+  // the EventResponse body that the client must echo back to /api/bitter_path
+  // for hash binding. Other triggers leave this undefined.
+  trigger_meta?: unknown;
   signed_state: SignedGameState;
 }
 

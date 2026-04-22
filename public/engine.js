@@ -145,6 +145,9 @@ class GameEngine {
     this.state = 'TITLE';
     this.signedState = null;
     this.currentEvent = null;
+    this.currentBitterPath = null;
+    this.currentBitterPathMeta = null;
+    this._resolvingBitterPath = false;
     this.rumor = null;
     this.listeners = {};
     this.apiBase = 'https://oregon-trail-api.trails710.workers.dev';
@@ -246,6 +249,8 @@ class GameEngine {
         currentEvent: this.currentEvent,
         currentRiver: this.currentRiver,
         currentLandmark: this.currentLandmark,
+        currentBitterPath: this.currentBitterPath,
+        currentBitterPathMeta: this.currentBitterPathMeta,
         dailyMode: this.dailyMode,
         dailyTrailNumber: this.dailyTrailNumber,
       }));
@@ -264,6 +269,7 @@ class GameEngine {
   }
 
   getResumeScene() {
+    if (this.currentBitterPath) return 'BITTER_PATH';
     if (this.currentEvent) return 'EVENT';
     if (this.currentRiver) return 'RIVER';
     if (this.currentLandmark) return 'LANDMARK';
@@ -474,6 +480,15 @@ class GameEngine {
           this._saveRun();
           this.transition('EVENT', res.trigger_data);
           break;
+        case 'bitter_path':
+          // trigger_data is the full EventResponse (body the scene renders +
+          // echoes back for hash binding). trigger_meta carries sim metadata
+          // (dead_member_name, trigger_variant, days_since_death) for display.
+          this.currentBitterPath = res.trigger_data;
+          this.currentBitterPathMeta = res.trigger_meta || null;
+          this._saveRun();
+          this.transition('BITTER_PATH', res.trigger_data);
+          break;
         case 'landmark':
           this.currentLandmark = res.trigger_data;
           this._saveRun();
@@ -489,11 +504,13 @@ class GameEngine {
           this.transition('DEATH', res.trigger_data);
           break;
         case 'arrival':
+          this._trackBitterPathOutcome('arrival');
           this._clearSavedRun();
           if (this.dailyMode) this.completeDailyTrail();
           this.transition('ARRIVAL');
           break;
         case 'wipe':
+          this._trackBitterPathOutcome('wipe');
           this._clearSavedRun();
           if (this.dailyMode) this.completeDailyTrail();
           this.transition('WIPE');
@@ -535,6 +552,105 @@ class GameEngine {
       this.emit('loading', false);
       this.emit('error', { message: e.message, recoverable: true });
     }
+  }
+
+  // Bitter Path resolution — mirrors makeChoice but routes to /api/bitter_path
+  // and uses a spam-click guard since the scene disables buttons on click.
+  // On 400 errors from unrecoverable server states (already_resolved,
+  // wrong_trigger_kind, event_hash_mismatch) we clear currentBitterPath so
+  // the scene doesn't resume into a permanent loop. On network-level errors
+  // we leave currentBitterPath set so retry works via button re-enable.
+  // On success: emit bitterPathResolved, hold 1500ms for the scene to show
+  // its outcome beat, then transition to TRAVEL.
+  async resolveBitterPath(choiceIndex) {
+    if (this._resolvingBitterPath) return;
+    if (choiceIndex < 0 || choiceIndex > 2) return;
+    if (!this.currentBitterPath) return;
+    this._resolvingBitterPath = true;
+    this.emit('loading', true);
+    try {
+      const res = await this.api('/api/bitter_path', {
+        signed_state: this.signedState,
+        event: this.currentBitterPath,
+        choice_index: choiceIndex,
+      });
+      this.signedState = res.signed_state;
+      const outcome = res.outcome;
+      this.currentBitterPath = null;
+      this.currentBitterPathMeta = null;
+      this._saveRun();
+      this.emit('loading', false);
+      this.emit('bitterPathResolved', { outcome, choiceIndex });
+      setTimeout(() => this.transition('TRAVEL'), 1500);
+    } catch (e) {
+      this.emit('loading', false);
+      if (this._isUnrecoverableBitterPathError(e.message)) {
+        this.currentBitterPath = null;
+        this.currentBitterPathMeta = null;
+        this._saveRun();
+      }
+      this.emit('error', { message: e.message, recoverable: true });
+    } finally {
+      this._resolvingBitterPath = false;
+    }
+  }
+
+  // Skip via content-warning gate. Fires BEFORE the scene body renders.
+  // Server applies zero mechanical effects but flags the run as "refused"
+  // for newspaper/telemetry differentiation. Same spam-click guard.
+  async skipBitterPath() {
+    if (this._resolvingBitterPath) return;
+    if (!this.currentBitterPath) return;
+    this._resolvingBitterPath = true;
+    this.emit('loading', true);
+    try {
+      const res = await this.api('/api/bitter_path_skip', {
+        signed_state: this.signedState,
+        event: this.currentBitterPath,
+      });
+      this.signedState = res.signed_state;
+      this.currentBitterPath = null;
+      this.currentBitterPathMeta = null;
+      this._saveRun();
+      this.emit('loading', false);
+      this.emit('bitterPathResolved', { outcome: 'refused', choiceIndex: -1 });
+      setTimeout(() => this.transition('TRAVEL'), 1500);
+    } catch (e) {
+      this.emit('loading', false);
+      if (this._isUnrecoverableBitterPathError(e.message)) {
+        this.currentBitterPath = null;
+        this.currentBitterPathMeta = null;
+        this._saveRun();
+      }
+      this.emit('error', { message: e.message, recoverable: true });
+    } finally {
+      this._resolvingBitterPath = false;
+    }
+  }
+
+  _isUnrecoverableBitterPathError(message) {
+    if (!message || typeof message !== 'string') return false;
+    return (
+      message.includes('already_resolved') ||
+      message.includes('wrong_trigger_kind') ||
+      message.includes('event_hash_mismatch')
+    );
+  }
+
+  // Fires on terminal trigger (arrival/wipe) when the run took any bitter-path
+  // branch. Lets the Plausible funnel compare bitter_path_choice_* counts
+  // against actual arrivals/wipes so we can measure which choices survive.
+  // Silent if plausible isn't loaded (local dev, adblock, offline).
+  _trackBitterPathOutcome(outcomeKind) {
+    try {
+      const taken = this.signedState?.state?.simulation?.bitter_path_taken;
+      if (!taken || taken === 'none') return;
+      if (typeof window.plausible !== 'function') return;
+      const event = outcomeKind === 'arrival'
+        ? 'bitter_path_outcome_arrival'
+        : 'bitter_path_outcome_wipe';
+      window.plausible(event, { props: { branch: taken } });
+    } catch (_) {}
   }
 
   async resolveRiver(choice) {
@@ -691,6 +807,9 @@ class GameEngine {
   restart() {
     this.signedState = null;
     this.currentEvent = null;
+    this.currentBitterPath = null;
+    this.currentBitterPathMeta = null;
+    this._resolvingBitterPath = false;
     this.rumor = null;
     this.fullJournal = [];
     this.profession = null;

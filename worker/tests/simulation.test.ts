@@ -44,7 +44,9 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
       resolved_crossings: [],
       visited_landmarks: [],
       pending_event_hash: null,
+      pending_event_trigger: null,
       landmark_rest_used: [],
+      bitter_path_taken: "none",
     },
     meta: {
       run_id: "test-run",
@@ -509,6 +511,78 @@ describe("advanceDays - grueling pace effects", () => {
         expect(member.morale).toBe(100 - 3 * daysSimulated);
       }
     }
+  });
+});
+
+describe("advanceDays - Bitter Path trigger", () => {
+  beforeEach(() => {
+    vi.spyOn(Math, "random").mockReturnValue(1);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeBitterEligibleState(): GameState {
+    const state = makeState();
+    state.settings.tone_tier = "high";
+    state.position.miles_traveled = 320;
+    state.position.current_segment_id = "seg_03";
+    state.simulation.visited_landmarks = ["lm_independence", "lm_kansas_river", "lm_alcove_spring", "lm_fort_kearney"];
+    state.simulation.resolved_crossings = ["rc_wakarusa_creek", "rc_kansas_river", "rc_big_blue_river", "rc_little_blue_river_multiple_fords"];
+    state.supplies.food = 0;
+    // Wasting variant: 5+ starvation days
+    state.simulation.starvation_days = 5;
+    // Recent death: yesterday
+    state.position.date = "1848-05-10";
+    state.deaths.push({ name: "Bob", date: "1848-05-09", cause: "exhaustion", epitaph: null });
+    return state;
+  }
+
+  it("fires bitter_path trigger on wasting variant (starvation_days >= 5) with recent death", () => {
+    const state = makeBitterEligibleState();
+    const result = advanceDays(state, historical);
+    expect(result.trigger).toBe("bitter_path");
+    const td = result.triggerData as { dead_member_name: string; trigger_variant: string };
+    expect(td.dead_member_name).toBe("Bob");
+    expect(td.trigger_variant).toBe("wasting");
+  });
+
+  it("fires bitter_path trigger on failing variant (food=0 + starvation>=2 + avg_health<40)", () => {
+    const state = makeBitterEligibleState();
+    state.simulation.starvation_days = 2; // not yet wasting
+    for (const m of state.party.members) m.health = 35; // failing
+    const result = advanceDays(state, historical);
+    expect(result.trigger).toBe("bitter_path");
+    const td = result.triggerData as { trigger_variant: string };
+    expect(td.trigger_variant).toBe("failing");
+  });
+
+  it("does NOT fire on medium or low tone tier", () => {
+    const state = makeBitterEligibleState();
+    state.settings.tone_tier = "medium";
+    const result = advanceDays(state, historical);
+    expect(result.trigger).not.toBe("bitter_path");
+  });
+
+  it("does NOT fire when bitterPathEnabled is false (kill switch)", () => {
+    const state = makeBitterEligibleState();
+    const result = advanceDays(state, historical, { bitterPathEnabled: false });
+    expect(result.trigger).not.toBe("bitter_path");
+  });
+
+  it("does NOT fire after bitter_path_taken is set to anything other than 'none'", () => {
+    const state = makeBitterEligibleState();
+    state.simulation.bitter_path_taken = "taken";
+    const result = advanceDays(state, historical);
+    expect(result.trigger).not.toBe("bitter_path");
+  });
+
+  it("does NOT fire without a recent death (within 3 game-days)", () => {
+    const state = makeBitterEligibleState();
+    // Push the death 10 days ago
+    state.deaths[0].date = "1848-04-30";
+    const result = advanceDays(state, historical);
+    expect(result.trigger).not.toBe("bitter_path");
   });
 });
 

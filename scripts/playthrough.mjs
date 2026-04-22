@@ -24,6 +24,16 @@ const PROFESSION = args.profession || "farmer";
 const PACE = args.pace || "steady";
 const MAX_TICKS = Number(args.maxTicks || 400);
 const HEADED = Boolean(args.headed);
+// --takeBitterPath=<0|1|2|skip>
+// Controls what the harness does if the hidden Bitter Path scene fires.
+// 0 = dignified (pray), 1 = hopeful (travel), 2 = taken (cannibalism),
+// "skip" = route through the content-warning Skip button (sets bitter_path_taken=refused).
+// Default is 0 (dignified) — matches the "safe" default picked by the harness
+// for normal events. Bitter Path rarely fires outside horror-tier + starvation,
+// so most runs ignore this flag entirely.
+const BITTER_PATH_CHOICE = args.takeBitterPath !== undefined
+  ? (args.takeBitterPath === true ? "0" : String(args.takeBitterPath))
+  : "0";
 
 const PARTY = ["Ryan", "Beth", "Carl", "Dana", "Earl"];
 const START_BUY = {
@@ -70,6 +80,7 @@ let eventsHandled = 0;
 let riversHandled = 0;
 let landmarksHandled = 0;
 let deathsSeen = 0;
+let bitterPathTriggered = 0;
 const timeline = [];
 
 while (tick < MAX_TICKS) {
@@ -130,6 +141,24 @@ while (tick < MAX_TICKS) {
     } else if (snapshot.s === "DEATH") {
       await page.evaluate(() => window.engine.advance?.());
       await page.waitForTimeout(800);
+    } else if (snapshot.s === "BITTER_PATH") {
+      // Hidden horror scene. Fires when the server detects starvation +
+      // recent death on a horror-tier run. --takeBitterPath picks what
+      // we do; default is dignified (choice 0).
+      const action = await page.evaluate(async (choice) => {
+        // Pre-ack the content-warning gate so the scene doesn't wait on us.
+        try { localStorage.setItem("ot_bitter_path_cw_acked", "true"); } catch (_) {}
+        if (choice === "skip") {
+          await window.engine.skipBitterPath();
+          return { kind: "skip" };
+        }
+        const idx = Number(choice);
+        await window.engine.resolveBitterPath(Number.isInteger(idx) && idx >= 0 && idx <= 2 ? idx : 0);
+        return { kind: "choice", idx };
+      }, BITTER_PATH_CHOICE);
+      console.log(`  BITTER_PATH ${action.kind === "skip" ? "skip" : `choice ${action.idx}`}`);
+      bitterPathTriggered++;
+      await page.waitForTimeout(2000);
     } else if (snapshot.s === "TRAVEL") {
       await page.evaluate(() => window.engine.advance());
       await page.waitForTimeout(1500);
@@ -166,6 +195,7 @@ for (const d of final.deaths) console.log(`  ${d.name} — ${d.cause} (${d.date}
 console.log(`events handled: ${eventsHandled}`);
 console.log(`rivers forded: ${riversHandled}`);
 console.log(`landmarks visited: ${landmarksHandled}`);
+console.log(`bitter path triggered: ${bitterPathTriggered} (action: ${BITTER_PATH_CHOICE})`);
 console.log(`ticks: ${tick} / ${MAX_TICKS}`);
 console.log(`page errors: ${pageErrors.length}`);
 if (pageErrors.length) pageErrors.slice(0, 5).forEach((e) => console.log(`  · ${e.slice(0, 200)}`));

@@ -1,341 +1,317 @@
-<!-- /autoplan restore point: /home/ryan/.gstack/projects/oregon-trail/kaplay-rebuild-autoplan-restore-20260417-183231.md -->
-# Difficulty System — Implementation Plan (v3 — converged)
+# Difficulty System — As Built
 
-**Status:** v3 rewritten 2026-04-17 after TWO autoplan CEO phases (v1 rejected, v2 sent back with 5 converged modifications). This version ships the converged minimum both Claude and Codex recommended. Phase D is gone. Phase C is redesigned. Ready for Eng + Design + final gate.
+System doc for Oregon Trail AI Edition's difficulty mechanics as they exist in the deployed game. Reflects what's live on trail.osi-cyber.com after Phases A + B + B.2 (2026-04-17).
 
-**What changed from v2:**
-- **Phase D DELETED.** No checkbox. No explicit "Challenge mode." No second axis. Both voices flagged Medium+Challenge as the new Easy+High dilution vector.
-- **Phase C REDESIGNED.** Was a post-death 5-day mercy timer (rubber-banding). Now a live-state-aware danger curve that reads party condition continuously and varies danger BEFORE disaster. Matches PLAN.md:164 literally.
-- **Profession money spread KEPT.** Banker ($1600) / Carpenter ($800) / Farmer ($400) stays as the zero-UI difficulty signaling already shipped.
-- **Phase A narrowed.** Its claim is "is default Medium catastrophically broken" — not "is the game fair for real users." Adds confidence intervals and an explicit STOP-as-valid outcome.
-- **No new state field.** No `challenge_mode`, no naming collision with existing `challenge_id`.
-- **HMAC back-compat:** no changes needed (no new state field).
-
-**Effort:** Phase A alone is 1 hour. A+B is 1.5 hours. A+B+C is ~3.5 hours. No phase exceeds 2 hours on its own.
+If you want the decision history, see `DIFFICULTY_STATUS.md`.
+If you want raw calibration data, see `scripts/calibration-history/*.json`.
+If you want the code, see `worker/src/simulation.ts`.
 
 ---
 
-## § 0. TL;DR
+## 1. Overview
 
-Two full autoplan CEO cycles (Claude + Codex, independent) converged on this recommendation:
+Difficulty in this game is the shape of the survival economy. There's no "Easy/Normal/Hard" toggle. Difficulty emerges from three player-set inputs interacting with a daily simulation loop:
 
-**Ship A → measure → maybe B → maybe C. No axis. No checkbox. No new UI.**
+**Inputs (set by the player):**
+- `pace`: steady | strenuous | grueling
+- `rations`: filling | meager | bare_bones
+- `tone_tier`: low | medium | high (narrative intensity; also gates Bitter Path)
 
-The v1 "3×3 matrix with new scene" concept is fully dead. The v2 "tone-gated checkbox" concept is dead. What remains:
-- **Phase A** — measure. Merge. Re-plan if needed.
-- **Phase B** — 30-min Medium tune (iff A triggers).
-- **Phase C** — live-state adaptive difficulty per PLAN.md:164, not a pity timer (iff B insufficient).
+**Outputs (what the simulation produces):**
+- miles gained per day
+- food consumed per day
+- health/morale deltas per member
+- disease rolls per day
+- starvation damage (after grace)
+- event trigger frequency
 
-**Fully invisible to the player.** No setup screen changes. Tone screen unchanged. Profession unchanged. Game difficulty softens invisibly for struggling parties (Phase C), period.
+All simulation runs server-side in `worker/src/simulation.ts::advanceDays()`. The client sends a signed state blob; the server advances 1-5 game days and returns the new signed state plus a trigger (travel | event | river | landmark | death | wipe | arrival | bitter_path).
 
----
-
-## § 1. Phase A — Emergency calibration (always runs)
-
-**Claim:** is default Medium catastrophically broken after the 2026-04-17 clamp fix?
-**Not a claim:** is the game fair for real users. (Synthetic harness can't answer that.)
-
-**Duration:** 1 hour.
-**Produces:** `.gstack/qa-reports/difficulty-calibration-v3.json`, regression reference.
-**No code changes.** Pure measurement.
-
-### Measurement harness — honest about its limits
-
-`scripts/playthrough.mjs` drives the engine with:
-- Fixed scenario loadouts (farmer/carpenter/banker × steady/strenuous)
-- Always picks option 0 on events
-- Production LLM (live Haiku 4.5, includes non-determinism)
-
-This is fine for "is Medium broken." It is NOT fine for "is the game fair." Don't overclaim.
-
-### Scenarios (30 runs, not 20 — we need confidence intervals)
-
-- 15 runs: farmer-steady-medium (the casual-first-time path)
-- 5 runs: carpenter-steady-medium
-- 5 runs: farmer-steady-high (stress-test horror tier)
-- 5 runs: banker-steady-medium (money-rich baseline)
-
-### Capture per run
-- Miles traveled at death/arrival
-- Day of first member death
-- Deaths by cause (specific disease, starvation, drowning, event)
-- Events handled (count)
-- % of runs that reach each landmark (Kearney / Chimney / Laramie / South Pass / Fort Hall / Blue Mtns)
-- % of runs that reach Oregon (arrival)
-
-### Aggregate + confidence intervals
-
-For each scenario:
-- `wipe_rate` with 95% Wilson confidence interval (N=15 gives ±~25% CI; N=5 gives ±~40% CI — acknowledge in report)
-- `median_miles` with bootstrap 95% CI
-- `median_days_to_first_death`
-
-### Decision gate (explicit STOP)
-
-Read the farmer-steady-medium bucket (N=15, the bucket with the tightest CI):
-
-- **Upper bound of wipe_rate_CI < 40%:** STOP. Ship nothing. Game is fine. Re-plan if user reports something later. **This is a valid outcome.**
-- **Wipe_rate point estimate 40–70%, CI overlaps 40%:** Borderline. Proceed to Phase B with acknowledgment that the tune may be premature; re-measure after.
-- **Lower bound of wipe_rate_CI ≥ 70%:** Medium is clearly broken. Ship Phase B.
-- **Any ambiguity in the farmer bucket:** look at first-event fatality rate. If >30% of runs have a death in the first 10 game-days, Medium is broken regardless of wipe rate.
-
-### Phase A acceptance
-- Calibration JSON committed
-- Summary in this doc: "Phase A: farmer-medium wipe_rate {PCT}% [{LB}%–{UB}%], median {MILES} miles. Decision: {STOP / B / re-measure after B}."
-- **If STOP:** close this plan. Autoplan gates are satisfied.
+There is no hidden difficulty slider. Profession affects starting money ($400 farmer / $800 carpenter / $1600 banker), which means banker starts with more supplies. That's the only baked-in difficulty modifier beyond the three inputs above.
 
 ---
 
-## § 2. Phase B — Global Medium tune (iff Phase A triggers)
+## 2. Input dimensions
 
-**Duration:** 30 minutes.
-**Files:** `worker/src/simulation.ts` (2 constants, 2 lines applied)
-**Ships iff:** Phase A's farmer-medium wipe_rate lower bound ≥ 70%, OR first-event fatality rate > 30%.
+### 2.1 Pace
+Set via `state.settings.pace`. Affects miles/day and health/morale.
 
-### Change
 ```ts
-// simulation.ts — module-level
-const DISEASE_PROBABILITY_MULTIPLIER = 0.7;  // NEW
-const STARVATION_GRACE_DAYS = 4;             // was 3
-
-// simulation.ts:138 — disease onset check
-if (Math.random() < disease.base_probability_per_day * riskMultiplier * DISEASE_PROBABILITY_MULTIPLIER) { ... }
-
-// simulation.ts:107 — starvation activation
-if (next.simulation.starvation_days >= STARVATION_GRACE_DAYS) { ... }
+const PACE_MILES: Record<Pace, number> = {
+  steady: 12,
+  strenuous: 16,
+  grueling: 20,
+};
 ```
 
-### Tests
-- `simulation.test.ts`: 2 new tests
-  - Disease onset with seeded RNG fires ~30% less often (statistical bound, not exact)
-  - Starvation doesn't damage until day 4 (not day 3)
-- Existing 124 tests pass unchanged.
+`grueling` additionally applies a daily penalty to every alive member:
+- health -2/day
+- morale -3/day
 
-### Phase B re-measurement
-- Run the same 30-scenario Phase A harness against the tuned local worker (`npx wrangler dev`)
-- Acknowledge the apples-to-oranges risk (local dev uses fallback events more often than prod LLM); note explicitly in the re-measure JSON that Phase B re-measures may trend slightly more favorable than Phase A due to fallback-event bias
-- Gate:
-  - Farmer-medium wipe_rate upper bound CI < 40%: ship Phase B, **STOP**
-  - Still ≥ 40%: keep B, proceed to Phase C
+`steady` and `strenuous` have no direct health/morale cost. `strenuous` is strictly "more miles, no penalty" — the cost is indirect (more days means more disease rolls and food burn per mile traveled is unchanged, but you complete the trip faster).
 
-### Phase B acceptance
-- 2 constants + 2 lines changed, 2 tests added
-- Re-measurement JSON committed
-- Decision log: "Phase B: re-measured {PCT}% [{LB}%–{UB}%]. Decision: {STOP ship B / continue to C}."
+### 2.2 Rations
+Set via `state.settings.rations`. Affects food consumed per person per day.
+
+```ts
+const RATIONS_PER_PERSON: Record<Rations, number> = {
+  filling: 2,       // was 3 (Phase B.2)
+  meager: 1.5,      // was 2 (Phase B.2)
+  bare_bones: 1,
+};
+```
+
+Total daily food burn = `RATIONS_PER_PERSON[rations] * aliveCount`. Food is clamped at 0 (no negative food; you just stop consuming).
+
+Rations do not directly damage morale or health. Starvation only kicks in when `supplies.food === 0`.
+
+### 2.3 Tone tier
+Set via `state.settings.tone_tier`. Does not affect survival math directly. It affects:
+- LLM system prompt (different narrative register per tier; see `worker/src/prompt-templates.ts`)
+- Bitter Path eligibility: only `high` tier can trigger the `bitter_path` event
+
+The tone tier is the product's marketing hook (horror tier = High). It is NOT a difficulty knob by design. The simulation loop treats low/medium/high identically for food, disease, and starvation math.
 
 ---
 
-## § 3. Phase C — Live-state adaptive difficulty (iff Phase B insufficient)
+## 3. Effect model (current numbers)
 
-**This is the implementation of PLAN.md §5.8 — "LLM reads party state and tunes event danger. Well-stocked party gets harder challenges, struggling party gets recovery opportunities. Not cheating — good dungeon mastering."**
+Order of operations inside one simulated day in `advanceDays()`:
 
-Not a post-death mercy timer. Not rubber-banding. Continuous state-aware danger tuning.
+### 3.1 Movement
+```
+milesGained = round(PACE_MILES[pace] * weather.pace_modifier * oxen_modifier)
+```
 
-**Duration:** 2 hours.
-**Files:** `worker/src/simulation.ts` (+60 lines), `worker/src/types.ts` (no new fields; derived from existing state), `worker/tests/simulation.test.ts` (+5 tests).
+Oxen gate movement:
+- 6+ oxen: 1.0×
+- 4-5 oxen: 0.7×
+- 2-3 oxen: 0.4×
+- 0-1 oxen: 0 (party is stranded)
 
-### Mechanism
+Weather `pace_modifier` comes from `historical-context.json`, keyed by (month, region). Typical range 0.8-1.1.
 
-A `partyCondition(state)` function derives a single `danger_modifier` in `[0.5, 1.5]` from observable state at each sim step:
+### 3.2 Food consumption
+```
+foodPerDay = RATIONS_PER_PERSON[rations] * aliveCount
+food = max(0, food - foodPerDay)
+```
+
+With the Phase B.2 values above, a 5-person party on filling burns 10 lbs/day. Bare_bones with 5 alive is 5 lbs/day.
+
+### 3.3 Starvation
+When `food === 0`, `starvation_days` increments. Once `starvation_days >= STARVATION_GRACE_DAYS` (currently 4, was 3 pre-Phase-B), every alive member takes:
+- health -10/day
+- morale -10/day
+
+First food purchase or successful hunt resets `starvation_days = 0`.
+
+### 3.4 Disease roll
+Max one new disease per party per day. For each alive, non-sick member, loop over `ctx.diseases`:
+
+```
+risk = 1 + (region_elevated ? 1 : 0) + (month_elevated ? 0.5 : 0)
+P(contract) = disease.base_probability_per_day * risk * DISEASE_PROBABILITY_MULTIPLIER
+```
+
+`DISEASE_PROBABILITY_MULTIPLIER = 0.7` (Phase B). Base probabilities from `historical-context.json`:
+
+| Disease | base P/day | progression | mortality |
+|---|---|---|---|
+| cholera | 0.008 | 3 | 0.50 |
+| dysentery | 0.006 | 14 | 0.15 |
+| accidental_injury | 0.005 | 7 | 0.25 |
+| measles | 0.004 | 10 | 0.08 |
+| mountain_fever | 0.004 | 14 | 0.12 |
+| typhoid | 0.003 | 21 | 0.20 |
+| scurvy | 0.003 | 30 | 0.10 |
+
+Loop breaks on first successful roll. First member in the loop has priority if multiple would have rolled.
+
+### 3.5 Disease progression
+Each sick member loses `ceil(100 * mortality_rate / progression_days)` health per day. One dose of medicine halves that day's loss and consumes 1 medicine. After `progression_days`, 50/50 coin flip: cure or continue rolling.
+
+Health at 0 = death. Cause is the disease id if sick, else `"exhaustion"`.
+
+### 3.6 Event frequency
+After all the above, if no terminal trigger (death/wipe/arrival/landmark/river/bitter_path) fires:
 
 ```ts
-// simulation.ts — derive continuously, never stored
-function partyCondition(state: GameState): number {
-  const alive = state.party.members.filter((m) => m.alive);
-  if (alive.length === 0) return 1.0;  // wipe already, doesn't matter
-
-  // Weighted signals — all continuous, no thresholds, no pity carve-outs
-  const avgHealth = alive.reduce((s, m) => s + m.health, 0) / alive.length;  // 0–100
-  const foodDays = state.supplies.food / Math.max(1, alive.length * 2);       // 0–∞, realistic 0–30
-  const aliveRatio = alive.length / state.party.members.length;               // 0–1
-  const progressRatio = state.position.miles_traveled / 1764;                 // 0–1, near-end gets no mercy
-  const recentEventSeverity = lastNEventsMeanHealthDelta(state, 3);           // rolling negative average
-
-  // Struggling parties get a lighter danger modifier; strong parties get pushed
-  //   avgHealth 100 + foodDays 20 + aliveRatio 1 → 1.4 (game pushes harder)
-  //   avgHealth  40 + foodDays  2 + aliveRatio 0.6 → 0.6 (game backs off)
-  const healthSignal   = (avgHealth - 50) / 100;       // −0.5 to +0.5
-  const foodSignal     = Math.max(-0.5, Math.min(0.5, (foodDays - 10) / 20));
-  const aliveSignal    = (aliveRatio - 0.8) * 1.5;     // −1.2 to +0.3
-  const progressAmplifier = 0.7 + 0.3 * progressRatio; // near-end parties get less mercy
-  const severityRecovery = recentEventSeverity < -20 ? -0.2 : 0; // only kicks in after rough stretch
-
-  const raw = 1.0 + (healthSignal + foodSignal + aliveSignal + severityRecovery);
-  const amped = 1.0 + (raw - 1.0) * progressAmplifier;
-  return Math.max(0.5, Math.min(1.5, amped));
+if (days_since_last_event >= 2 &&
+    (days_since_last_event >= 5 || Math.random() < 0.3)) {
+  return { trigger: "event" };
 }
 ```
 
-### What the modifier does
+So: minimum 2 days between events, 30% chance each day from day 3-4, forced event on day 5. Expected gap is ~3-4 days. Events are LLM-generated per tone tier (or fallback from `anthropic.ts::FALLBACK_EVENTS`).
 
-Applied in existing simulation paths (no new state fields):
+### 3.7 Bitter Path (high tier only)
+Late-stage trigger; a special event variant. Fires only when all of:
+- `tone_tier === "high"`
+- `bitter_path_taken === "none"` (once per run)
+- `deaths.length >= 1` (and most recent death within 3 game-days)
+- EITHER `starvation_days >= 5` (variant: wasting)
+- OR `food === 0 && starvation_days >= 2 && avgAliveHealth < 40` (variant: failing)
 
+Server kill switch: `opts.bitterPathEnabled` (default true). See `BITTER_PATH_PLAN.md` for the narrative design.
+
+---
+
+## 4. Phase A — the measurement
+
+Shipped `scripts/measure-calibration.mjs` and `scripts/playthrough.mjs`. The playthrough script drives the real deployed game via Playwright: picks a profession, names the party, buys a canned supply loadout, picks option 0 on every event, fords every river, continues at every landmark, and advances until WIPE / ARRIVAL / tick cap. The harness runs N playthroughs in parallel across 4 scenarios.
+
+**Baseline (pre-Phase-B, worker `e7d18d36`, 2026-04-17):**
+
+| Scenario | N | Wipe rate | 95% CI | Median miles | First-death day |
+|---|---|---|---|---|---|
+| farmer-steady-medium | 15 | 100.0% | [79.6%–100.0%] | 227 | 22 |
+| carpenter-steady-medium | 5 | 100.0% | [56.6%–100.0%] | 271 | 17 |
+| farmer-steady-high | 5 | 80.0% | [37.6%–96.4%] | 148 | 22.5 |
+| banker-steady-medium | 5 | 100.0% | [56.6%–100.0%] | 315 | 32 |
+
+Cause distribution, farmer-steady-medium (74 deaths across 15 runs):
+- exhaustion: 36 (49%) — starvation was already dominant
+- dysentery 9, typhoid 8, measles 5, Stampede 5, cholera 4, mountain_fever 3, scurvy 2, drowning 2
+
+**Gate:** Wilson 95% lower bound of wipe rate >= 70% OR early-death (first 10 days) rate >= 30% → PHASE_B. Farmer-medium LB 79.6%, so PHASE_B triggered.
+
+Full JSON: `scripts/calibration-history/2026-04-17-phaseA-preB.json`.
+
+---
+
+## 5. Phase B — disease softening
+
+Shipped commit `ed6729e`, worker `9592b64d`.
+
+Two constants in `simulation.ts`:
 ```ts
-// simulation.ts:138 — disease onset
-const danger = partyCondition(next);
-if (Math.random() < disease.base_probability_per_day * riskMultiplier * DISEASE_PROBABILITY_MULTIPLIER * danger) { ... }
-
-// state.ts clampConsequences — optionally scale negative bounds by `danger`
-//   (pass `danger` through applyEventAndSign → clampConsequences)
+const DISEASE_PROBABILITY_MULTIPLIER = 0.7;   // was implicitly 1.0
+const STARVATION_GRACE_DAYS = 4;              // was 3
 ```
 
-**Result:** a struggling party (low health, low food, few alive) faces disease ~50% as often as baseline, for as long as they're struggling. Once they recover (eat well at a landmark, heal up), the game goes back to full difficulty. No timer. No "mercy mode." Continuous signal, invisible to the player.
+**Post-B measurement:** farmer-steady-medium 10/10 wipes (100%, 5 runs came back UNKNOWN during deploy propagation and were excluded). Median 221 miles.
 
-### Why this matches PLAN.md:164 literally
+What moved:
+- dysentery deaths 9 → 3
+- typhoid 8 → 5
+- measles 5 → 2
+- cholera 4 → 2
+- exhaustion share: 49% → 56% (more people reached starvation instead of dying to disease first)
 
-> "LLM reads party state and tunes event danger. Well-stocked party gets harder challenges, struggling party gets recovery opportunities."
+Disease was tamed. Wipe rate didn't move because starvation was the binding constraint, and the measurement harness cannot hunt to replenish food. This is what triggered Phase B.2.
 
-- ✅ Reads party state (health, supplies, alive, recent severity)
-- ✅ Tunes danger (disease onset + consequence clamp)
-- ✅ Well-stocked gets harder (modifier up to 1.5× at avgHealth 100 + foodDays 20)
-- ✅ Struggling gets mercy (modifier down to 0.5× at avgHealth 30 + foodDays 2)
-- ✅ Not cheating: fixed formula, no special-case carve-outs, deterministic given state
-
-### What was rejected from v2's Phase C
-
-- ❌ 5-day post-death mercy timer (rubber-banding)
-- ❌ Flat multipliers (0.5 disease, +2 starvation grace) (over-tuning)
-- ❌ "high + banker" carve-out (arbitrary design surface)
-- ❌ Stored `recent_death_grace_days` field (unnecessary state)
-- ❌ "Journal lampshade" framing (cheating perception)
-
-### Progress amplifier — preserves the Horror ending
-
-`progressAmplifier` grows from 0.7 at mile 0 to 1.0 at mile 1764. Early parties get stronger mercy; late parties get less. This means: the first 500 miles have active dungeon-master mercy, the final 500 miles feel unsoftened. **The horror ending stays brutal. The arbitrary early wipe becomes rare.** This is explicitly the "earned wipe at a dramatic point" product outcome Codex flagged as the real KPI.
-
-### Tests (5 new)
-
-- `partyCondition` returns ~1.0 for a full-health full-food full-party state (baseline)
-- `partyCondition` returns <0.8 for low-health low-food state (struggling)
-- `partyCondition` returns >1.2 for high-health over-provisioned state (pushing)
-- Disease onset with seeded RNG is ~50% of baseline when party is struggling
-- Progress amplifier reduces mercy near mile 1700 (final stretch stays hard)
-
-### Phase C re-measurement
-- Same 30-scenario harness
-- Gate:
-  - Farmer-medium wipe_rate UB < 50% AND high-tone wipe_rate LB > 80% (horror tier stays brutal)  → ship. **STOP.**
-  - If horror tier wipe rate drops below 80%: the progress amplifier needs more weight. Tune once and re-measure.
-
-### Phase C acceptance
-- ~60 net lines in simulation.ts, 0 new fields in types.ts, 5 new tests (131 total)
-- Re-measurement JSON committed
-- Decision log: "Phase C: farmer-medium {PCT}% [{LB}%–{UB}%], high-tone {PCT}% [{LB}%–{UB}%]. Decision: {STOP / tune amplifier / abandon}."
+Full JSON: `scripts/calibration-history/2026-04-17-phaseA-postB.json`.
 
 ---
 
-## § 4. What's explicitly NOT in this plan
+## 6. Phase B.2 — ration runway
 
-- Phase D (tone-gated checkbox, explicit "Challenge mode") — **deleted**
-- 3×3 tone×difficulty matrix — **deleted**
-- New setup screen — **deleted**
-- New `difficulty` state field — **deleted**
-- New `challenge_mode` field (would collide with existing `challenge_id`) — **deleted**
-- Profession money flatten (all $400) — **deleted**
-- HMAC back-compat path — unchanged (no new state field means no compat issue)
-- Custom difficulty sliders — deleted
-- Telemetry wiring — deferred; Phase A's JSON is the baseline until real telemetry ships
+Shipped commit `92cac0b`, worker `36ce1d55`.
 
-If the game still feels too hard after A+B+C and real user data (not synthetic playthroughs) justifies it, we plan Phase D separately with that data in hand. Not before.
-
----
-
-## § 5. Sequencing + rollback
-
-Tag `pre-difficulty-v3` at HEAD `ccbedfe` before any phase lands.
-
-Phase A is always first, produces data only. Phase B, if it triggers, is a 2-constant commit. Phase C is a single-file addition.
-
-Revert order:
-1. Phase C revert: adaptive off, Phase B tune remains
-2. Phase B revert: Medium goes back to pre-tune
-3. Phase A: no code, no revert
-
-Each phase ships independently. Standard `git revert <sha>` works for any.
-
----
-
-## § 6. Testing strategy summary
-
-| Phase | Unit tests added | Playthrough scenarios | Total tests if all ship |
-|---|---|---|---|
-| A | 0 | 30 runs measured, JSON committed | 124 |
-| B | 2 | 30 reruns | 126 |
-| C | 5 | 30 reruns | 131 |
-
-Total delta if every phase ships: +7 tests. v1 was +15 for the axis. v2 was +12 for the phased plan. v3 is genuinely the minimum.
-
----
-
-## § 7. Pre-mortem — how v3 fails
-
-Per `feedback_pre_mortem_before_review`:
-
-1. **Phase A's harness is too synthetic to detect real-user unfairness.** Explicitly acknowledged. Claim narrowed to "catastrophic breakage." If real users later complain and the harness said "fine," we add telemetry and re-plan. No loss.
-2. **Phase B tune is too aggressive, Medium becomes trivial at survival-rate <20%.** Mitigation: ship with `DISEASE_PROBABILITY_MULTIPLIER = 0.7`, revert to 0.85 if re-measurement wipe rate falls below 20%. Not a user-blocking issue.
-3. **Phase C's `partyCondition` has an unexpected feedback loop** (e.g., low-health parties get less disease but miss recovery events, getting stuck at low health forever). Mitigation: the progress amplifier prevents indefinite mercy — near-end parties get full danger regardless of condition. Tests assert this explicitly.
-4. **Phase C is perceived as cheating by players who notice the pattern.** Mitigation: the continuous formula is harder to spot than a post-death timer. No carve-outs, no journal lampshading, no visible threshold. The signal is on the boundary of perceptibility.
-5. **The whole plan is premature — Phase A finds Medium is fine.** That's a success outcome. Spent 1 hour measuring. Nothing to revert. Re-measurement JSON becomes a regression reference for any future balance work.
-
----
-
-## § 8. Decision tree summary
-
-```
-Phase A (always) ─── measure farmer-medium with CI on N=15
-     │
-     ├─ wipe_rate UB < 40% ─── STOP. Ship nothing.
-     │
-     ├─ 40–70% ─── Phase B, then re-measure
-     │              │
-     │              ├─ UB < 40%? ─── STOP, ship B
-     │              │
-     │              └─ still ≥ 40%? ── Phase C
-     │
-     └─ LB ≥ 70% ── Phase B, then re-measure
-                      │
-                      └─ (same gate as above → STOP or Phase C)
-
-Phase C (last resort):
-     partyCondition() continuously varies danger
-     Gate: farmer-medium < 50% wipe AND high-tone > 80% wipe (horror intact)
-     If horror tier softens too much: tune progress amplifier
+Dropped daily consumption for the two top rations:
+```ts
+filling: 3 → 2
+meager: 2 → 1.5
+bare_bones: 1 (unchanged)
 ```
 
----
+Math: with 5 people on `filling`, old burn was 15 lbs/day on ~180 lbs starting food = 12-day runway. New burn is 10 lbs/day = 18-day runway.
 
-## § 9. Review gauntlet
+**Post-B.2 measurement:**
 
-- [x] CEO Review v1 — REJECTED (6/6 findings, drove v2 rewrite)
-- [x] CEO Review v2 — MODIFY FURTHER (5 findings, drove this v3)
-- [ ] CEO Review v3 — pending autoplan re-run
-- [ ] Codex Review v3 — pending
-- [ ] Eng Review — pending (not yet reached)
-- [ ] Design Review — N/A (no UI changes in v3 — tone screen unchanged, no new scene, no new copy)
-- [ ] DX Review — N/A (not dev-facing)
+| Scenario | N | Wipe rate | Median miles | Δ vs pre-B |
+|---|---|---|---|---|
+| farmer-steady-medium | 15 | 100.0% | 254 | +27 mi |
+| carpenter-steady-medium | 5 | 100.0% | 369 | +98 mi |
+| farmer-steady-high | 5 | 100.0% | 282 | +134 mi |
+| banker-steady-medium | 5 | 100.0% | 411 | +96 mi |
 
----
+Every scenario got meaningful additional runway. Still 100% wipe against the harness because the harness still cannot hunt. Real players who hunt when food drops will see significantly better survival.
 
-## § 10. History
-
-- **v1** (first draft) — 3×3 matrix, new scene, tone/difficulty orthogonal, 6-8 hrs. Rejected by both CEO voices for diluting horror hook, over-architecting, contradicting PLAN.md:85.
-- **v2** (revised after v1 rejection) — phased approach, tone-gated checkbox, profession flatten, 4 phases with measurement gates. Sent back by both voices: Medium+Challenge is new dilution vector; Phase C was rubber-banding; profession flatten was net loss.
-- **v3 (current)** — converged minimum. No axis, no checkbox, no new field. Phase C redesigned as live-state-aware. Profession money spread intact. Ships in phases with honest measurement gates and an explicit STOP outcome.
+Full JSON: `scripts/calibration-history/2026-04-17-phaseBv2-postB2.json`.
 
 ---
 
-## GSTACK REVIEW REPORT
+## 7. How to retune
 
-| Review | Trigger | Why | Runs | Status | Findings |
-|--------|---------|-----|------|--------|----------|
-| CEO Review (v1) | `/plan-ceo-review` | Scope & strategy | 1 | **REJECTED** | 6/6 consensus reject |
-| CEO Review (v2) | `/plan-ceo-review` | Scope & strategy | 1 | **MODIFY FURTHER** | 5 converged findings |
-| CEO Review (v3) | `/plan-ceo-review` | Scope & strategy | 0 | Pending | — |
-| Codex Review (v1) | `/codex review` | Independent 2nd opinion | 1 | **REJECT** | Aligned with CEO v1 |
-| Codex Review (v2) | `/codex review` | Independent 2nd opinion | 1 | **MODIFY FURTHER** | Aligned with CEO v2 |
-| Codex Review (v3) | `/codex review` | Independent 2nd opinion | 0 | Pending | — |
-| Eng Review | `/plan-eng-review` | Architecture & tests | 0 | Pending | — |
-| Design Review | `/plan-design-review` | UI/UX gaps | 0 | N/A (no UI changes in v3) | — |
-| DX Review | `/plan-devex-review` | DX gaps | 0 | N/A (not dev-facing) | — |
+The measurement → tune → re-measure loop is cheap. ~3-5 minutes end-to-end depending on parallelism.
 
-**VERDICT:** v3 ready for autoplan re-run. Both prior CEO phases converged on this exact shape.
+### 7.1 Run the harness
+
+```bash
+cd /home/ryan/code/oregon-trail
+node scripts/measure-calibration.mjs \
+  --parallel=5 \
+  --out=scripts/calibration-history/<YYYY-MM-DD>-<stage>.json
+```
+
+Flags:
+- `--url=<worker>` — defaults to `https://trail.osi-cyber.com`. Point at a staging worker for pre-deploy measurement.
+- `--parallel=<N>` — concurrent browser contexts. 5 is safe; 10 works if the machine can handle it.
+- `--out=<path>` — JSON output path.
+
+Writes JSON report and in-place updates `DIFFICULTY_STATUS.md`'s Measurements section. Exit code 10 when the gate triggers PHASE_B, 0 otherwise.
+
+Scenarios are hardcoded at the top of `measure-calibration.mjs` (farmer/carpenter/banker × steady × medium + one farmer-steady-high). Edit there if you want different configs.
+
+### 7.2 Interpret
+
+- Wilson 95% CI lower bound on wipe rate. Gate: LB >= 70% = broken.
+- First-10-days fatality rate. Gate: >= 30% = broken pacing.
+- Cause distribution from the `deaths` array in each run.
+- Median miles and median first-death day.
+
+### 7.3 Tune
+
+Constants live at the top of `worker/src/simulation.ts`:
+```ts
+const PACE_MILES = { steady: 12, strenuous: 16, grueling: 20 };
+const RATIONS_PER_PERSON = { filling: 2, meager: 1.5, bare_bones: 1 };
+const DISEASE_PROBABILITY_MULTIPLIER = 0.7;
+const STARVATION_GRACE_DAYS = 4;
+```
+
+Change one thing at a time. Commit. Deploy worker (`npx wrangler deploy`). Wait for propagation (~60s). Re-measure.
+
+Vitest suite at `worker/tests/simulation.test.ts` pins a historical 3-lb filling baseline via a fixture toggle so unit tests don't break when production values move. Do not break that toggle.
+
+### 7.4 Harness limitation
+
+`playthrough.mjs` picks option 0 on every event, fords every river, and continues at every landmark. It does not call `/api/hunt`. That means every harness run eventually starves. This is why Phase B.2 still shows 100% wipe against the harness despite real improvement.
+
+To make the harness realistic: extend `playthrough.mjs` to call `window.engine.startHunt?.()` when `supplies.food < 50`. Not yet done.
+
+---
+
+## 8. Known issues / future work
+
+**1. Phase C deferred.** Designed as live-state adaptive difficulty (see `PLAN.md:164`). Concept: parties demonstrably dying get gentle assists (e.g. food recovery at landmarks), parties thriving get pushed harder. Intentionally invisible to the player. Deferred until real user telemetry justifies it — the synthetic harness can't validate it because the harness can't represent "a real player struggling." The prior version of this doc (`DIFFICULTY_SYSTEM_PLAN.md` at commit `aa4e120`) has the full Phase C design if/when we come back to it.
+
+**2. Starvation dominates.** Post-tune, ~56% of deaths are exhaustion. This is an artifact of the harness not hunting. If real telemetry shows the same share in real play, the next tune should be ration-side, not disease-side.
+
+**3. No profession-based survival tuning.** Banker starts with more money, that's it. The three professions produce different runway purely through starting supplies. No hidden profession modifiers in the sim loop.
+
+**4. Tone tier is survival-neutral.** By design. High tier is the horror experience, not a harder game. Bitter Path fires on high only, but it doesn't change survival math — it's narrative.
+
+**5. Harness cannot hunt.** See § 7.4. Every measurement is pessimistic relative to real play. Real-user telemetry is the next real signal.
+
+**6. Weather pace modifier is data-driven, not tunable.** Lives in `historical-context.json` per (month, region). If survivability needs a systemic shift rather than a tune, changing that JSON is more surgical than touching the constants in `simulation.ts`. Not recommended without a specific reason.
+
+**7. Event frequency is not currently a difficulty knob.** 30% roll per day after day 3, forced at day 5. If you want fewer events (less danger, more travel), that lives in the tail of `advanceDays()` (the step labelled "13. Event check"). Don't touch casually — this affects feel as much as difficulty.
+
+---
+
+## 9. File map
+
+| File | Purpose |
+|---|---|
+| `worker/src/simulation.ts` | The daily loop. All difficulty constants at top. |
+| `worker/src/historical-context.json` | Disease probabilities, weather modifiers, regions. |
+| `worker/src/types.ts` | Pace, Rations, GameState types. |
+| `worker/tests/simulation.test.ts` | Pins historical 3-lb filling baseline via fixture toggle. Do not break. |
+| `scripts/measure-calibration.mjs` | 30-run harness, Wilson CI, auto-updates STATUS.md. |
+| `scripts/playthrough.mjs` | Single Playwright playthrough. Option 0 everywhere, no hunting. |
+| `scripts/calibration-history/*.json` | Raw measurement records. Machine-readable. Append-only. |
+| `DIFFICULTY_STATUS.md` | Phase ledger, decision log, current status. |
+| `DIFFICULTY_SYSTEM_PLAN.md` | This file. System documentation as-built. |
