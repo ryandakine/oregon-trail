@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Frontier 1848 / The Oregon Trail AI Edition</title>
+  <meta name="description" content="Privacy policy for trail.osi-cyber.com and the Frontier 1848 mobile apps. No accounts, no PII collected, no advertising trackers.">
+  <link rel="canonical" href="https://trail.osi-cyber.com/privacy">
+  <meta name="theme-color" content="#1a1a2e">
+  <script defer data-domain="trail.osi-cyber.com" src="https://analytics.osi-cyber.com/js/script.js"></script>
+  <style>
+    body {
+      background: #1a1a2e;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "IBM Plex Mono", monospace;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      line-height: 1.6;
+    }
+    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; color: #fff; }
+    h2 { font-size: 1.15rem; margin-top: 2rem; margin-bottom: 0.5rem; color: #d4a017; }
+    p, li { margin-bottom: 0.75rem; }
+    ul { padding-left: 1.5rem; }
+    a { color: #d4a017; }
+    .meta { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    code { background: #222; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.9em; }
+    .back { display: inline-block; margin-top: 2rem; padding: 0.5rem 1rem; background: #2a2a3e; color: #fff; text-decoration: none; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <p class="meta">Effective: 2026-04-28. Applies to trail.osi-cyber.com and the &ldquo;Frontier 1848&rdquo; iOS / Android apps published by On-Site Intelligence (OSI).</p>
+
+  <h2>The short version</h2>
+  <p>The game does not require an account, does not collect personal information, does not use advertising trackers, and does not sell or share data with third parties. It uses one privacy-respecting analytics tool (self-hosted Plausible) to count visits, and one large-language-model API (Anthropic Claude) to generate in-game text from anonymous game state. That is the entire data flow.</p>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li><strong>Aggregate analytics</strong> via self-hosted Plausible at <code>analytics.osi-cyber.com</code>. No cookies. No persistent identifiers. No cross-site tracking. We see counts of page views, referrers, country (from IP, IP not stored), browser/OS bucket. We never see who you are.</li>
+    <li><strong>Anonymous game state</strong> sent to our Cloudflare Worker API at <code>oregon-trail-api.trails710.workers.dev</code> when you take an action. State contains your party names, supplies, position, and recent journal entries &mdash; all values you entered into the game itself. None of this is linked to you, stored permanently, or used outside generating the next event.</li>
+    <li><strong>Game state forwarded to Anthropic</strong> as part of the prompt that generates the next narrative event. Anthropic processes this data per their <a href="https://www.anthropic.com/legal/privacy">privacy policy</a>. We do not send any account, device, or identifier alongside the state.</li>
+  </ul>
+
+  <h2>What we don&rsquo;t collect</h2>
+  <ul>
+    <li>No name, email, phone, address, or account.</li>
+    <li>No advertising ID (IDFA / GAID).</li>
+    <li>No location beyond country-level (derived at request time, never stored).</li>
+    <li>No contacts, photos, microphone, camera, or device sensors.</li>
+    <li>No push notifications.</li>
+    <li>No third-party advertising SDKs. No Facebook SDK. No Google Ads. No analytics other than Plausible.</li>
+  </ul>
+
+  <h2>Storage</h2>
+  <p>Your in-progress run is stored in your browser&rsquo;s localStorage (or the equivalent on iOS/Android) so you can resume a run. Clearing browser data or uninstalling the app deletes it. We have no server-side database and do not back up your run.</p>
+
+  <h2>Children</h2>
+  <p>The game is rated 17+ on the App Store and Mature 17+ on Google Play due to the optional psychological-horror content tier. It is not designed for or directed to children under 13, and we do not knowingly collect data from anyone of any age beyond what is described above.</p>
+
+  <h2>Cookies</h2>
+  <p>None. Plausible is cookieless. The game itself does not set cookies.</p>
+
+  <h2>GDPR / CCPA</h2>
+  <p>Because we do not collect personal information, there is nothing to request, correct, or delete on a per-user basis. If you played the game, your visit count was incremented in aggregate analytics; that count cannot be associated with you. If you have questions, contact the email below.</p>
+
+  <h2>Changes</h2>
+  <p>If the data flow ever changes, this page is updated and the &ldquo;effective&rdquo; date at the top is revised. The current text is the only thing that governs.</p>
+
+  <h2>Contact</h2>
+  <p>On-Site Intelligence (OSI) &mdash; <a href="mailto:hello@osi-cyber.com">hello@osi-cyber.com</a></p>
+
+  <a class="back" href="/">&larr; Back to the trail</a>
+</body>
+</html>

@@ -1,0 +1,6 @@
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  Cache-Control: public, max-age=3600
+
+/privacy
+  Content-Type: text/html; charset=utf-8
