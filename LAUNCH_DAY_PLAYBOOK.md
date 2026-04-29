@@ -10,14 +10,34 @@ This file is the hour-by-hour execution checklist. Copy is paste-ready.
 
 ## T-minus checklist (do before 9 AM ET)
 
+### CRITICAL — screenshot gap (verified 2026-04-29 early AM ET)
+`/tmp/ot-shots/` is empty. The screenshots LAUNCH_MARKETING.md references **do not currently exist**. They were generated for an earlier draft and never re-saved durably. This is the #1 launch-day blocker.
+
+**Required new screenshots (~30 min to generate):**
+- [ ] `01-title.png` — title screen with wagon + starfield + Daily Trail badge
+- [ ] `04-tone.png` — three tone tiers side-by-side **(THE MONEY SHOT — single most important image)**
+- [ ] `07-event-full.png` — an LLM event with prose visible + 4 choice buttons
+- [ ] `12-newspaper-lone.png` — horror-tier "lone survivor" newspaper
+- [ ] `13-newspaper-wipe.png` — full-wipe river-drowning newspaper
+- [ ] `14-newspaper-arrival.png` — classroom-safe clean arrival newspaper
+- [ ] `15-newspaper-horror-arrival.png` — horror-tier partial arrival newspaper
+
+**How to generate them (manual, since they have to look polished):**
+1. Open https://trail.osi-cyber.com on a desktop browser (Chrome at 1280×800, no devtools open).
+2. **Title shot:** load the title screen. Cmd-Shift-4 (Mac) or Snipping Tool (Windows) → save as `01-title.png`.
+3. **Tone shot:** start a new game, advance to the tone-selection screen. Capture as `04-tone.png`.
+4. **Event shot:** play through to an LLM event (usually within 3-5 days of travel). Capture as `07-event-full.png`.
+5. **Newspaper shots:** play 4 separate runs to completion — one classroom-safe arrival (Easy + low tier), one horror lone-survivor (Hard + high tier), one wipe (anything that ends in <50% survivors), one horror partial arrival. Each ends with a newspaper. Capture each.
+6. Save all to `/tmp/ot-shots/` so the rest of this playbook's filenames work.
+7. Make the 2×2 newspaper grid: `montage /tmp/ot-shots/12-newspaper-lone.png /tmp/ot-shots/13-newspaper-wipe.png /tmp/ot-shots/14-newspaper-arrival.png /tmp/ot-shots/15-newspaper-horror-arrival.png -tile 2x2 -geometry +8+8 -background black /tmp/ot-shots/16-newspaper-grid.png` (requires ImageMagick: `sudo apt install imagemagick`).
+
+**Why I (Claude) didn't do this for you:** screenshot capture from a live canvas game requires real browser sessions and hand-curation for "the prose actually looks good in this one." Headless canvas captures end up muddy. This is 30 min of your time, not automation.
+
+**Alternative:** if /tmp/ot-shots/ is still empty 30 min before launch, push HN by 24 hours. Don't post without images. The HN post is text-only, so HN can technically go without — but Twitter without images flops. Fire HN solo at 9 AM if needed and delay Twitter.
+
+### Pre-flight (general)
 - [ ] Verify https://trail.osi-cyber.com loads cleanly on desktop + mobile (one fresh-cache run)
-- [ ] Verify https://trail.osi-cyber.com/privacy loads (NEW — needed if anyone asks)
-- [ ] Confirm screenshots in `/tmp/ot-shots/` are present:
-  - [ ] `01-title.png` — title screen + starfield
-  - [ ] `04-tone.png` — three tones side-by-side **(MONEY SHOT)**
-  - [ ] `07-event-full.png` — "The Argument" event with prose
-  - [ ] `12-newspaper-lone.png` + `13-newspaper-wipe.png` + `14-newspaper-arrival.png` + `15-newspaper-horror-arrival.png` — newspaper 2x2 grid
-- [ ] Optionally make the 4-newspaper 2x2 grid as a single PNG: `montage 12-newspaper-lone.png 13-newspaper-wipe.png 14-newspaper-arrival.png 15-newspaper-horror-arrival.png -tile 2x2 -geometry +8+8 -background black /tmp/ot-shots/16-newspaper-grid.png`
+- [ ] Verify https://trail.osi-cyber.com/privacy loads (newly deployed — needed if anyone asks)
 - [ ] Be at the keyboard 9:00–10:30 AM ET. The first 90 minutes on HN decide everything.
 - [ ] Pre-stage the Twitter thread as drafts in TweetDeck or your Twitter web compose, so 11:30 AM ET is a 5-minute click-through.
 - [ ] DO NOT post anywhere before 9 AM ET. HN should always go first.
