@@ -3,3 +3,4 @@ node_modules/
 .gstack/
 .dev.vars
 .wrangler/
+.context/
