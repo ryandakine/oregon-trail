@@ -1005,7 +1005,7 @@ async function handleHunt(
   }
 
   // Cap food per hunt
-  foodGained = Math.min(200, foodGained);
+  foodGained = Math.min(300, foodGained);
 
   // Apply: deduct ammo, add food, advance date +1 day
   next.supplies.ammo -= ammoSpent;
