@@ -980,8 +980,8 @@ async function handleHunt(
   if (ammoSpent > verified.state.supplies.ammo) {
     return jsonResponse({ error: "insufficient_ammo" }, 400, origin);
   }
-  if (ammoSpent > 20) {
-    return jsonResponse({ error: "ammo_cap_exceeded: max 20 per hunt" }, 400, origin);
+  if (ammoSpent > 30) {
+    return jsonResponse({ error: "ammo_cap_exceeded: max 30 per hunt" }, 400, origin);
   }
 
   const next = structuredClone(verified.state);
