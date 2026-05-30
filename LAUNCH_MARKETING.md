@@ -29,7 +29,7 @@ Lead with prose and mystery. Tech lives in tweet 6, not tweet 1.
 **Tweet 2 (real prose sample — attach event screenshot):**
 > Every event in every run is written live from the party's state. No pre-authored pool.
 >
-> From a run this morning:
+> From a sample run (re-capture live on launch day):
 >
 > "The trail strips courtesy like bark from a dead tree."
 >
@@ -50,7 +50,7 @@ Lead with prose and mystery. Tech lives in tweet 6, not tweet 1.
 > A content warning gate lets any player opt out without mechanical penalty. What sits behind it is the reason to play it.
 
 **Tweet 5 (replay modes):**
-> Daily Trail: shared seed. Everyone plays the same trail on the same day.
+> Daily Trail: a shared daily challenge — everyone gets the same starting setup that day (the prose still differs every run).
 >
 > Weekly challenges: Iron Man (no medicine), Pacifist, others rotating.
 >
@@ -59,7 +59,7 @@ Lead with prose and mystery. Tech lives in tweet 6, not tweet 1.
 **Tweet 6 (tech — for the builders who made it this far):**
 > Built on Cloudflare Workers and Pages. HMAC-signed game state, no database, zero session storage. Claude Haiku narrates.
 >
-> 175 tests on the worker. Scales horizontally for free. No ads. No telemetry beyond Plausible.
+> 190+ tests on the worker. Scales horizontally for free. No ads. No telemetry beyond Plausible.
 
 **Tweet 7 (CTA):**
 > trail.osi-cyber.com
@@ -89,7 +89,7 @@ Space 48h apart minimum. Reply personally to the first ten comments within the f
 > The Oregon Trail — AI Edition: free browser roguelike with a horror tier the game refuses to explain
 
 **Body:**
-> Three-week build. Classic Oregon Trail loop: pick a party, buy supplies, die a thousand miles short of Oregon City. What's different is every event is written live from the party's state. Same seed, three tone tiers, three completely different runs.
+> Three-week build. Classic Oregon Trail loop: pick a party, buy supplies, die a thousand miles short of Oregon City. What's different is every event is written live from the party's state. Three tone tiers, three completely different runs.
 >
 > Quick facts:
 > - Free, no login, no signup
@@ -114,7 +114,7 @@ Space 48h apart minimum. Reply personally to the first ten comments within the f
 >
 > Mechanics:
 > - Permadeath, one continuous run
-> - Daily Trail (everyone gets the same seed)
+> - Daily Trail (everyone gets the same daily challenge)
 > - Weekly mutators: Iron Man (no medicine), Pacifist, rotating
 > - Three tones are not just flavor; they gate different endings
 > - Runs end in a generated 1848 newspaper, shareable
@@ -139,11 +139,11 @@ Space 48h apart minimum. Reply personally to the first ten comments within the f
 > - Medium: historically authentic, morally complicated
 > - High: psychological horror, period voice, McCarthy register
 >
-> Real events from this week:
+> Sample events (re-capture live on launch day):
 > - "The trail strips courtesy like bark from a dead tree."
 > - "The wind moves through the grass and does not stop."
 >
-> Tech: Cloudflare Worker runs the simulation and handles the model calls. HMAC-signed state. 175 unit tests. No database.
+> Tech: Cloudflare Worker runs the simulation and handles the model calls. HMAC-signed state. 190+ unit tests. No database.
 >
 > https://trail.osi-cyber.com
 >
@@ -165,7 +165,7 @@ Space 48h apart minimum. Reply personally to the first ten comments within the f
 **Body:**
 > Live: https://trail.osi-cyber.com
 >
-> A full Oregon Trail run: pick a party, buy supplies at Independence, cross two thousand miles, die or arrive. The difference from the 1985 game is that every narrative event is generated live by Claude Haiku 4.5 from the party's current state. Same seed, three tones, three totally different runs.
+> A full Oregon Trail run: pick a party, buy supplies at Independence, cross two thousand miles, die or arrive. The difference from the 1985 game is that every narrative event is generated live by Claude Haiku 4.5 from the party's current state. Three tones, three totally different runs.
 >
 > Architecture for anyone curious:
 >
@@ -175,7 +175,7 @@ Space 48h apart minimum. Reply personally to the first ten comments within the f
 >
 > - Three tone tiers are real branching, not just prose flavor. Different system prompts per tier, and the horror tier has one win condition only reachable when the party is past saving. Content-warning gate lets players refuse without mechanical penalty. Env-var kill switch on the worker.
 >
-> - Zero-dep vanilla JS + Kaplay from CDN, no build step. 175 tests. Deploy gate runs a headless smoke against a preview branch before promoting to master. Learned that one the hard way.
+> - Zero-dep vanilla JS + Kaplay from CDN, no build step. 190+ tests. Deploy gate runs a headless smoke against a preview branch before promoting to master. Learned that one the hard way.
 >
 > Free. No login. No account.
 >
@@ -185,7 +185,7 @@ Space 48h apart minimum. Reply personally to the first ten comments within the f
 - Tuesday 9am ET, from the account with the longest karma history.
 - No upvote-ring. No prompting friends. HN flags it within minutes.
 - Be in the thread for the first 90 minutes. Technical questions are how Show HN posts climb.
-- Pre-draft a response for the inevitable "AI slop" comment: *"The model writes prose. The simulation is deterministic server-side. Every consequence is validated and clamped before it touches state. Two runs on the same seed produce different prose and the same outcomes."*
+- Pre-draft a response for the inevitable "AI slop" comment: *"The model writes the prose, never the numbers. The simulation runs entirely server-side and the state is HMAC-signed; every consequence the model proposes is validated and clamped before it touches state. Open the network tab — signed state blobs, not the model deciding whether you live."*
 
 ---
 
