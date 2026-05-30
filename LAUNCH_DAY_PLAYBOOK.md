@@ -10,10 +10,10 @@ This file is the hour-by-hour execution checklist. Copy is paste-ready.
 
 ## T-minus checklist (do before 9 AM ET)
 
-### CRITICAL — screenshot gap (verified 2026-04-29 early AM ET)
-`/tmp/ot-shots/` is empty. The screenshots LAUNCH_MARKETING.md references **do not currently exist**. They were generated for an earlier draft and never re-saved durably. This is the #1 launch-day blocker.
+### Screenshots — RESOLVED (committed to `screenshots/launch/`)
+The launch screenshots are committed at `screenshots/launch/` (desktop) and `screenshots/launch/mobile/` — no longer a blocker. **Caveat:** several were captured during the dead-key window, so the event/newspaper prose in them may be canned fallback, not live AI. **Launch-day, re-capture against the live AI** so the prose is real: `node scripts/launch-screenshots.mjs` (writes to `screenshots/launch/`; pass `--out=<dir>` to override). Then eyeball `07-event-full.png` to confirm the event text isn't one of the 14 fallback titles.
 
-**Required new screenshots (~30 min to generate):**
+**Shot list (regenerate if re-capturing):**
 - [ ] `01-title.png` — title screen with wagon + starfield + Daily Trail badge
 - [ ] `04-tone.png` — three tone tiers side-by-side **(THE MONEY SHOT — single most important image)**
 - [ ] `07-event-full.png` — an LLM event with prose visible + 4 choice buttons
@@ -63,7 +63,7 @@ https://trail.osi-cyber.com
 ```
 Live: https://trail.osi-cyber.com
 
-A full Oregon Trail run: pick a party, buy supplies at Independence, cross two thousand miles, die or arrive. The difference from the 1985 game is that every narrative event is generated live by Claude Haiku 4.5 from the party's current state. Same seed, three tones, three totally different runs.
+A full Oregon Trail run: pick a party, buy supplies at Independence, cross two thousand miles, die or arrive. The difference from the 1985 game is that every narrative event is generated live by Claude Haiku 4.5 from the party's current state. Three tones, three totally different runs.
 
 Architecture for anyone curious:
 
@@ -73,7 +73,7 @@ Architecture for anyone curious:
 
 - Three tone tiers are real branching, not just prose flavor. Different system prompts per tier, and the horror tier has one win condition only reachable when the party is past saving. Content-warning gate lets players refuse without mechanical penalty. Env-var kill switch on the worker.
 
-- Zero-dep vanilla JS + Kaplay from CDN, no build step. 175 tests. Deploy gate runs a headless smoke against a preview branch before promoting to master. Learned that one the hard way.
+- Zero-dep vanilla JS + Kaplay from CDN, no build step. 190+ tests. Deploy gate runs a headless smoke against a preview branch before promoting to master. Learned that one the hard way.
 
 Free. No login. No account.
 
@@ -82,7 +82,7 @@ Happy to answer questions on prompt calibration, HMAC canonicalization, the Kapl
 
 **The pre-drafted "AI slop" rebuttal** (post if anyone says this in first 30 min):
 ```
-The model writes prose. The simulation is deterministic server-side. Every consequence is validated and clamped before it touches state. Two runs on the same seed produce different prose and the same outcomes. Happy to share the validator code if you're curious.
+The model writes the prose, never the numbers. The simulation runs entirely server-side and the state is HMAC-signed; every consequence the model proposes is validated and clamped before it touches state. Open the network tab — you'll see signed state blobs, not the model deciding whether you live. Happy to share the clamping code if you're curious.
 ```
 
 **Be in the thread for the next 90 minutes.** Reply to every technical question. Don't reply to trolls. Don't upvote-ring. Don't tell friends to upvote — HN flags it within minutes.
@@ -135,7 +135,7 @@ A content warning gate lets any player opt out without mechanical penalty. What 
 
 **Tweet 5** (attach the 4-newspaper grid `16-newspaper-grid.png` if generated, otherwise `12-newspaper-lone.png`):
 ```
-Daily Trail: shared seed. Everyone plays the same trail on the same day.
+Daily Trail: a shared daily challenge — everyone gets the same starting setup that day (the prose still differs every run).
 
 Weekly challenges: Iron Man (no medicine), Pacifist, others rotating.
 
@@ -146,7 +146,7 @@ Runs end in a newspaper. Most of them are obituaries.
 ```
 Built on Cloudflare Workers and Pages. HMAC-signed game state, no database, zero session storage. Claude Haiku narrates.
 
-175 tests on the worker. Scales horizontally for free. No ads. No telemetry beyond Plausible.
+190+ tests on the worker. Scales horizontally for free. No ads. No telemetry beyond Plausible.
 ```
 
 **Tweet 7** (attach `01-title.png` or `12-newspaper-lone.png`):
@@ -179,7 +179,7 @@ The Oregon Trail — AI Edition: free browser roguelike with a horror tier the g
 
 **Body:**
 ```
-Three-week build. Classic Oregon Trail loop: pick a party, buy supplies, die a thousand miles short of Oregon City. What's different is every event is written live from the party's state. Same seed, three tone tiers, three completely different runs.
+Three-week build. Classic Oregon Trail loop: pick a party, buy supplies, die a thousand miles short of Oregon City. What's different is every event is written live from the party's state. Three tone tiers, three completely different runs.
 
 Quick facts:
 - Free, no login, no signup
@@ -240,7 +240,7 @@ Real events from this week:
 - "The trail strips courtesy like bark from a dead tree."
 - "The wind moves through the grass and does not stop."
 
-Tech: Cloudflare Worker runs the simulation and handles the model calls. HMAC-signed state. 175 unit tests. No database.
+Tech: Cloudflare Worker runs the simulation and handles the model calls. HMAC-signed state. 190+ unit tests. No database.
 
 https://trail.osi-cyber.com
 
