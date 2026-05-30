@@ -31,6 +31,10 @@ export interface Env {
   // The real global spend ceiling is a budget on the Anthropic account, not here.
   PAID_LIMITER?: RateLimitBinding;   // native CF Rate Limiting binding (per-colo)
   PAID_PER_IP_DAY_CAP?: string;      // per-IP daily paid-call volume cap (default 60)
+  // AI-liveness canary alerting (see scheduled() + runCanary). Optional: if
+  // unset the canary logs instead of paging. Set via `wrangler secret put`.
+  TELEGRAM_BOT_TOKEN?: string;       // @osi_dispatch_bot
+  TELEGRAM_CHAT_ID?: string;
 }
 
 // Rate limiter: in-memory Map, 200 calls/min per IP
@@ -151,7 +155,60 @@ export default {
       return jsonResponse({ error: message }, 500, origin);
     }
   },
+
+  // AI-liveness canary (Cron Trigger — see wrangler.toml [triggers]).
+  // The "dead/out-of-credit key silently serves canned fallbacks at HTTP 200"
+  // failure ran for weeks undetected because nothing checked the LLM path.
+  // This probes the exact failure: one trivial Anthropic call; if it throws
+  // (dead key, no credit, 4xx, sustained overload), page via Telegram. Cost is
+  // a few tokens × 4/day. Healthy → silent.
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runCanary(env));
+  },
 };
+
+async function runCanary(env: Env): Promise<void> {
+  let detail = "";
+  try {
+    const raw = await callAnthropic(
+      "Reply with the single word: OK.",
+      "ping",
+      env.ANTHROPIC_API_KEY,
+      { maxTokens: 8, timeout: 8000 },
+    );
+    if (typeof raw === "string" && raw.trim().length > 0) {
+      console.log("canary_ok", JSON.stringify({ ts: new Date().toISOString() }));
+      return; // healthy → silent
+    }
+    detail = "empty response from model";
+  } catch (e) {
+    detail = String(e).slice(0, 160);
+  }
+  console.error("canary_failed", JSON.stringify({ detail }));
+  await sendTelegram(
+    env,
+    `🛑 Oregon Trail AI canary FAILED — trail.osi-cyber.com is serving canned fallback events (players see no AI). callAnthropic error: ${detail}`,
+  );
+}
+
+async function sendTelegram(env: Env, text: string): Promise<void> {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  const chat = env.TELEGRAM_CHAT_ID;
+  if (!token || !chat) {
+    // No channel configured — at least leave a loud log line for tail/Logpush.
+    console.error("canary_alert_unsent", JSON.stringify({ text }));
+    return;
+  }
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chat, text }),
+    });
+  } catch (e) {
+    console.error("canary_alert_failed", JSON.stringify({ msg: String(e).slice(0, 120) }));
+  }
+}
 
 async function handleStart(
   request: Request,
@@ -297,6 +354,11 @@ async function handleAdvance(
   const result = advanceDays(stateToAdvance, historical, { bitterPathEnabled });
 
   let eventData: EventResponse | null = null;
+  // Tracks whether the event the player sees came from the live LLM or a
+  // hand-written fallback. Surfaced in the response (event_source) and logged,
+  // so fallback-rate is observable — the dead-key outage hid for weeks because
+  // fallbacks are served as HTTP 200 and nothing recorded which was which.
+  let eventSource: "llm" | "fallback" | null = null;
 
   if (result.trigger === "event") {
     const tier = result.state.settings.tone_tier;
@@ -311,6 +373,7 @@ async function handleAdvance(
     if (!guard.allowed) {
       console.warn("spend_rate_block", JSON.stringify({ route: "advance", reason: guard.reason }));
       eventData = pickFallback();
+      eventSource = "fallback";
     } else {
       try {
         const prompt = assembleEventPrompt(result.state, historical);
@@ -320,12 +383,14 @@ async function handleAdvance(
           env.ANTHROPIC_API_KEY,
         );
         eventData = parseEventResponse(raw);
+        eventSource = "llm";
       } catch (e) {
         // Anthropic threw (timeout, or a 4xx like dead key / no credit). Log
         // the cause — secret-free, status + truncated message only — so an
         // exhausted/invalid key is never again silently invisible.
         console.warn("llm_fallback", JSON.stringify({ route: "advance", msg: String(e).slice(0, 120) }));
         eventData = pickFallback();
+        eventSource = "fallback";
       }
     }
   } else if (result.trigger === "bitter_path") {
@@ -347,7 +412,11 @@ async function handleAdvance(
         td.days_since_death,
         survivorName,
       );
+      eventSource = "fallback";
     } else {
+      // generateLongNight may itself fall back internally on an API error; from
+      // here we only know an LLM call was attempted. The scheduled canary is
+      // the authoritative dead-key detector — this flag is best-effort.
       eventData = await generateLongNight(
         td.dead_member_name,
         td.dead_member_cause,
@@ -355,7 +424,14 @@ async function handleAdvance(
         survivorName,
         env.ANTHROPIC_API_KEY,
       );
+      eventSource = "llm";
     }
+  }
+
+  // Observability: emit which source served the event so fallback-rate is
+  // visible in `wrangler tail` / Logpush without exposing any secret.
+  if (eventSource) {
+    console.log("event_source", JSON.stringify({ trigger: result.trigger, source: eventSource }));
   }
 
   // If we have an event, hash it and embed in state along with the trigger
@@ -408,6 +484,7 @@ async function handleAdvance(
     trigger: result.trigger,
     trigger_data: triggerData,
     trigger_meta: triggerMeta,
+    event_source: eventSource ?? undefined,
     signed_state,
   };
 

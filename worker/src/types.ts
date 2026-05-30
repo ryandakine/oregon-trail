@@ -391,6 +391,10 @@ export interface AdvanceResponse {
   // the EventResponse body that the client must echo back to /api/bitter_path
   // for hash binding. Other triggers leave this undefined.
   trigger_meta?: unknown;
+  // "llm" if the event came from the live model, "fallback" if a hand-written
+  // event was served (rate-blocked, or Anthropic errored/dead key). Undefined
+  // for non-event triggers. Used for fallback-rate observability.
+  event_source?: "llm" | "fallback";
   signed_state: SignedGameState;
 }
 
