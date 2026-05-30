@@ -1,6 +1,7 @@
 import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES, STORE_PRICES } from "./state";
 import { assembleEventPrompt } from "./prompt-assembly";
-import { callAnthropic, parseEventResponse, FALLBACK_EVENTS, generateLongNight, bitterPathConsequences } from "./anthropic";
+import { callAnthropic, parseEventResponse, FALLBACK_EVENTS, generateLongNight, buildLongNightFallback, bitterPathConsequences } from "./anthropic";
+import { guardPaidCall, type RateLimitBinding } from "./paid-guard";
 import { advanceDays } from "./simulation";
 import { signState, deepCanonicalize, bufferToHex } from "./hmac";
 import type {
@@ -26,6 +27,10 @@ export interface Env {
   ANTHROPIC_API_KEY: string;
   ALLOWED_ORIGIN: string;
   BITTER_PATH_ENABLED?: string; // "true" | "false"; default "true". Kill switch for the horror-tier hidden path.
+  // Per-IP load-shedding for paid (Anthropic) routes. See paid-guard.ts.
+  // The real global spend ceiling is a budget on the Anthropic account, not here.
+  PAID_LIMITER?: RateLimitBinding;   // native CF Rate Limiting binding (per-colo)
+  PAID_PER_IP_DAY_CAP?: string;      // per-IP daily paid-call volume cap (default 60)
 }
 
 // Rate limiter: in-memory Map, 200 calls/min per IP
@@ -294,19 +299,34 @@ async function handleAdvance(
   let eventData: EventResponse | null = null;
 
   if (result.trigger === "event") {
-    try {
-      const prompt = assembleEventPrompt(result.state, historical);
-      const raw = await callAnthropic(
-        prompt.system,
-        prompt.user,
-        env.ANTHROPIC_API_KEY,
-      );
-      eventData = parseEventResponse(raw);
-    } catch {
-      // Fall back to pre-written events
-      const tier = result.state.settings.tone_tier;
+    const tier = result.state.settings.tone_tier;
+    const pickFallback = () => {
       const fallbacks = FALLBACK_EVENTS[tier];
-      eventData = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    };
+    // Per-IP paid-call guard. On block, serve the existing fallback (free) and
+    // skip Anthropic entirely — never 429 here, which would discard the
+    // already-advanced simulation step above.
+    const guard = await guardPaidCall(env, request);
+    if (!guard.allowed) {
+      console.warn("spend_rate_block", JSON.stringify({ route: "advance", reason: guard.reason }));
+      eventData = pickFallback();
+    } else {
+      try {
+        const prompt = assembleEventPrompt(result.state, historical);
+        const raw = await callAnthropic(
+          prompt.system,
+          prompt.user,
+          env.ANTHROPIC_API_KEY,
+        );
+        eventData = parseEventResponse(raw);
+      } catch (e) {
+        // Anthropic threw (timeout, or a 4xx like dead key / no credit). Log
+        // the cause — secret-free, status + truncated message only — so an
+        // exhausted/invalid key is never again silently invisible.
+        console.warn("llm_fallback", JSON.stringify({ route: "advance", msg: String(e).slice(0, 120) }));
+        eventData = pickFallback();
+      }
     }
   } else if (result.trigger === "bitter_path") {
     const td = result.triggerData as {
@@ -316,13 +336,26 @@ async function handleAdvance(
     };
     const firstAlive = result.state.party.members.find((m) => m.alive);
     const survivorName = firstAlive ? firstAlive.name : "someone";
-    eventData = await generateLongNight(
-      td.dead_member_name,
-      td.dead_member_cause,
-      td.days_since_death,
-      survivorName,
-      env.ANTHROPIC_API_KEY,
-    );
+    // Same per-IP guard. On block, build the hand-written Long Night fallback
+    // directly (generateLongNight would otherwise spend on Anthropic).
+    const guard = await guardPaidCall(env, request);
+    if (!guard.allowed) {
+      console.warn("spend_rate_block", JSON.stringify({ route: "advance", reason: guard.reason, kind: "bitter_path" }));
+      eventData = buildLongNightFallback(
+        td.dead_member_name,
+        td.dead_member_cause,
+        td.days_since_death,
+        survivorName,
+      );
+    } else {
+      eventData = await generateLongNight(
+        td.dead_member_name,
+        td.dead_member_cause,
+        td.days_since_death,
+        survivorName,
+        env.ANTHROPIC_API_KEY,
+      );
+    }
   }
 
   // If we have an event, hash it and embed in state along with the trigger
@@ -607,28 +640,37 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
   const survivors = state.party.members.filter((m) => m.alive).map((m) => m.name);
   const deadList = state.deaths.map((d) => ({ name: d.name, cause: d.cause, date: d.date }));
 
-  try {
-    const raw = await callAnthropic(
-      "You are the editor of the Independence Gazette, 1848. Write frontier newspaper articles.",
-      prompt,
-      env.ANTHROPIC_API_KEY,
-      { maxTokens: 600 },
-    );
-    const stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
-    const parsed = JSON.parse(stripped);
-    // Normalize to expected shape
-    const newspaper = {
-      headline: parsed.headline || "News From The Trail",
-      byline: parsed.byline || "By our correspondent",
-      article_paragraphs: Array.isArray(parsed.article_paragraphs)
-        ? parsed.article_paragraphs
-        : (parsed.body || "").split("\n\n").filter(Boolean),
-      date: parsed.date || parsed.dateline || state.position.date,
-      survivors,
-      deaths: deadList,
-    };
-    return jsonResponse(newspaper, 200, origin);
-  } catch {
+  const guard = await guardPaidCall(env, request);
+  if (guard.allowed) {
+    try {
+      const raw = await callAnthropic(
+        "You are the editor of the Independence Gazette, 1848. Write frontier newspaper articles.",
+        prompt,
+        env.ANTHROPIC_API_KEY,
+        { maxTokens: 600 },
+      );
+      const stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
+      const parsed = JSON.parse(stripped);
+      // Normalize to expected shape
+      const newspaper = {
+        headline: parsed.headline || "News From The Trail",
+        byline: parsed.byline || "By our correspondent",
+        article_paragraphs: Array.isArray(parsed.article_paragraphs)
+          ? parsed.article_paragraphs
+          : (parsed.body || "").split("\n\n").filter(Boolean),
+        date: parsed.date || parsed.dateline || state.position.date,
+        survivors,
+        deaths: deadList,
+      };
+      return jsonResponse(newspaper, 200, origin);
+    } catch (e) {
+      console.warn("llm_fallback", JSON.stringify({ route: "newspaper", msg: String(e).slice(0, 120) }));
+    }
+  } else {
+    console.warn("spend_rate_block", JSON.stringify({ route: "newspaper", reason: guard.reason }));
+  }
+  // Fallback: guard-blocked or Anthropic failed.
+  {
     return jsonResponse({
       headline: `${state.party.leader_name.toUpperCase()} PARTY: ${survivors.length} OF ${state.party.members.length} SURVIVE`,
       byline: "By our correspondent",
@@ -665,21 +707,27 @@ async function handleEpitaph(
     return jsonResponse({ error: "death_not_found" }, 400, origin);
   }
 
-  try {
-    const raw = await callAnthropic(
-      "You write gravestone inscriptions for Oregon Trail emigrants, 1848. One line only. Period appropriate. Solemn.",
-      `Write a one-line gravestone inscription for ${death.name}, who died of ${death.cause} on ${death.date} on the Oregon Trail. Return only the inscription text, no quotes or formatting.`,
-      env.ANTHROPIC_API_KEY,
-      { maxTokens: 60, timeout: 5000 },
-    );
-    return jsonResponse({ epitaph: raw.trim() }, 200, origin);
-  } catch {
-    return jsonResponse(
-      { epitaph: `Here lies ${death.name}. Gone to rest, ${death.date}.` },
-      200,
-      origin,
-    );
+  const guard = await guardPaidCall(env, request);
+  if (guard.allowed) {
+    try {
+      const raw = await callAnthropic(
+        "You write gravestone inscriptions for Oregon Trail emigrants, 1848. One line only. Period appropriate. Solemn.",
+        `Write a one-line gravestone inscription for ${death.name}, who died of ${death.cause} on ${death.date} on the Oregon Trail. Return only the inscription text, no quotes or formatting.`,
+        env.ANTHROPIC_API_KEY,
+        { maxTokens: 60, timeout: 5000 },
+      );
+      return jsonResponse({ epitaph: raw.trim() }, 200, origin);
+    } catch (e) {
+      console.warn("llm_fallback", JSON.stringify({ route: "epitaph", msg: String(e).slice(0, 120) }));
+    }
+  } else {
+    console.warn("spend_rate_block", JSON.stringify({ route: "epitaph", reason: guard.reason }));
   }
+  return jsonResponse(
+    { epitaph: `Here lies ${death.name}. Gone to rest, ${death.date}.` },
+    200,
+    origin,
+  );
 }
 
 async function handleRiver(
