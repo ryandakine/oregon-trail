@@ -5,6 +5,27 @@ workers_dev = true
 
 [vars]
 ENVIRONMENT = "production"
+# Per-IP daily paid-call (Anthropic) volume sub-cap. Tunable without redeploy
+# via dashboard. Defaults to 60 if unset/garbage (see paid-guard.ts:parseDayCap).
+PAID_PER_IP_DAY_CAP = "60"
 
 # HMAC_SECRET set via `wrangler secret put HMAC_SECRET`
 # ANTHROPIC_API_KEY set via `wrangler secret put ANTHROPIC_API_KEY`
+
+# Native per-IP rate limiter for paid (Anthropic-spending) routes only.
+# Per-colo (not global); the real global $ ceiling is the Anthropic account
+# budget. period must be 10 or 60. namespace_id must be a quoted string holding
+# an integer (CF requirement). Verify syntax at deploy — CF config churns.
+[[ratelimits]]
+name = "PAID_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 15
+  period = 60
+
+# AI-liveness canary: every 6h, scheduled() probes callAnthropic and pages
+# @osi_dispatch_bot if the LLM path is dead (the failure that hid for weeks).
+# TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID set via `wrangler secret put`.
+[triggers]
+crons = ["0 */6 * * *"]

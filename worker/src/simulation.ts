@@ -29,8 +29,8 @@ const PACE_MILES: Record<Pace, number> = {
 // starting food = 12 days. Dropping filling to 2 extends runway to 18 days.
 // Tests use historical 3-lb baseline via a fixture toggle; production drops to 2.
 const RATIONS_PER_PERSON: Record<Rations, number> = {
-  filling: 2,       // was 3 (Phase B.2)
-  meager: 1.5,      // was 2 (Phase B.2)
+  filling: 1.5,     // was 2 (Phase C v3)
+  meager: 1.2,      // was 1.5 (Phase C v3)
   bare_bones: 1,
 };
 
