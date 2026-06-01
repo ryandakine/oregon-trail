@@ -19,6 +19,7 @@ import type {
   HuntResult,
 } from "./types";
 import { getLandmarkById } from "./context-loader";
+import { getCostsReport } from "./cost-tracker";
 import ctx from "./historical-context.json";
 
 export interface Env {
@@ -136,6 +137,14 @@ export default {
           if (request.method === "GET") {
             const current = getCurrentChallenge();
             return jsonResponse({ current, all: WEEKLY_CHALLENGES }, 200, origin);
+          }
+          return jsonResponse({ error: "method_not_allowed" }, 405, origin);
+        case "/api/costs":
+          // AI-spend canary: per-player daily spend + daily total with the
+          // $0.05/player and $50/day alert thresholds. In-memory only (no DB),
+          // resets when the Worker recycles — a same-day spend signal.
+          if (request.method === "GET") {
+            return jsonResponse(getCostsReport(), 200, origin);
           }
           return jsonResponse({ error: "method_not_allowed" }, 405, origin);
         default:
@@ -293,6 +302,8 @@ async function handleAdvance(
 
   let eventData: EventResponse | null = null;
 
+  const playerKey = request.headers.get("CF-Connecting-IP") || "unknown";
+
   if (result.trigger === "event") {
     try {
       const prompt = assembleEventPrompt(result.state, historical);
@@ -300,6 +311,7 @@ async function handleAdvance(
         prompt.system,
         prompt.user,
         env.ANTHROPIC_API_KEY,
+        { playerKey },
       );
       eventData = parseEventResponse(raw);
     } catch {
@@ -322,6 +334,7 @@ async function handleAdvance(
       td.days_since_death,
       survivorName,
       env.ANTHROPIC_API_KEY,
+      playerKey,
     );
   }
 
@@ -612,7 +625,7 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
       "You are the editor of the Independence Gazette, 1848. Write frontier newspaper articles.",
       prompt,
       env.ANTHROPIC_API_KEY,
-      { maxTokens: 600 },
+      { maxTokens: 600, playerKey: request.headers.get("CF-Connecting-IP") || "unknown" },
     );
     const stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
     const parsed = JSON.parse(stripped);
@@ -670,7 +683,7 @@ async function handleEpitaph(
       "You write gravestone inscriptions for Oregon Trail emigrants, 1848. One line only. Period appropriate. Solemn.",
       `Write a one-line gravestone inscription for ${death.name}, who died of ${death.cause} on ${death.date} on the Oregon Trail. Return only the inscription text, no quotes or formatting.`,
       env.ANTHROPIC_API_KEY,
-      { maxTokens: 60, timeout: 5000 },
+      { maxTokens: 60, timeout: 5000, playerKey: request.headers.get("CF-Connecting-IP") || "unknown" },
     );
     return jsonResponse({ epitaph: raw.trim() }, 200, origin);
   } catch {
