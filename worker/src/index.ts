@@ -1,7 +1,8 @@
 import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES, STORE_PRICES } from "./state";
 import { assembleEventPrompt } from "./prompt-assembly";
 import { callAnthropic, parseEventResponse, FALLBACK_EVENTS, generateLongNight, buildLongNightFallback, bitterPathConsequences } from "./anthropic";
-import { guardPaidCall, type RateLimitBinding } from "./paid-guard";
+import { guardPaidCall, ipKey, type RateLimitBinding } from "./paid-guard";
+import { getCostsReport } from "./cost-tracker";
 import { advanceDays } from "./simulation";
 import { signState, deepCanonicalize, bufferToHex } from "./hmac";
 import type {
@@ -145,6 +146,15 @@ export default {
           if (request.method === "GET") {
             const current = getCurrentChallenge();
             return jsonResponse({ current, all: WEEKLY_CHALLENGES }, 200, origin);
+          }
+          return jsonResponse({ error: "method_not_allowed" }, 405, origin);
+        case "/api/costs":
+          // Read-only dollar-spend canary. Surfaces today's Anthropic spend
+          // (total + per-player, keyed by paid-guard's ipKey) and early-warning
+          // breach flags. Complements paid-guard's volume load-shedding and the
+          // out-of-band Anthropic account budget — it never blocks a call.
+          if (request.method === "GET") {
+            return jsonResponse(getCostsReport(), 200, origin);
           }
           return jsonResponse({ error: "method_not_allowed" }, 405, origin);
         default:
@@ -381,6 +391,7 @@ async function handleAdvance(
           prompt.system,
           prompt.user,
           env.ANTHROPIC_API_KEY,
+          { playerKey: ipKey(request) },
         );
         eventData = parseEventResponse(raw);
         eventSource = "llm";
@@ -423,6 +434,7 @@ async function handleAdvance(
         td.days_since_death,
         survivorName,
         env.ANTHROPIC_API_KEY,
+        ipKey(request),
       );
       eventSource = "llm";
     }
@@ -724,7 +736,7 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
         "You are the editor of the Independence Gazette, 1848. Write frontier newspaper articles.",
         prompt,
         env.ANTHROPIC_API_KEY,
-        { maxTokens: 600 },
+        { maxTokens: 600, playerKey: ipKey(request) },
       );
       const stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
       const parsed = JSON.parse(stripped);
@@ -791,7 +803,7 @@ async function handleEpitaph(
         "You write gravestone inscriptions for Oregon Trail emigrants, 1848. One line only. Period appropriate. Solemn.",
         `Write a one-line gravestone inscription for ${death.name}, who died of ${death.cause} on ${death.date} on the Oregon Trail. Return only the inscription text, no quotes or formatting.`,
         env.ANTHROPIC_API_KEY,
-        { maxTokens: 60, timeout: 5000 },
+        { maxTokens: 60, timeout: 5000, playerKey: ipKey(request) },
       );
       return jsonResponse({ epitaph: raw.trim() }, 200, origin);
     } catch (e) {
