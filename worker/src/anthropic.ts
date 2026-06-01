@@ -1,4 +1,5 @@
 import type { EventResponse, ToneTier } from "./types";
+import { recordUsage } from "./cost-tracker";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-haiku-4-5-20251001";
@@ -17,7 +18,7 @@ export async function callAnthropic(
   system: string,
   user: string,
   apiKey: string,
-  opts?: { maxTokens?: number; timeout?: number },
+  opts?: { maxTokens?: number; timeout?: number; playerKey?: string },
 ): Promise<string> {
   const maxTokens = opts?.maxTokens ?? 800;
   const baseTimeout = opts?.timeout ?? 8000;
@@ -49,7 +50,18 @@ export async function callAnthropic(
       if (response.ok) {
         const data = (await response.json()) as {
           content: Array<{ type: string; text: string }>;
+          usage?: { input_tokens?: number; output_tokens?: number };
         };
+        // Spend canary: record every successful call's token usage against the
+        // player key. This is the single chokepoint for all Anthropic spend, so
+        // every paid path is counted here exactly once.
+        if (opts?.playerKey && data.usage) {
+          recordUsage(
+            opts.playerKey,
+            data.usage.input_tokens ?? 0,
+            data.usage.output_tokens ?? 0,
+          );
+        }
         return data.content[0].text;
       }
 
@@ -484,6 +496,7 @@ export async function generateLongNight(
   daysSinceDeath: number,
   survivorName: string,
   apiKey: string,
+  playerKey?: string,
 ): Promise<EventResponse> {
   const user = `Context:
 - deceased_member: {"name": "${deceasedName}", "cause": "${deceasedCause}", "days_ago": ${daysSinceDeath}}
@@ -495,6 +508,7 @@ Write The Long Night scene. Follow all voice constraints. Return JSON.`;
     const raw = await callAnthropic(LONG_NIGHT_SYSTEM_PROMPT, user, apiKey, {
       maxTokens: 500,
       timeout: 8000,
+      playerKey,
     });
     const parsed = parseEventResponse(raw);
     // Post-parse guard: reject any output that trips the forbidden-category
