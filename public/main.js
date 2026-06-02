@@ -18,8 +18,19 @@ const k = kaplay({
   crisp: true,
   stretch: true,
   letterbox: true,
+  // Render the backing buffer at >=2x so canvas text (sizes 11-20) has enough
+  // pixels to stay sharp when the 640x480 frame is stretched to the window.
+  // Without this, small type smears to fuzz on any non-trivial display scale.
+  pixelDensity: Math.max(2, window.devicePixelRatio || 1),
+  // Default canvas font: real vector TTF instead of kaplay's low-res bitmap
+  // font, so glyphs rasterize crisply at the higher pixel density.
+  font: "plex",
   background: [26, 26, 46],
 });
+
+// Load the default font before any scene renders text. Must complete before
+// k.go("loading") below, or the first frames fall back to the bitmap font.
+await k.loadFont("plex", "/fonts/ibm-plex-mono-700.ttf");
 
 window.k = k;
 
