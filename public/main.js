@@ -18,19 +18,27 @@ const k = kaplay({
   crisp: true,
   stretch: true,
   letterbox: true,
-  // Render the backing buffer at >=2x so canvas text (sizes 11-20) has enough
-  // pixels to stay sharp when the 640x480 frame is stretched to the window.
-  // Without this, small type smears to fuzz on any non-trivial display scale.
-  pixelDensity: Math.max(2, window.devicePixelRatio || 1),
+  // Render the backing buffer at 2-3x logical so canvas text (sizes 11-20) has
+  // enough pixels to stay sharp when the 640x480 frame is stretched to the
+  // window. Floor 2 fixes low-DPR desktops (where text was smearing); cap 3 so
+  // DPR-4+ phones don't allocate an oversized buffer for no visible gain.
+  pixelDensity: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
   // Default canvas font: real vector TTF instead of kaplay's low-res bitmap
   // font, so glyphs rasterize crisply at the higher pixel density.
   font: "plex",
   background: [26, 26, 46],
 });
 
-// Load the default font before any scene renders text. Must complete before
-// k.go("loading") below, or the first frames fall back to the bitmap font.
-await k.loadFont("plex", "/fonts/ibm-plex-mono-700.ttf");
+// Load the default font before any scene renders text — must finish before
+// k.go("loading") below. If the TTF ever fails to fetch (404, network), swallow
+// it so the top-level await doesn't reject and halt the module: the game still
+// boots and renders text with kaplay's built-in font (blurry, but not a black
+// screen).
+try {
+  await k.loadFont("plex", "/fonts/ibm-plex-mono-700.ttf");
+} catch (err) {
+  console.warn("plex font failed to load; falling back to built-in font:", err?.message);
+}
 
 window.k = k;
 
