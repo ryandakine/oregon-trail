@@ -1,7 +1,14 @@
 # Launch Day Playbook — Oregon Trail AI Edition
 
 **Generated:** 2026-04-29 (early AM ET)
-**Optimal Show HN slot:** Wed 2026-04-29 9:00 AM ET (~7 hours from generation)
+**RE-TIMED:** 2026-06-03 — the 4/29 slot was never fired. Game is now confirmed launch-ready (text legibility fixed, mobile rotate hint, analytics live, AI live-verified 2026-06-03).
+**Optimal Show HN slot:** Tue 2026-06-09 9:00 AM ET. (Today is Wed 6/3 eve. Tue is a top HN day and gives 5 days to finish the newspaper shots. Faster alt: Thu 6/4 9 AM ET if you want to move now.)
+**Re-timed schedule:**
+- Show HN — Tue 6/9 9:00 AM ET
+- Twitter thread — Tue 6/9 11:30 AM ET
+- r/WebGames — Sat 6/13 10:00 AM ET
+- r/roguelites — Mon 6/15 8:00 PM ET
+- r/ChatGPTGaming — Wed 6/17 10:00 AM ET
 **Source plans:** `LAUNCH_MARKETING.md` (full strategy + Grok review trail)
 
 This file is the hour-by-hour execution checklist. Copy is paste-ready.
@@ -10,8 +17,16 @@ This file is the hour-by-hour execution checklist. Copy is paste-ready.
 
 ## T-minus checklist (do before 9 AM ET)
 
-### Screenshots — RESOLVED (committed to `screenshots/launch/`)
-The launch screenshots are committed at `screenshots/launch/` (desktop) and `screenshots/launch/mobile/` — no longer a blocker. **Caveat:** several were captured during the dead-key window, so the event/newspaper prose in them may be canned fallback, not live AI. **Launch-day, re-capture against the live AI** so the prose is real: `node scripts/launch-screenshots.mjs` (writes to `screenshots/launch/`; pass `--out=<dir>` to override). Then eyeball `07-event-full.png` to confirm the event text isn't one of the 14 fallback titles.
+### Screenshots — 3 of 7 captured fresh against LIVE AI (2026-06-03), in `/tmp/ot-shots/`
+Captured by driving the live prod game at 1280×800 retina (2×), AI confirmed live (no fallbacks):
+- [x] `01-title.png` — title screen, crisp (post-legibility-fix)
+- [x] `04-tone.png` — **THE MONEY SHOT** — three tone tiers, horror CW + flavor line visible
+- [x] `07-event-full.png` — live AI event "The Kansas River Crossing": full prose with party continuity (Sue coughing, Tom sleeping apart, limping ox) + 3 real-tradeoff choices
+- [ ] `12-newspaper-lone.png` / `13-newspaper-wipe.png` / `14-newspaper-arrival.png` / `15-newspaper-horror-arrival.png` — STILL NEEDED. Require a full game-end; capture by playing 4 short runs to completion (a wipe is fastest), or re-run the screenshot driver.
+- [ ] `16-newspaper-grid.png` — 2×2 montage of the four above (`montage ... -tile 2x2`)
+- [ ] `10-bitter-cw.png` / `11-bitter-body.png` — reserve shots for journalists only (never post publicly)
+
+**Before launch:** move the 3 captured shots into `screenshots/launch/` (version-controlled) and capture the 4 newspapers. The earlier `scripts/launch-screenshots.mjs` shots may be from the dead-key window (canned prose) — prefer these fresh live-AI ones.
 
 **Shot list (regenerate if re-capturing):**
 - [ ] `01-title.png` — title screen with wagon + starfield + Daily Trail badge
