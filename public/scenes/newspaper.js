@@ -10,7 +10,11 @@ export default function register(k, engine) {
     const headline = np.headline || 'TRAIL PARTY REACHES END OF JOURNEY';
     const byline = np.byline || 'From our correspondent';
     const paperName = np.newspaper_name || 'The Independence Gazette';
-    const dateStr = np.date || engine.currentDate;
+    // np.date is the LLM's freeform dateline and often isn't a parseable date
+    // ("May 1848"). Only trust it if it parses; else use the canonical in-game
+    // date so the dateline never renders as "undefined NaN, NaN".
+    const validIso = np.date && !isNaN(new Date(np.date + 'T00:00:00').getTime());
+    const dateStr = validIso ? np.date : engine.currentDate;
     const paragraphs = np.article_paragraphs || ['No further details are available.'];
     const survivors = np.survivors || [];
     const deaths = np.deaths || engine.deaths || [];
