@@ -56,6 +56,31 @@ describe("frontend harness — boot + primary regression pins", () => {
     expect(r.plexLoaded).toBe(true);
   });
 
+  // Regression 2026-06-03: the LLM emits a freeform newspaper dateline
+  // ("May 1848") that isn't a parseable date. engine.formatDate fed it to
+  // `new Date(...)`, got Invalid Date, and rendered "undefined NaN, NaN" in the
+  // dateline of every early-wipe obituary — the exact artifact players share.
+  // Fix: scene only trusts np.date if it parses, else uses the canonical
+  // in-game date; formatDate guards Invalid Date. Found while capturing launch
+  // screenshots.
+  it("T-newspaper-date-1: malformed LLM dateline never renders NaN/undefined", async () => {
+    await h.seedEngine({ profession: "farmer" });
+    await h.goScene("newspaper", {
+      headline: "TRAGEDY BEFALLS THE TEST PARTY",
+      newspaper_name: "The Independence Gazette",
+      date: "May 1848", // freeform, unparseable — the bug trigger
+      article_paragraphs: ["A grievous catalogue of misfortunes."],
+      survivors: [],
+      deaths: [],
+    });
+    const dateline = await h.page.evaluate(() => {
+      const o = document.getElementById("newspaper-overlay");
+      return o ? o.textContent || "" : "";
+    });
+    expect(dateline).not.toContain("NaN");
+    expect(dateline).not.toContain("undefined");
+  });
+
   it("T-river-2: renders river with numeric ford_difficulty=5 (regression 4af2434)", async () => {
     await h.seedEngine({ profession: "farmer", supplies: { money: 50000, ammo: 20 } });
     await h.goScene("river", riverFx.edgeNumericMax);
