@@ -123,11 +123,11 @@ trail.osi-cyber.com
 ```
 Every event in every run is written live from the party's state. No pre-authored pool.
 
-From a run this morning:
+From a run an hour ago, the party already sick and fraying:
 
-"The trail strips courtesy like bark from a dead tree."
+"Sue coughs beside the lead wagon, her eyes red-rimmed, and you notice Tom has taken to sleeping apart from the others."
 
-The party had lost a member four days back. The narrator had not forgotten.
+The narrator tracks who is failing and writes them in.
 ```
 
 **Tweet 3** (attach `04-tone.png` again):
