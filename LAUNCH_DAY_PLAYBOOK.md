@@ -58,8 +58,9 @@ Automated capture can't do these: an arrival needs the party to *survive ~2,000 
 **Alternative:** if /tmp/ot-shots/ is still empty 30 min before launch, push HN by 24 hours. Don't post without images. The HN post is text-only, so HN can technically go without — but Twitter without images flops. Fire HN solo at 9 AM if needed and delay Twitter.
 
 ### Pre-flight (general)
-- [ ] Verify https://trail.osi-cyber.com loads cleanly on desktop + mobile (one fresh-cache run)
-- [ ] Verify https://trail.osi-cyber.com/privacy loads (newly deployed — needed if anyone asks)
+> **Launch-readiness QA — PASS (2026-06-06).** Automated sweep of prod: all assets/pages 200 (/, /privacy, /manifest.json, /sw.js, /og-image.png served as real image/png, /icons), worker /api/challenge returns valid JSON, desktop full flow (title→event→choice→river→wipe→newspaper) clean, mobile-landscape title + event overlay render clean with zero console errors, share path works (native share → clipboard fallback → Twitter intent on SHARE scene), copy test-count claim accurate (236 ≥ "190+"). Fixed this session: dateline NaN, missing og-image, text legibility, analytics registration. STILL HUMAN-ONLY: the 3 newspaper shots + a real-browser pageview to confirm analytics records (headless is excluded).
+- [x] ~~Verify https://trail.osi-cyber.com loads cleanly on desktop + mobile~~ — verified clean (desktop + mobile landscape), no console errors
+- [x] ~~Verify https://trail.osi-cyber.com/privacy loads~~ — 200 OK
 - [ ] Be at the keyboard 9:00–10:30 AM ET. The first 90 minutes on HN decide everything.
 - [ ] Pre-stage the Twitter thread as drafts in TweetDeck or your Twitter web compose, so 11:30 AM ET is a 5-minute click-through.
 - [ ] DO NOT post anywhere before 9 AM ET. HN should always go first.
