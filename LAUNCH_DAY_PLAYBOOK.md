@@ -17,16 +17,23 @@ This file is the hour-by-hour execution checklist. Copy is paste-ready.
 
 ## T-minus checklist (do before 9 AM ET)
 
-### Screenshots — 3 of 7 captured fresh against LIVE AI (2026-06-03), in `/tmp/ot-shots/`
+### Screenshots — 4 of 7 captured fresh against LIVE AI (2026-06-03), committed to `screenshots/launch/`
 Captured by driving the live prod game at 1280×800 retina (2×), AI confirmed live (no fallbacks):
 - [x] `01-title.png` — title screen, crisp (post-legibility-fix)
 - [x] `04-tone.png` — **THE MONEY SHOT** — three tone tiers, horror CW + flavor line visible
 - [x] `07-event-full.png` — live AI event "The Kansas River Crossing": full prose with party continuity (Sue coughing, Tom sleeping apart, limping ox) + 3 real-tradeoff choices
-- [ ] `12-newspaper-lone.png` / `13-newspaper-wipe.png` / `14-newspaper-arrival.png` / `15-newspaper-horror-arrival.png` — STILL NEEDED. Require a full game-end; capture by playing 4 short runs to completion (a wipe is fastest), or re-run the screenshot driver.
-- [ ] `16-newspaper-grid.png` — 2×2 montage of the four above (`montage ... -tile 2x2`)
+- [x] `13-newspaper-wipe.png` — wipe obituary, clean "Apr 30, 1848" dateline (after the NaN dateline fix), IN MEMORIAM with cause-of-death per member
+
+#### 3 newspapers left — capture by HAND during the real-device pass (15 min)
+Automated capture can't do these: an arrival needs the party to *survive ~2,000 miles*, which scripted blind play can't sustain (it dies early). A human making smart choices reaches Oregon City reliably. Each shot is the **"(N) Read Newspaper"** screen at the end of a run — play the run, press **N**, screenshot. This doubles as your real-device sanity check (no crash + analytics records a real pageview, which headless visits can't).
+
+- [ ] `14-newspaper-arrival.png` — **clean arrival.** New game → **Classroom Safe (tone 1)** → Buy Recommended → on the trail, **ferry** every river (never ford), **rest** at landmarks when anyone is sick, pick cautious event options. Reach Oregon City with everyone alive → press **N** → screenshot.
+- [ ] `15-newspaper-horror-arrival.png` — **horror partial arrival.** Same as above but **Psychological Horror (tone 3)**. Play to the end; some will die, some arrive. The horror-tier obituary prose is the strongest copy → press **N** → screenshot.
+- [ ] `12-newspaper-lone.png` — **lone survivor.** Whichever run ends with **exactly one** survivor (common on horror tier) → that newspaper → screenshot. If no run gives a lone survivor, this one is optional.
+- [ ] `16-newspaper-grid.png` — 2×2 montage once you have the four newspapers: `montage screenshots/launch/12-newspaper-lone.png screenshots/launch/13-newspaper-wipe.png screenshots/launch/14-newspaper-arrival.png screenshots/launch/15-newspaper-horror-arrival.png -tile 2x2 -geometry +8+8 -background black screenshots/launch/16-newspaper-grid.png` (needs ImageMagick)
 - [ ] `10-bitter-cw.png` / `11-bitter-body.png` — reserve shots for journalists only (never post publicly)
 
-**Before launch:** move the 3 captured shots into `screenshots/launch/` (version-controlled) and capture the 4 newspapers. The earlier `scripts/launch-screenshots.mjs` shots may be from the dead-key window (canned prose) — prefer these fresh live-AI ones.
+**Save location:** drop each into `screenshots/launch/` with the exact filename above so the Twitter/Reddit steps below find them. The earlier `scripts/launch-screenshots.mjs` shots may be from the dead-key window (canned prose) — the 4 already captured are fresh live-AI; prefer those.
 
 **Shot list (regenerate if re-capturing):**
 - [ ] `01-title.png` — title screen with wagon + starfield + Daily Trail badge
