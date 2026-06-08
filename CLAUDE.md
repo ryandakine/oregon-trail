@@ -7,6 +7,14 @@
 
 ---
 
+<atomic-signals>
+
+## Project signals (auto-loaded)
+
+@.claude/project/signals.md
+
+</atomic-signals>
+
 ## TL;DR — Read This First
 
 **Before writing any code in this repo:**
@@ -69,7 +77,7 @@ oregon-trail/
 │   │   ├── context-loader.ts     # Lookup functions for historical-context.json
 │   │   ├── hmac.ts               # signState(), verifyState(), deepCanonicalize()
 │   │   └── historical-context.json  # ~164KB, 3839 lines. 16 segments, 18 landmarks, 7 diseases, 11 nations
-│   └── tests/                    # 175 tests across 7 suites (vitest)
+│   └── tests/                    # 194 tests across 9 suites (vitest)
 │       ├── hmac.test.ts
 │       ├── state.test.ts
 │       ├── simulation.test.ts
@@ -298,7 +306,7 @@ Total input target: ~1,500 tokens. Output: max 800 tokens (events), 600 tokens (
 
 - **Secrets:** `HMAC_SECRET` and `ANTHROPIC_API_KEY` set via `wrangler secret put`. Never in code, never in `.dev.vars` committed. `.dev.vars` is in `.gitignore`.
 - **Deploy:** `bun run deploy` from the repo root — worker first, then pages via the gated script. See § Deploy Configuration below for the full pipeline.
-- **Tests:** `bun run test` (alias for `npx vitest run`) — must see 175+ tests pass before committing worker changes.
+- **Tests:** `bun run test` (alias for `npx vitest run`) — must see all 236 tests pass before committing worker changes.
 - **Local dev:** `npx wrangler dev` starts worker locally. Frontend needs a local HTTP server for `public/` (e.g., `npx serve public`). **Note:** `engine.js` hardcodes the production worker URL — you must manually override it to `http://localhost:8787` for local development.
 - **CORS:** Worker reads `ALLOWED_ORIGIN` env var but it is not set in `wrangler.toml` — defaults to `*` (all origins). Set it explicitly if origin restriction is needed.
 - **Active branch:** `kaplay-rebuild` — this is the working branch. `master` has the old ASCII terminal UI.
@@ -365,7 +373,7 @@ Claude Code must not:
 6. Summarize your understanding of the task before writing code
 
 **End of session:**
-1. Run `npx vitest run` and confirm all 119+ tests pass
+1. Run `npx vitest run` and confirm all 236 tests pass
 2. Summarize what changed
 3. List files modified
 4. List any new technical debt introduced
@@ -384,7 +392,7 @@ Priority:
 
 ---
 
-**Bottom line:** free marketing asset, near-zero ops cost, AI-generated events are the product, horror tier is the hook, server owns all game logic, client is mostly a display layer. Respect the HMAC chain, validate LLM output, keep the frontend zero-dependency, and run the 175 tests before committing.
+**Bottom line:** free marketing asset, near-zero ops cost, AI-generated events are the product, horror tier is the hook, server owns all game logic, client is mostly a display layer. Respect the HMAC chain, validate LLM output, keep the frontend zero-dependency, and run the 236 tests before committing.
 
 ## Project Context
 Query `osi-context.get_bundle("oregon-trail")` at session start for project decisions, gotchas, and cross-project rules.
