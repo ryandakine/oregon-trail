@@ -9,7 +9,8 @@
     "deploy:pages": "./scripts/deploy-pages.sh",
     "deploy:smoke": "node scripts/deploy-smoke.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260401.0",

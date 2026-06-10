@@ -4,3 +4,23 @@
 
 /privacy
   Content-Type: text/html; charset=utf-8
+
+# Static, effectively-immutable assets (fonts, PWA icons, shared lib modules).
+# Filenames are stable across deploys, so cache hard and long. The service
+# worker (cache-busted per deploy via CACHE_NAME) handles app-shell freshness.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/icons/*
+  Cache-Control: public, max-age=31536000, immutable
+/lib/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Unhashed app JS — content changes under the same URL on each deploy. Short
+# max-age + revalidate so returning visitors pick up new logic quickly without
+# hammering origin every navigation.
+/engine.js
+  Cache-Control: public, max-age=300, must-revalidate
+/main.js
+  Cache-Control: public, max-age=300, must-revalidate
+/scenes/*
+  Cache-Control: public, max-age=300, must-revalidate

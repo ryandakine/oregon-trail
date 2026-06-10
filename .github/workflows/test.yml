@@ -18,6 +18,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Install Playwright browsers (chromium only)
         run: npx playwright install --with-deps chromium
+      - name: Type-check worker (tsc --noEmit)
+        run: npm run typecheck
       - name: Run tests (worker + frontend)
         run: npx vitest run
       # Playthrough smoke hits the real worker + Anthropic — opt-in on PR

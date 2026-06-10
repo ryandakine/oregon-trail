@@ -52,6 +52,34 @@ else
   echo "=== Skipping unit tests (--skip-tests) ==="
 fi
 
+# ── 1b. Cache-bust the service worker ────────────────────
+# CACHE_NAME in public/sw.js is a static string + cache-first fetch, so
+# returning visitors run the FIRST JS they ever cached forever, even after a
+# deploy. Inject the git short-sha so each deploy mints a fresh cache key and
+# the activate handler evicts the stale one. No build step — one sed.
+#
+# The edit is reverted on EXIT (clean or crash) so the working tree never
+# carries a deploy-time suffix and re-runs stay idempotent (the regex always
+# matches the placeholder, never a previously-stamped value).
+SW_FILE="public/sw.js"
+SW_PLACEHOLDER="oregon-trail-kaplay-v3-primitive"
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || true)"
+
+restore_sw() {
+  if [ -n "${SW_STAMPED:-}" ] && [ -f "$SW_FILE" ]; then
+    sed -i "s/${SW_PLACEHOLDER}-${GIT_SHA}/${SW_PLACEHOLDER}/" "$SW_FILE"
+  fi
+}
+trap restore_sw EXIT
+
+if [ -n "$GIT_SHA" ] && grep -q "'${SW_PLACEHOLDER}'" "$SW_FILE"; then
+  sed -i "s/'${SW_PLACEHOLDER}'/'${SW_PLACEHOLDER}-${GIT_SHA}'/" "$SW_FILE"
+  SW_STAMPED=1
+  echo "=== Stamped sw.js CACHE_NAME with git sha ${GIT_SHA} ==="
+else
+  echo "=== sw.js CACHE_NAME not stamped (no git sha or placeholder absent) ===" >&2
+fi
+
 # ── 2. Preview deploy ────────────────────────────────────
 echo ""
 echo "=== Deploying to PREVIEW branch ==="

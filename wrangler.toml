@@ -24,8 +24,9 @@ namespace_id = "1001"
   limit = 15
   period = 60
 
-# AI-liveness canary: every 6h, scheduled() probes callAnthropic and pages
+# AI-liveness canary: hourly, scheduled() probes callAnthropic and pages
 # @osi_dispatch_bot if the LLM path is dead (the failure that hid for weeks).
+# Tightened from 6h to 1h so an AI-dark incident is caught within the hour.
 # TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID set via `wrangler secret put`.
 [triggers]
-crons = ["0 */6 * * *"]
+crons = ["0 * * * *"]
