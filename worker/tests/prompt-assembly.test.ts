@@ -7,6 +7,8 @@ import {
   buildRecentEventsBlock,
   buildConditionalBlock,
   buildBitterPathSituationalHint,
+  buildHistoricalGroundingBlock,
+  buildAntiRepetitionBlock,
   assembleEventPrompt,
 } from '../src/prompt-assembly';
 import { SYSTEM_PROMPTS } from '../src/prompt-templates';
@@ -147,6 +149,7 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
       pace: 'steady',
       rations: 'filling',
       tone_tier: 'low',
+      challenge_id: null,
     },
     journal: [
       'Left Independence this morning under clear skies.',
@@ -163,6 +166,7 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
       pending_event_trigger: null,
       landmark_rest_used: [],
       bitter_path_taken: "none",
+      recent_event_titles: [],
     },
     meta: {
       run_id: 'test-run-001',
@@ -487,7 +491,7 @@ describe('assembleEventPrompt', () => {
     const ctx = makeContext();
     for (const tier of ['low', 'medium', 'high'] as ToneTier[]) {
       const state = makeGameState({
-        settings: { pace: 'steady', rations: 'filling', tone_tier: tier },
+        settings: { pace: 'steady', rations: 'filling', tone_tier: tier, challenge_id: null },
       });
       const result = assembleEventPrompt(state, ctx);
       expect(result.system).toBe(SYSTEM_PROMPTS[tier]);
@@ -597,7 +601,7 @@ describe('assembleEventPrompt', () => {
     const journal = Array.from({ length: 10 }, (_, i) => `Day ${i + 1}: The trail stretched on. We made camp by a muddy creek and ate cold beans.`);
     const state = makeGameState({
       position: { current_segment_id: 'seg_05', miles_traveled: 150, date: '1848-05-20' },
-      settings: { pace: 'grueling', rations: 'bare_bones', tone_tier: 'high' },
+      settings: { pace: 'grueling', rations: 'bare_bones', tone_tier: 'high', challenge_id: null },
       party: {
         leader_name: 'Ezra',
         members: [
@@ -610,6 +614,123 @@ describe('assembleEventPrompt', () => {
       journal,
     });
     const result = assembleEventPrompt(state, ctx);
+    expect(result.estimated_input_tokens).toBeLessThan(1700);
+  });
+});
+
+// Context with the previously-dormant corpus populated, so the grounding block
+// has real material to surface (test fixtures default these to empty).
+function makeGroundedContext(): HistoricalContext {
+  return makeContext({
+    landmarks: [makeLandmark({
+      diary_quote: 'The town was full of Indians, Mexicans, and traders.',
+      event_hooks: ['outfit_wagon', 'hire_guide', 'join_company'],
+    })],
+    period_voice: {
+      diary_excerpts: [
+        { text: 'We are now fairly launched upon the broad prairie.', author: 'Francis Parkman', date: '1846-05', source: 'Test' },
+        { text: 'The dust was intolerable and the heat severe.', author: 'A. Delano', date: '1849-06', source: 'Test' },
+      ],
+      vocabulary: [
+        { modern_term: 'doctor', period_term: 'physician', notes: '' },
+        { modern_term: 'campsite', period_term: 'encampment', notes: '' },
+        { modern_term: 'sick', period_term: 'taken poorly', notes: '' },
+        { modern_term: 'tired', period_term: 'wearied', notes: '' },
+        { modern_term: 'food', period_term: 'provisions', notes: '' },
+      ],
+      style_notes: ['Use compound sentences.'],
+    },
+  });
+}
+
+describe('buildHistoricalGroundingBlock', () => {
+  it('surfaces landmark diary quote and event hooks', () => {
+    const state = makeGameState();
+    const block = buildHistoricalGroundingBlock(state, makeGroundedContext());
+    expect(block).toContain('PERIOD DIARY');
+    expect(block).toContain('full of Indians, Mexicans');
+    expect(block).toContain('outfit_wagon');
+  });
+
+  it('surfaces a period diary excerpt and vocabulary diction', () => {
+    // miles_traveled=0 → first excerpt (Parkman) in the rotation
+    const state = makeGameState({ position: { current_segment_id: 'seg_01', miles_traveled: 0, date: '1848-04-15' } });
+    const block = buildHistoricalGroundingBlock(state, makeGroundedContext());
+    expect(block).toContain('EMIGRANT VOICE');
+    expect(block).toContain('Francis Parkman');
+    expect(block).toContain('Period diction');
+    expect(block).toContain('doctor→physician');
+  });
+
+  it('caps vocabulary to 4 pairs to respect the token budget', () => {
+    const state = makeGameState();
+    const block = buildHistoricalGroundingBlock(state, makeGroundedContext());
+    // 5 vocab entries provided; only the first 4 surfaced (5th is dropped)
+    expect(block).not.toContain('food→provisions');
+    const pairCount = (block.match(/→/g) ?? []).length;
+    expect(pairCount).toBe(4);
+  });
+
+  it('rotates the diary excerpt by miles_traveled', () => {
+    const ctx = makeGroundedContext();
+    const even = buildHistoricalGroundingBlock(
+      makeGameState({ position: { current_segment_id: 'seg_01', miles_traveled: 0, date: '1848-04-15' } }),
+      ctx,
+    );
+    const odd = buildHistoricalGroundingBlock(
+      makeGameState({ position: { current_segment_id: 'seg_01', miles_traveled: 1, date: '1848-04-15' } }),
+      ctx,
+    );
+    expect(even).toContain('Francis Parkman');
+    expect(odd).toContain('A. Delano');
+  });
+
+  it('returns empty string when corpus is empty', () => {
+    const state = makeGameState();
+    // No landmark in the current segment + empty period_voice → nothing to ground on
+    const bareCtx = makeContext({
+      landmarks: [makeLandmark({ segment_id: 'seg_99', diary_quote: '', event_hooks: [] })],
+      period_voice: { diary_excerpts: [], vocabulary: [], style_notes: [] },
+    });
+    expect(buildHistoricalGroundingBlock(state, bareCtx)).toBe('');
+  });
+
+  it('stays within its ~250 token budget', () => {
+    const state = makeGameState();
+    const block = buildHistoricalGroundingBlock(state, makeGroundedContext());
+    expect(estimateTokens(block)).toBeLessThanOrEqual(250);
+  });
+});
+
+describe('buildAntiRepetitionBlock', () => {
+  it('returns empty string when no recent titles', () => {
+    const state = makeGameState();
+    state.simulation.recent_event_titles = [];
+    expect(buildAntiRepetitionBlock(state)).toBe('');
+  });
+
+  it('lists recent titles with a do-NOT-repeat instruction', () => {
+    const state = makeGameState();
+    state.simulation.recent_event_titles = ['Broken Wheel', 'Tainted Water', 'The Fever'];
+    const block = buildAntiRepetitionBlock(state);
+    expect(block).toContain('Do NOT repeat');
+    expect(block).toContain('Broken Wheel');
+    expect(block).toContain('Tainted Water');
+    expect(block).toContain('The Fever');
+  });
+
+  it('is injected into the assembled prompt when titles exist', () => {
+    const state = makeGameState();
+    state.simulation.recent_event_titles = ['Broken Wheel'];
+    const result = assembleEventPrompt(state, makeGroundedContext());
+    expect(result.user).toContain('Do NOT repeat');
+    expect(result.user).toContain('Broken Wheel');
+  });
+
+  it('full prompt with grounding + anti-repetition stays under 1700 tokens', () => {
+    const state = makeGameState();
+    state.simulation.recent_event_titles = ['Broken Wheel', 'Tainted Water', 'The Fever', 'Dead Oxen', 'The Trade'];
+    const result = assembleEventPrompt(state, makeGroundedContext());
     expect(result.estimated_input_tokens).toBeLessThan(1700);
   });
 });

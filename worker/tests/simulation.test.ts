@@ -35,6 +35,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
       pace: "steady",
       rations: "filling",
       tone_tier: "medium",
+      challenge_id: null,
     },
     journal: [],
     deaths: [],
@@ -47,6 +48,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
       pending_event_trigger: null,
       landmark_rest_used: [],
       bitter_path_taken: "none",
+      recent_event_titles: [],
     },
     meta: {
       run_id: "test-run",

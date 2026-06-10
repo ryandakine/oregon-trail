@@ -41,6 +41,26 @@ export interface Env {
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 let rateLimitRequestCount = 0;
 
+// Per-isolate round-robin cursor over FALLBACK_EVENTS, keyed by tone tier.
+// Cycling (vs Math.random) guarantees no immediate repeat within an isolate:
+// a player who hits two fallbacks in a row sees two distinct events. Per-
+// isolate only — best-effort, like the rate limiter — but with 12 events/tier
+// the collision window is wide enough that this is a real variety improvement.
+const fallbackCursor = new Map<ToneTier, number>();
+
+export function nextFallbackEvent(tier: ToneTier): EventResponse {
+  const pool = FALLBACK_EVENTS[tier];
+  const cursor = fallbackCursor.get(tier) ?? 0;
+  fallbackCursor.set(tier, (cursor + 1) % pool.length);
+  return pool[cursor % pool.length];
+}
+
+// Test-only: reset the per-isolate fallback cursors so cycling assertions
+// start from a known position. Mirrors paid-guard's __resetDayCounts.
+export function __resetFallbackCursor(): void {
+  fallbackCursor.clear();
+}
+
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   rateLimitRequestCount++;
@@ -70,12 +90,18 @@ function corsHeaders(origin: string): Record<string, string> {
   };
 }
 
-function jsonResponse(data: unknown, status: number, origin: string): Response {
+function jsonResponse(
+  data: unknown,
+  status: number,
+  origin: string,
+  extraHeaders?: Record<string, string>,
+): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
       ...corsHeaders(origin),
+      ...extraHeaders,
     },
   });
 }
@@ -138,13 +164,21 @@ export default {
           return await handleBitterPathSkip(request, env, origin);
         case "/api/prices":
           if (request.method === "GET") {
-            return jsonResponse({ prices: STORE_PRICES }, 200, origin);
+            // Static store-price table — safe to cache at the edge/browser for
+            // 5 min. Hit on every play; no per-request variation.
+            return jsonResponse({ prices: STORE_PRICES }, 200, origin, {
+              "Cache-Control": "public, max-age=300",
+            });
           }
           return jsonResponse({ error: "method_not_allowed" }, 405, origin);
         case "/api/challenge":
           if (request.method === "GET") {
             const current = getCurrentChallenge();
-            return jsonResponse({ current, all: WEEKLY_CHALLENGES }, 200, origin);
+            // Weekly challenge rotates on a 7-day boundary, so a 1h cache is
+            // safe and shaves a request off every play.
+            return jsonResponse({ current, all: WEEKLY_CHALLENGES }, 200, origin, {
+              "Cache-Control": "public, max-age=3600",
+            });
           }
           return jsonResponse({ error: "method_not_allowed" }, 405, origin);
         default:
@@ -263,7 +297,7 @@ async function handleStart(
   return jsonResponse({ signed_state, rumor }, 200, origin);
 }
 
-async function handleStore(
+export async function handleStore(
   request: Request,
   env: Env,
   origin: string,
@@ -333,7 +367,7 @@ async function handleAdvance(
 
   // Apply pace/rations changes from client before simulation
   const stateToAdvance = structuredClone(verified.state);
-  const bodyAny = body as Record<string, unknown>;
+  const bodyAny = body as unknown as Record<string, unknown>;
   const advanceChallenge = stateToAdvance.settings.challenge_id
     ? getChallengeById(stateToAdvance.settings.challenge_id)
     : undefined;
@@ -362,10 +396,7 @@ async function handleAdvance(
 
   if (result.trigger === "event") {
     const tier = result.state.settings.tone_tier;
-    const pickFallback = () => {
-      const fallbacks = FALLBACK_EVENTS[tier];
-      return fallbacks[Math.floor(Math.random() * fallbacks.length)];
-    };
+    const pickFallback = () => nextFallbackEvent(tier);
     // Per-IP paid-call guard. On block, serve the existing fallback (free) and
     // skip Anthropic entirely — never 429 here, which would discard the
     // already-advanced simulation step above.
@@ -491,7 +522,7 @@ async function handleAdvance(
   return jsonResponse(response, 200, origin);
 }
 
-async function handleChoice(
+export async function handleChoice(
   request: Request,
   env: Env,
   origin: string,
@@ -528,6 +559,15 @@ async function handleChoice(
   stateForApply.simulation.pending_event_hash = null;
   stateForApply.simulation.pending_event_trigger = null;
   stateForApply.simulation.days_since_last_event = 0;
+
+  // Record the resolved event's title for anti-repetition. Keep the last 5;
+  // assembleEventPrompt surfaces these as a "do NOT repeat" line on the next
+  // generation. Defensive against pre-field-migration states (?? []).
+  const recentTitles = stateForApply.simulation.recent_event_titles ?? [];
+  if (typeof body.event.title === "string" && body.event.title.length > 0) {
+    recentTitles.push(body.event.title);
+  }
+  stateForApply.simulation.recent_event_titles = recentTitles.slice(-5);
 
   const signed_state = await applyEventAndSign(
     stateForApply,
@@ -807,7 +847,7 @@ async function handleEpitaph(
   );
 }
 
-async function handleRiver(
+export async function handleRiver(
   request: Request,
   env: Env,
   origin: string,
@@ -845,6 +885,13 @@ async function handleRiver(
   // Already resolved?
   if (verified.state.simulation.resolved_crossings.includes(body.crossing_id)) {
     return jsonResponse({ error: "crossing_already_resolved" }, 400, origin);
+  }
+
+  // Positional gate: crossing IDs are public, so without this a client could
+  // POST a future crossing_id and skip the forced stop. The party must have
+  // actually reached the crossing's mile marker. (Tech debt item 3.6 / §4.)
+  if (verified.state.position.miles_traveled < crossing.mile_marker) {
+    return jsonResponse({ error: "river_not_reached" }, 400, origin);
   }
 
   const next = structuredClone(verified.state);
@@ -942,7 +989,7 @@ function mapTradeItemToSupplyKey(itemName: string): keyof GameState["supplies"] 
   return null;
 }
 
-async function handleLandmark(
+export async function handleLandmark(
   request: Request,
   env: Env,
   origin: string,
@@ -1073,7 +1120,7 @@ async function handleLandmark(
   }, 200, origin);
 }
 
-async function handleHunt(
+export async function handleHunt(
   request: Request,
   env: Env,
   origin: string,

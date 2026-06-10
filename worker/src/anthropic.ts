@@ -8,10 +8,14 @@ const ALLOWED_CONSEQUENCE_KEYS = new Set([
   "medicine", "money", "oxen", "morale", "miles", "days",
 ]);
 
-// Retry config: shrinking timeouts to cap total latency at ~17s worst case
+// Retry config: fast-fail ladder. The interactive /advance path must serve an
+// instant fallback rather than stall the player, so we cap total latency hard:
+// 1 retry only (2 attempts), with shrinking timeouts. Worst case is now
+// ~4s + ~1s delay + ~2s ≈ 7s (was ~17s with 3 attempts). The hand-written
+// fallback events sit ready behind a failed/timed-out call.
 const RETRY_STATUS_CODES = new Set([429, 529]);
-const RETRY_TIMEOUTS = [8000, 4000, 2000]; // 1st attempt, 1st retry, 2nd retry
-const RETRY_DELAYS = [1000, 2000]; // delay before 1st retry, before 2nd retry
+const RETRY_TIMEOUTS = [4000, 2000]; // 1st attempt, 1st (and only) retry
+const RETRY_DELAYS = [1000]; // delay before the single retry
 
 export async function callAnthropic(
   system: string,
@@ -20,7 +24,7 @@ export async function callAnthropic(
   opts?: { maxTokens?: number; timeout?: number },
 ): Promise<string> {
   const maxTokens = opts?.maxTokens ?? 800;
-  const baseTimeout = opts?.timeout ?? 8000;
+  const baseTimeout = opts?.timeout ?? RETRY_TIMEOUTS[0];
   const maxAttempts = RETRY_TIMEOUTS.length;
   let lastError: Error | null = null;
 
@@ -195,6 +199,76 @@ export const FALLBACK_EVENTS: Record<ToneTier, EventResponse[]> = {
       personality_effects: {},
       journal_entry: "An ox strayed in the night. A setback for the company.",
     },
+    {
+      title: "River Ford Decision",
+      description: "A shallow creek crosses the trail. The water looks calm, but the bank is steep and muddy on the far side.",
+      choices: [
+        { label: "Ford carefully", consequences: { days: 1, morale: 5 } },
+        { label: "Rush across to save time", consequences: { health: -5, miles: 8 } },
+      ],
+      personality_effects: {},
+      journal_entry: "Crossed a creek today. The far bank was a struggle.",
+    },
+    {
+      title: "Wild Berries",
+      description: "The children find a thicket of ripe berries near the camp. There is enough to gather a good amount, if the party spends the time.",
+      choices: [
+        { label: "Spend the morning gathering", consequences: { food: 15, morale: 5, days: 1 } },
+        { label: "Take a handful and move on", consequences: { food: 3, miles: 10 } },
+      ],
+      personality_effects: {},
+      journal_entry: "The children found berries. A small sweetness on a hard road.",
+    },
+    {
+      title: "Trail Fork",
+      description: "The trail splits. One branch is the well-worn main route; the other is a shortcut that other parties have warned can be rough.",
+      choices: [
+        { label: "Take the known route", consequences: { miles: 10 } },
+        { label: "Try the shortcut", consequences: { miles: 18, health: -5, morale: -5 } },
+      ],
+      personality_effects: {},
+      journal_entry: "Came to a fork in the trail and had to choose our road.",
+    },
+    {
+      title: "Worn Boots",
+      description: "Several of the party's boots have worn through at the sole. Bare feet on this ground will slow everyone down.",
+      choices: [
+        { label: "Repair them with spare cloth", consequences: { clothing: -1, days: 1 } },
+        { label: "Press on barefoot", consequences: { health: -5, morale: -5 } },
+      ],
+      personality_effects: {},
+      journal_entry: "Our boots are failing us. The trail is hard on leather and feet alike.",
+    },
+    {
+      title: "Helpful Guide",
+      description: "A friendly trapper offers to point out the best water and grazing for the next stretch, for a small fee.",
+      choices: [
+        { label: "Pay him for the advice", consequences: { money: -200, morale: 5, miles: 6 } },
+        { label: "Decline and find your own way", consequences: { morale: -5 } },
+      ],
+      personality_effects: {},
+      journal_entry: "A trapper offered to guide us a ways. Good company on the road.",
+    },
+    {
+      title: "Clear Skies",
+      description: "After days of grey weather, the sky opens bright and the trail is firm underfoot. Spirits lift across the company.",
+      choices: [
+        { label: "Make the most of the good weather", consequences: { miles: 14, morale: 10 } },
+        { label: "Rest while conditions are good", consequences: { days: 1, health: 5, morale: 5 } },
+      ],
+      personality_effects: {},
+      journal_entry: "A fine clear day. We made good time and laughed for the first time in a while.",
+    },
+    {
+      title: "Prairie Schooner Repair",
+      description: "The wagon cover has torn loose in the wind and supplies are exposed to the weather. A morning's work with needle and thread would set it right.",
+      choices: [
+        { label: "Patch the cover properly", consequences: { days: 1, morale: 5 } },
+        { label: "Lash it down and keep rolling", consequences: { food: -10, miles: 10 } },
+      ],
+      personality_effects: {},
+      journal_entry: "The wind tore at our wagon cover. We mended it as best we could.",
+    },
   ],
 
   medium: [
@@ -249,6 +323,78 @@ export const FALLBACK_EVENTS: Record<ToneTier, EventResponse[]> = {
       ],
       personality_effects: {},
       journal_entry: "Axle broke on a descent. Had to make hard choices about what to keep.",
+    },
+    {
+      title: "The Beggar Family",
+      description: "A family sits beside the trail, their wagon long broken, their food gone. They ask for whatever can be spared. There is not enough for everyone.",
+      choices: [
+        { label: "Share what little you have", consequences: { food: -40, morale: 10 } },
+        { label: "Give them nothing and ride on", consequences: { morale: -15 } },
+        { label: "Offer them a place if they can keep pace", consequences: { food: -20, days: 1 } },
+      ],
+      personality_effects: {},
+      journal_entry: "We passed a family with nothing. What we did or did not do will sit with us.",
+    },
+    {
+      title: "Theft in the Night",
+      description: "Morning reveals that someone slipped into camp and made off with supplies. Tracks lead toward another train ahead on the trail.",
+      choices: [
+        { label: "Confront the train ahead", consequences: { days: 1, morale: -10 } },
+        { label: "Swallow the loss and move on", consequences: { food: -25, ammo: -10, morale: -5 } },
+      ],
+      personality_effects: {},
+      journal_entry: "Someone robbed us in the dark. The trail breeds desperation in all of us.",
+    },
+    {
+      title: "Fork in the Weather",
+      description: "Storm clouds gather to the west. Pressing on means risking a soaking and worse; stopping means losing a day you may not have.",
+      choices: [
+        { label: "Race ahead of the storm", consequences: { miles: 16, health: -10 } },
+        { label: "Make camp and wait it out", consequences: { days: 1, food: -10, morale: -5 } },
+      ],
+      personality_effects: {},
+      journal_entry: "A storm chased us across the plain. We gambled against the sky.",
+    },
+    {
+      title: "Snakebite",
+      description: "A rattlesnake strikes one of the party as they gather firewood. The wound is already swelling. There is an old remedy, but no certainty.",
+      choices: [
+        { label: "Cut and draw the poison", consequences: { health: -10, days: 1 } },
+        { label: "Dose with medicine and pray", consequences: { medicine: -2, morale: -5 } },
+        { label: "Press on and hope it passes", consequences: { health: -20, miles: 8 } },
+      ],
+      personality_effects: {},
+      journal_entry: "A snake found one of us by the woodpile. We did what we could.",
+    },
+    {
+      title: "The Quarrel Over Rations",
+      description: "Hunger has frayed tempers. Two members come to blows over how the food is divided. The whole company watches to see how it is settled.",
+      choices: [
+        { label: "Cut everyone's share equally", consequences: { food: -10, morale: -10 } },
+        { label: "Side with the strongest workers", consequences: { morale: -15 } },
+      ],
+      personality_effects: {},
+      journal_entry: "We fought over the food today. There is never enough, and it shows in our faces.",
+    },
+    {
+      title: "Mired Wagon",
+      description: "The wagon sinks to its axles in a soft bottom. Every hour spent here is an hour the oxen strain and the food dwindles.",
+      choices: [
+        { label: "Unload and dig it free", consequences: { days: 1, health: -5 } },
+        { label: "Whip the oxen hard to pull through", consequences: { oxen: -1, miles: 6 } },
+      ],
+      personality_effects: {},
+      journal_entry: "Bogged down in soft ground. The trail does not give anything back easily.",
+    },
+    {
+      title: "The Sick Stranger",
+      description: "A man staggers out of the brush, feverish and begging for water and a place to lie down. Taking him in risks the sickness; turning him away has its own weight.",
+      choices: [
+        { label: "Tend to him and risk the fever", consequences: { medicine: -1, health: -5, morale: 5 } },
+        { label: "Give water and send him on", consequences: { food: -5, morale: -10 } },
+      ],
+      personality_effects: {},
+      journal_entry: "A sick stranger came to us out of the brush. We chose, and we will live with it.",
     },
   ],
 
@@ -305,6 +451,76 @@ export const FALLBACK_EVENTS: Record<ToneTier, EventResponse[]> = {
       ],
       personality_effects: {},
       journal_entry: "Met a trader who knew exactly how desperate we were.",
+    },
+    {
+      title: "The Empty Cradle",
+      description: "A family ahead buried something small this morning and would not speak of it. They left the cradle by the trailside, turned to face west. The party walks past it and no one says a word.",
+      choices: [
+        { label: "Take the wood for the fire", consequences: { morale: -15 } },
+        { label: "Leave it and keep walking", consequences: { morale: -5, miles: 8 } },
+      ],
+      personality_effects: {},
+      journal_entry: "We passed what they left behind. Some griefs do not bear naming.",
+    },
+    {
+      title: "Counting Heads",
+      description: "Someone counts the party at the cookfire and comes up one short. They count again. The number is right the second time, but no one is sure who they thought they saw.",
+      choices: [
+        { label: "Say nothing and bank the fire", consequences: { morale: -10 } },
+        { label: "Walk the perimeter with the lantern", consequences: { health: -5, days: 0 } },
+      ],
+      personality_effects: {},
+      journal_entry: "We are all accounted for. I keep counting anyway.",
+    },
+    {
+      title: "The Wolves Wait",
+      description: "They have followed since the last grave. They keep just out of range, patient as creditors, and at night their eyes catch the firelight. The oxen will not settle.",
+      choices: [
+        { label: "Spend ammunition to thin them", consequences: { ammo: -12, morale: -5 } },
+        { label: "Build the fire high and endure the night", consequences: { health: -10, food: -10 } },
+      ],
+      personality_effects: {},
+      journal_entry: "The wolves know something we do not. They are in no hurry.",
+    },
+    {
+      title: "What the Sick One Says",
+      description: "The fevered one has begun to talk through the nights — to people not present, about things not yet happened. By morning they remember none of it. The rest of the party remembers all of it.",
+      choices: [
+        { label: "Dose them to keep them quiet", consequences: { medicine: -2, morale: -5 } },
+        { label: "Let them speak and listen", consequences: { health: -5, morale: -15 } },
+      ],
+      personality_effects: {},
+      journal_entry: "He spoke of the road ahead as though he had already walked it. I did not sleep.",
+    },
+    {
+      title: "The Shared Grave",
+      description: "The ground is frozen too hard to dig two holes, and there are two to bury. The choice is whether to lay them together or to spend the strength no one has on a second grave.",
+      choices: [
+        { label: "Bury them together and move on", consequences: { days: 1, morale: -10 } },
+        { label: "Spend the day digging properly", consequences: { days: 2, health: -10 } },
+      ],
+      personality_effects: {},
+      journal_entry: "We laid them in the one hole. The trail does not grant us the dignity of distance.",
+    },
+    {
+      title: "The Mirror Train",
+      description: "A wagon train passes going the wrong way — east, against everything. Gaunt, silent, eyes that do not meet yours. One of them says only: 'There is nothing out there worth what it costs.' Then they are gone.",
+      choices: [
+        { label: "Press west regardless", consequences: { miles: 10, morale: -15 } },
+        { label: "Make camp and reconsider the road", consequences: { days: 1, morale: -5 } },
+      ],
+      personality_effects: {},
+      journal_entry: "We met those who turned back. I cannot stop thinking of what they saw.",
+    },
+    {
+      title: "The Lottery of the Last Dose",
+      description: "Two have taken the fever and there is medicine for one. No one will say it aloud, so the matter falls to a drawn lot, or to whoever holds the bottle. The healthy ones do not meet each other's eyes.",
+      choices: [
+        { label: "Give it to the one most likely to live", consequences: { medicine: -3, morale: -10 } },
+        { label: "Split it and hope for both", consequences: { medicine: -3, health: -10, morale: -5 } },
+      ],
+      personality_effects: {},
+      journal_entry: "There was medicine enough for one. We are the kind of people who must now decide such things.",
     },
   ],
 };

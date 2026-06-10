@@ -287,6 +287,10 @@ export interface SimulationState {
   pending_event_trigger: "event" | "bitter_path" | null;
   landmark_rest_used: string[];
   bitter_path_taken: BitterPathOutcome;
+  // Titles of the last ~5 resolved events this run. Surfaced to the LLM as a
+  // "do NOT repeat these titles" anti-repetition signal so the same event does
+  // not fire back-to-back. Capped at 5 entries (oldest dropped).
+  recent_event_titles: string[];
 }
 
 export interface GameState {

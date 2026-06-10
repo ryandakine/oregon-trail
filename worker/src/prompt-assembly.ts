@@ -96,6 +96,48 @@ export function buildRecentEventsBlock(state: GameState): string {
   return truncateToTokenBudget(`RECENT EVENTS:\n${text}`, 300);
 }
 
+// Grounding block — feeds the historical corpus that was previously dormant
+// (diary_quote / event_hooks per landmark, period_voice diary excerpts and
+// vocabulary) into the prompt so generated events sit in real 1848 material
+// instead of generic frontier register. ~250 token budget. Every field is
+// optional in practice (test fixtures and a few records ship empty), so each
+// part is guarded and the block returns '' when nothing is available.
+export function buildHistoricalGroundingBlock(state: GameState, ctx: HistoricalContext): string {
+  const parts: string[] = [];
+
+  const segment = ctx.segments.find(s => s.id === state.position.current_segment_id);
+  const nearbyLandmark = segment
+    ? ctx.landmarks.find(l => l.segment_id === segment.id)
+    : undefined;
+
+  if (nearbyLandmark?.diary_quote) {
+    parts.push(`PERIOD DIARY (${nearbyLandmark.name}): "${nearbyLandmark.diary_quote}"`);
+  }
+  if (nearbyLandmark?.event_hooks && nearbyLandmark.event_hooks.length > 0) {
+    parts.push(`Plausible incidents here: ${nearbyLandmark.event_hooks.join(', ')}`);
+  }
+
+  // One rotating diary excerpt + a few vocabulary substitutions from the
+  // global corpus. Rotate by miles so consecutive events vary their grounding
+  // rather than repeating the first excerpt every call.
+  const excerpts = ctx.period_voice?.diary_excerpts ?? [];
+  if (excerpts.length > 0) {
+    const pick = excerpts[state.position.miles_traveled % excerpts.length];
+    parts.push(`EMIGRANT VOICE (${pick.author}): "${pick.text}"`);
+  }
+
+  const vocab = ctx.period_voice?.vocabulary ?? [];
+  if (vocab.length > 0) {
+    const pairs = vocab.slice(0, 4).map(v => `${v.modern_term}→${v.period_term}`);
+    parts.push(`Period diction: ${pairs.join(', ')}`);
+  }
+
+  if (parts.length === 0) return '';
+
+  parts.unshift('HISTORICAL GROUNDING (draw on this; do not quote it verbatim):');
+  return truncateToTokenBudget(parts.join('\n'), 250);
+}
+
 // Situational hint that fires when a horror-tier run is approaching Bitter
 // Path trigger territory: low food + recent death or active starvation.
 // Appended to the LLM user prompt so the narrator starts thinking about
@@ -143,6 +185,16 @@ export function buildConditionalBlock(state: GameState, ctx: HistoricalContext):
   return truncateToTokenBudget(parts.join('\n'), 200);
 }
 
+// Anti-repetition signal. The simulation tracks the last few event titles the
+// player has already seen this run; surfacing them as a "do NOT repeat" line
+// keeps the LLM from re-issuing "Broken Wheel" three times in a row. Returns
+// '' when there is nothing to avoid yet (start of run).
+export function buildAntiRepetitionBlock(state: GameState): string {
+  const recent = state.simulation.recent_event_titles ?? [];
+  if (recent.length === 0) return '';
+  return `Do NOT repeat any of these recent event titles or close variants: ${recent.join('; ')}.`;
+}
+
 // ── Main assembler ──────────────────────────────────────────
 
 export function assembleEventPrompt(state: GameState, ctx: HistoricalContext): AssembledPrompt {
@@ -152,6 +204,8 @@ export function assembleEventPrompt(state: GameState, ctx: HistoricalContext): A
   const partyBlock = buildPartyBlock(state);
   const recentBlock = buildRecentEventsBlock(state);
   const conditionalBlock = buildConditionalBlock(state, ctx);
+  const groundingBlock = buildHistoricalGroundingBlock(state, ctx);
+  const antiRepetitionBlock = buildAntiRepetitionBlock(state);
 
   const userParts: string[] = [
     locationBlock,
@@ -163,6 +217,14 @@ export function assembleEventPrompt(state: GameState, ctx: HistoricalContext): A
 
   if (conditionalBlock) {
     userParts.push('', conditionalBlock);
+  }
+
+  if (groundingBlock) {
+    userParts.push('', groundingBlock);
+  }
+
+  if (antiRepetitionBlock) {
+    userParts.push('', antiRepetitionBlock);
   }
 
   const bitterHint = buildBitterPathSituationalHint(state);

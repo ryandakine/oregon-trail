@@ -107,6 +107,7 @@ export async function createInitialState(
       pending_event_trigger: null,
       landmark_rest_used: [],
       bitter_path_taken: "none",
+      recent_event_titles: [],
     },
     meta: {
       run_id: crypto.randomUUID(),
