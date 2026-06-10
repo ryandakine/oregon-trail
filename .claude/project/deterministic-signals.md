@@ -1,5 +1,5 @@
 ---
-generated_at: 2026-06-07T18:53:01Z
+generated_at: 2026-06-10T20:42:10Z
 atomic_version: 4.0.0
 ---
 # Deterministic signals
@@ -164,7 +164,7 @@ atomic_version: 4.0.0
 ├── APP_STORE_PLAN.md (13d0dbb, 321L, 22925ch, 23121B)
 ├── BITTER_PATH_C3_PLAN.md (7e0cfe4, 775L, 38228ch, 38857B)
 ├── BITTER_PATH_PLAN.md (bbdddd8, 508L, 25732ch, 26092B)
-├── CLAUDE.md (eaca02e, 390L, 26104ch, 26762B)
+├── CLAUDE.md (4b1202e, 398L, 26206ch, 26864B)
 ├── COMPETITIVE_ANALYSIS.md (4a7c6c5, 241L, 10926ch, 10935B)
 ├── DIFFICULTY_REBALANCE_PLAN.md (8e9fbc9, 154L, 8882ch, 8939B)
 ├── DIFFICULTY_STATUS.md (4e6f280, 133L, 7668ch, 7803B)
@@ -196,7 +196,7 @@ atomic_version: 4.0.0
 ## Languages
 
 - JSON: 34927 LOC (58%), 14 files (12%)
-- Markdown: 8779 LOC (14%), 20 files (17%)
+- Markdown: 8787 LOC (14%), 20 files (17%)
 - JavaScript: 7182 LOC (11%), 35 files (30%)
 - TypeScript: 7063 LOC (11%), 30 files (26%)
 - HTML: 1496 LOC (2%), 10 files (8%)
