@@ -3,12 +3,15 @@ window.__ERRORS = [];
 window.addEventListener("error", (e) => window.__ERRORS.push({ msg: e.message, src: e.filename, line: e.lineno }));
 window.addEventListener("unhandledrejection", (e) => window.__ERRORS.push({ msg: "rejection: " + String(e.reason) }));
 
-// Kaplay CDN with jsDelivr fallback so the game loads if unpkg is down.
+// Kaplay is self-hosted at /vendor/kaplay.mjs (IMPROVEMENT_ROADMAP §2) so the
+// service worker can precache it and the PWA works offline — a cross-origin
+// CDN module was never cacheable. jsDelivr stays as a runtime fallback if the
+// self-hosted copy ever fails to load (e.g. a bad deploy).
 let kaplay;
 try {
-  kaplay = (await import("https://unpkg.com/kaplay@3001/dist/kaplay.mjs")).default;
+  kaplay = (await import("/vendor/kaplay.mjs")).default;
 } catch (err) {
-  console.warn("unpkg unreachable, falling back to jsDelivr:", err?.message);
+  console.warn("self-hosted kaplay unreachable, falling back to jsDelivr:", err?.message);
   kaplay = (await import("https://cdn.jsdelivr.net/npm/kaplay@3001/dist/kaplay.mjs")).default;
 }
 
@@ -51,6 +54,37 @@ if (canvas) {
 }
 
 const engine = window.engine;
+
+// ── "Written live by Claude" loading overlay (IMPROVEMENT_ROADMAP §1.5) ──
+// engine.emit('loading', true|false) fires around every ~8s LLM call. Without
+// a subscriber the wait reads as a hang on the exact feature being demoed.
+// Frame it instead. Copy mirrors tone.js:89-92. The tone scene runs its own
+// inline loading state, so suppress this global one while on TONE to avoid a
+// double overlay.
+const aiLoadingEl = document.createElement("div");
+aiLoadingEl.id = "ai-loading";
+aiLoadingEl.setAttribute("role", "status");
+aiLoadingEl.setAttribute("aria-live", "polite");
+aiLoadingEl.style.cssText = [
+  "position:fixed", "inset:0", "z-index:250", "display:none",
+  "flex-direction:column", "align-items:center", "justify-content:center",
+  "gap:10px", "padding:32px", "text-align:center",
+  "background:rgba(10,8,6,0.86)", "color:#f5e6c8",
+  "font-family:Georgia,'Times New Roman',serif",
+].join(";");
+aiLoadingEl.innerHTML = `
+  <p style="color:#d4a030;font-size:1.15rem;margin:0;">The trail unfolds…</p>
+  <p style="font-size:0.9rem;opacity:0.75;margin:0;">Written live by Claude.</p>
+`;
+document.body.appendChild(aiLoadingEl);
+
+engine.on("loading", (isLoading) => {
+  if (engine.state === "TONE") { aiLoadingEl.style.display = "none"; return; }
+  aiLoadingEl.style.display = isLoading ? "flex" : "none";
+});
+// Never let the overlay outlive a scene change (e.g. an error mid-call).
+engine.on("stateChange", () => { aiLoadingEl.style.display = "none"; });
+engine.on("error", () => { aiLoadingEl.style.display = "none"; });
 
 // Register stateChange bridge BEFORE engine.init() — critical:
 // init() fires transition('TITLE') synchronously, so bridge must exist first

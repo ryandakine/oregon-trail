@@ -120,12 +120,26 @@ export default function register(k, engine) {
     buttons.forEach((btn, i) => {
       const bx = startX + i * (btnW + btnGap);
 
-      k.add([
+      // Choose the crossing method. Shared by the key handler and the tap
+      // handler so the game is reachable on a phone (no keyboard) — see
+      // IMPROVEMENT_ROADMAP §1.1.
+      const choose = () => {
+        if (selected) return;
+        if (btn.choice === "ferry" && money < ferryCost) return;
+        selected = true;
+        engine.resolveRiver(btn.choice);
+      };
+
+      // k.area() makes the button rect clickable; k.onClick() on that obj
+      // fires for both mouse and touch (kaplay maps touchstart → click).
+      const bg = k.add([
         k.rect(btnW, btnH, { radius: 4 }),
         k.pos(bx, btnY),
         k.color(btn.color[0], btn.color[1], btn.color[2]),
         k.opacity(0.85),
+        k.area(),
       ]);
+      bg.onClick(choose);
 
       k.add([
         k.text(btn.label, { size: 14 }),
@@ -134,12 +148,7 @@ export default function register(k, engine) {
         k.color(255, 255, 255),
       ]);
 
-      k.onKeyPress(btn.key, () => {
-        if (selected) return;
-        if (btn.choice === "ferry" && money < ferryCost) return;
-        selected = true;
-        engine.resolveRiver(btn.choice);
-      });
+      k.onKeyPress(btn.key, choose);
     });
 
     // Crossing description panel

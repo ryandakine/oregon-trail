@@ -75,11 +75,16 @@ export default function register(k, engine) {
     if (isFortOrSettlement) {
       actions.push({ label: "(3) Talk", key: "3", action: "talk" });
     }
+    // Hunt entry (IMPROVEMENT_ROADMAP §1.3). Returns to TRAVEL then opens the
+    // HUNTING scene via engine.requestHuntFromLandmark().
+    actions.push({ label: "(H) Hunt", key: "h", action: "hunt" });
     actions.push({ label: "(4) Continue", key: "4", action: "continue" });
 
-    const btnW = 130;
+    const btnGap = 8;
+    // Shrink button width so 5 actions (Rest/Trade/Talk/Hunt/Continue) fit the
+    // 640px frame; 130px each would overflow once Hunt was added (§1.3).
+    const btnW = Math.min(130, Math.floor((W - 24 - (actions.length - 1) * btnGap) / actions.length));
     const btnH = 32;
-    const btnGap = 10;
     const totalBtnW = actions.length * btnW + (actions.length - 1) * btnGap;
     const startX = (W - totalBtnW) / 2;
     const btnY = H - 88;   // cleared bottom HUD panel at y=440
@@ -91,21 +96,9 @@ export default function register(k, engine) {
       const bx = startX + i * (btnW + btnGap);
       const btnColor = btn.action === "continue" ? [85, 107, 47] : [46, 139, 87];
 
-      const bg = k.add([
-        k.rect(btnW, btnH, { radius: 4 }),
-        k.pos(bx, btnY),
-        k.color(btnColor[0], btnColor[1], btnColor[2]),
-        k.opacity(0.85),
-      ]);
-      const txt = k.add([
-        k.text(btn.label, { size: 13 }),
-        k.pos(bx + btnW / 2, btnY + btnH / 2),
-        k.anchor("center"),
-        k.color(255, 255, 255),
-      ]);
-      btnObjs.push({ bg, txt });
-
-      k.onKeyPress(btn.key, () => {
+      // Shared by key + tap so the landmark is reachable without a keyboard
+      // (IMPROVEMENT_ROADMAP §1.1/§1.3).
+      const choose = () => {
         if (btn.action === "continue") {
           engine.resolveLandmark("continue");
           return;
@@ -122,7 +115,30 @@ export default function register(k, engine) {
           showTalkOverlay(landmark, engine);
           return;
         }
-      });
+        if (btn.action === "hunt") {
+          engine.track?.('hunt_started', { from: 'landmark' });
+          engine.requestHuntFromLandmark();
+          return;
+        }
+      };
+
+      const bg = k.add([
+        k.rect(btnW, btnH, { radius: 4 }),
+        k.pos(bx, btnY),
+        k.color(btnColor[0], btnColor[1], btnColor[2]),
+        k.opacity(0.85),
+        k.area(),
+      ]);
+      bg.onClick(choose);
+      const txt = k.add([
+        k.text(btn.label, { size: 13 }),
+        k.pos(bx + btnW / 2, btnY + btnH / 2),
+        k.anchor("center"),
+        k.color(255, 255, 255),
+      ]);
+      btnObjs.push({ bg, txt });
+
+      k.onKeyPress(btn.key, choose);
     });
 
     // Error recovery

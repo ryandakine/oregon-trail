@@ -131,6 +131,33 @@ export default function register(k, engine) {
     });
     engineOn("error", ({ message }) => showFloatingText("Error: " + message));
 
+    // ── Hunt action (IMPROVEMENT_ROADMAP §1.3) ──
+    // startHunt() previously had zero callers — the HUNTING scene was
+    // unreachable, so players couldn't recover food. Surface an [H]/tap entry
+    // in the travel HUD. Placed bottom-left, clear of the pause hotspot
+    // (x<100,y<60) and the bottom party panel (y=440).
+    const huntBtnW = 92, huntBtnH = 26, huntBtnX = 8, huntBtnY = 404;
+    const huntBtn = k.add([
+      k.rect(huntBtnW, huntBtnH, { radius: 4 }),
+      k.pos(huntBtnX, huntBtnY),
+      k.color(46, 139, 87),
+      k.opacity(0.85),
+      k.area(),
+      k.fixed(),
+      k.z(60),
+    ]);
+    k.add([
+      k.text("(H) Hunt", { size: 13 }),
+      k.pos(huntBtnX + huntBtnW / 2, huntBtnY + huntBtnH / 2),
+      k.anchor("center"),
+      k.color(255, 255, 255),
+      k.fixed(),
+      k.z(61),
+    ]);
+    const goHunt = () => { engine.track('hunt_started'); engine.startHunt(); };
+    huntBtn.onClick(goHunt);
+    k.onKeyPress("h", goHunt);
+
     // ── Pause ──
     let pauseOverlay = null;
     function togglePause() {
@@ -153,7 +180,44 @@ export default function register(k, engine) {
           "",
           "Press P to resume",
         ];
-        k.add([k.text(statsLines.join("\n"), { size: 13, width: 400 }), k.pos(320, 240), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
+        k.add([k.text(statsLines.join("\n"), { size: 13, width: 400 }), k.pos(320, 200), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
+
+        // ── Pace + rations controls (IMPROVEMENT_ROADMAP §1.3) ──
+        // changePace()/changeRations() previously had zero callers, so the
+        // difficulty levers were dead. Cycle buttons live in the pause overlay;
+        // the chosen value is sent on the next /api/advance via pendingPace/
+        // pendingRations. Server accepts the override (index.ts force_pace/
+        // force_rations). Pretty labels for bare_bones.
+        const PACES = ["steady", "strenuous", "grueling"];
+        const RATIONS = ["filling", "meager", "bare_bones"];
+        const pretty = (s) => String(s).replace(/_/g, " ");
+        const settings = engine.settings;
+        let curPace = engine.pendingPace || settings?.pace || "steady";
+        let curRations = engine.pendingRations || settings?.rations || "filling";
+
+        const makeCycle = (label, getCur, onCycle, y) => {
+          const rowY = y;
+          k.add([k.text(label, { size: 13 }), k.pos(170, rowY), k.anchor("left"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
+          const valText = k.add([k.text(pretty(getCur()), { size: 14 }), k.pos(330, rowY), k.anchor("left"), k.color(...draw.PALETTE.gold), k.z(102), "pauseTag"]);
+          const btn = k.add([
+            k.rect(28, 24, { radius: 4 }), k.pos(290, rowY - 12), k.color(46, 139, 87), k.opacity(0.9), k.area(), k.z(102), "pauseTag",
+          ]);
+          k.add([k.text(">", { size: 16 }), k.pos(304, rowY), k.anchor("center"), k.color(255, 255, 255), k.z(103), "pauseTag"]);
+          btn.onClick(() => { onCycle(); valText.text = pretty(getCur()); });
+          return btn;
+        };
+
+        makeCycle("Pace:", () => curPace, () => {
+          curPace = PACES[(PACES.indexOf(curPace) + 1) % PACES.length];
+          engine.changePace(curPace);
+        }, 320);
+        makeCycle("Rations:", () => curRations, () => {
+          curRations = RATIONS[(RATIONS.indexOf(curRations) + 1) % RATIONS.length];
+          engine.changeRations(curRations);
+        }, 352);
+
+        k.add([k.text("(changes apply as you travel on)", { size: 10 }), k.pos(320, 384), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.opacity(0.7), k.z(101), "pauseTag"]);
+        k.add([k.text("Press P or tap top-left to resume", { size: 12 }), k.pos(320, 410), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
       } else {
         engine.resumeAdvance();
         k.destroyAll("pauseTag");
@@ -164,6 +228,14 @@ export default function register(k, engine) {
     }
     k.onKeyPress("p", togglePause);
     k.onClick(() => { if (k.mousePos().x < 100 && k.mousePos().y < 60) togglePause(); });
+
+    // If a landmark requested a hunt, route straight to HUNTING instead of
+    // auto-advancing (IMPROVEMENT_ROADMAP §1.3). startHunt() pauses advance +
+    // transitions, so we never kick off a travel advance this frame.
+    if (engine.consumePendingHunt?.()) {
+      engine.startHunt();
+      return;
+    }
 
     engine.resumeAdvance();
     engine.advance();

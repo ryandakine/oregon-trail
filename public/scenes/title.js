@@ -119,6 +119,16 @@ export default function register(k, engine) {
       k.color(180, 140, 60),
     ]);
 
+    // ── Meta-progression line (localStorage, no backend) ──
+    // "Best: 847 mi · 12 runs · Horror not yet survived" — the repeat-visit
+    // hook (IMPROVEMENT_ROADMAP §1.4). getMetaSummary never throws.
+    k.add([
+      k.text(GameEngine.getMetaSummary(), { size: 11, width: 600 }),
+      k.pos(320, 178),
+      k.anchor("center"),
+      k.color(150, 140, 110),
+    ]);
+
     // ── Challenge of the week ──
     // Use CHALLENGE_INFO from engine.js (single source of truth)
     const challengeId = GameEngine.getCurrentChallengeId();

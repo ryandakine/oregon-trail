@@ -34,12 +34,38 @@ export default function register(k, engine) {
       ? `<span style="color:#6aad6a;">Reached Oregon City</span>`
       : `<span style="color:#cc3333;">Perished on the Trail</span>`;
 
+    // Lead with the viral fact — an AI wrote this run live — so the share
+    // says what's novel, not just the score. (IMPROVEMENT_ROADMAP §1.2)
     const shareText = arrived && alive > 0
-      ? `I led the ${leader} party ${miles} miles to Oregon City! ${alive}/${totalMembers} survived. Can you do better?`
-      : `The ${leader} party perished after ${miles} miles on the Oregon Trail. ${dead} lost. Can you survive?`;
+      ? `I led the ${leader} party ${miles} miles to Oregon City! ${alive}/${totalMembers} survived. An AI wrote my whole run live — every playthrough is different. Can you do better?`
+      : `The ${leader} party perished after ${miles} miles on the Oregon Trail. ${dead} lost. An AI wrote my whole run live — every playthrough is different. Can you survive?`;
 
+    // Plain origin for navigator/clipboard; UTM-tagged variants for the OSI
+    // links so Plausible can attribute game → site traffic. (ROADMAP §1.2/§1.5)
     const shareUrl = window.location.origin;
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+    // UTM-tagged variants so Plausible can attribute game → site traffic.
+    const utm = (base, medium) => `${base}/?utm_source=oregon-trail&utm_medium=${medium}`;
+    const dailyUrl = `${shareUrl}/?utm_source=oregon-trail&utm_medium=share&play=daily`;
+    const osiSiteUrl = utm('https://osi-cyber.com', 'share-footer');
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(utm(shareUrl, 'twitter'))}`;
+
+    // Streak: count consecutive prior days the daily trail was completed,
+    // ending today. Purely local (ROADMAP §1.2). 0 → no streak line.
+    const streak = (() => {
+      try {
+        let n = 0;
+        const today = GameEngine.getDailyTrailNumber();
+        // Today counts if a run just finished in daily mode.
+        for (let day = today; day >= 1; day--) {
+          const raw = localStorage.getItem('ot_daily_' + day);
+          if (!raw) break;
+          const r = JSON.parse(raw);
+          if (!r?.completed) break;
+          n++;
+        }
+        return n;
+      } catch (_) { return 0; }
+    })();
 
     content.innerHTML = `
       <h1 class="overlay-title">Your Journey Has Ended</h1>
@@ -58,12 +84,15 @@ export default function register(k, engine) {
       </div>
 
       <div class="overlay-choices" style="display:flex;flex-direction:column;gap:0.6rem;">
-        <a href="${twitterUrl}" target="_blank" rel="noopener" class="overlay-choice" style="display:block;text-align:center;padding:0.7rem 1rem;text-decoration:none;color:#deb887;">
+        <a href="${twitterUrl}" target="_blank" rel="noopener" id="share-twitter" class="overlay-choice" style="display:block;text-align:center;padding:0.7rem 1rem;text-decoration:none;color:#deb887;">
           Share on Twitter
         </a>
         <button id="share-copy" class="overlay-choice" style="padding:0.7rem 1rem;">
           Copy Link
         </button>
+        <a href="${dailyUrl}" id="share-daily" class="overlay-choice" style="display:block;text-align:center;padding:0.7rem 1rem;text-decoration:none;color:#a0d090;background:rgba(40,80,40,0.35);border-color:#4a8a4a;">
+          Try today's Daily Trail →${streak > 0 ? ` <span style="opacity:0.85;">&middot; \u{1F525} ${streak}-day streak</span>` : ''}
+        </a>
         <button id="share-restart" class="overlay-choice" style="padding:0.7rem 1rem;background:rgba(80,120,60,0.3);border-color:#6aad6a;">
           Play Again
         </button>
@@ -73,14 +102,14 @@ export default function register(k, engine) {
         <p class="overlay-text" style="font-size:0.9rem;margin-bottom:0.5rem;">
           Enjoyed the trail? Support the dev.
         </p>
-        <a href="https://buymeacoffee.com/osicyber" target="_blank" rel="noopener"
+        <a href="https://buymeacoffee.com/osicyber" target="_blank" rel="noopener" class="osi-link"
            style="color:#d4a030;text-decoration:underline;font-family:Georgia,serif;font-size:0.95rem;">
           Buy me a coffee
         </a>
       </div>
 
       <div style="margin-top:1.5rem;text-align:center;opacity:0.5;font-size:0.8rem;">
-        <p>Built by <a href="https://osi-cyber.com" target="_blank" rel="noopener" style="color:#deb887;">OSI Cyber</a></p>
+        <p>Built by <a href="${osiSiteUrl}" target="_blank" rel="noopener" class="osi-link" style="color:#deb887;">OSI Cyber</a></p>
       </div>
     `;
 
@@ -90,8 +119,30 @@ export default function register(k, engine) {
         await navigator.clipboard.writeText(shareUrl);
         const btn = document.getElementById('share-copy');
         btn.textContent = 'Copied!';
+        engine.track('share_clicked', { method: 'copy', outcome: arrived && alive > 0 ? 'arrival' : 'wipe' });
         setTimeout(() => { btn.textContent = 'Copy Link'; }, 2000);
       } catch (_) {}
+    });
+
+    // Twitter share — funnel event (ROADMAP §1.5).
+    document.getElementById('share-twitter')?.addEventListener('click', () => {
+      engine.track('share_clicked', { method: 'twitter', outcome: arrived && alive > 0 ? 'arrival' : 'wipe' });
+    });
+
+    // OSI outbound links — attribution goal (ROADMAP §1.5).
+    content.querySelectorAll('.osi-link').forEach((a) => {
+      a.addEventListener('click', () => engine.track('osi_link_clicked', { from: 'share' }));
+    });
+
+    // "Try today's Daily Trail" — start a fresh daily run in-session rather
+    // than reloading via the UTM href. (ROADMAP §1.2)
+    document.getElementById('share-daily')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      engine.track('daily_trail_clicked', { from: 'share' });
+      overlay.classList.remove('active');
+      engine.restart();
+      engine.startDailyTrail();
+      engine.transition('PROFESSION');
     });
 
     // Play again

@@ -134,6 +134,49 @@ await page.evaluate(() => {
 await page.waitForTimeout(500);
 assertClean("landmark (fort)");
 
+// ── 6. No-keyboard tap reachability (IMPROVEMENT_ROADMAP §1.1) ──
+// The five mid-run canvas scenes (river/hunting/death/arrival/wipe) used to
+// register keyboard handlers only — so a phone visitor hit the first river
+// crossing and could never advance (the worst bounce point). Every actionable
+// button must now carry a kaplay area() so onClick fires for mouse + touch.
+// Assert each scene mounts at least one clickable (area) GameObj. Seed a
+// minimal signed state so scenes that read supplies render their buttons.
+// k.get("area") is the component query — k.go defers the switch one frame, so
+// go + wait + query are split across evaluate calls.
+const tapScenes = [
+  ["river", {
+    id: "rc_tap", name: "Tap River", width_ft: 120, depth_ft_summer: 2,
+    ford_difficulty: 3, ferry_available: true, ferry_cost_1848_dollars: 200,
+    description: "Tap reachability check.",
+  }],
+  ["hunting", {}],
+  ["arrival", {}],
+  ["wipe", {}],
+  ["death", { name: "Tap", cause: "exhaustion", date: "1848-05-12" }],
+];
+await page.evaluate(() => {
+  window.engine.signedState = {
+    state: { supplies: { money: 50000, ammo: 20 }, party: { members: [] }, deaths: [] },
+    signature: "smoke",
+  };
+});
+for (const [scene, data] of tapScenes) {
+  await page.evaluate(([s, d]) => window.k.go(s, d), [scene, data]);
+  await page.waitForTimeout(400);
+  const clickable = await page.evaluate(() => {
+    const areaObjs = window.k.get ? window.k.get("area") : [];
+    return Array.isArray(areaObjs) ? areaObjs.length : 0;
+  });
+  assertClean(`tap-reachability (${scene})`);
+  if (clickable < 1) {
+    findings.push({
+      scene: `tap-reachability (${scene})`,
+      pageErrors: [`scene "${scene}" has 0 clickable (area) objects — unwinnable without a keyboard`],
+      kaplayErrors: [],
+    });
+  }
+}
+
 await browser.close();
 
 // ── Report ──────────────────────────────────────────────

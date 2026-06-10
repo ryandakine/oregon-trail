@@ -13,6 +13,23 @@ export default function register(k, engine) {
     const names = [];
     let step = 0;
 
+    // Period-appropriate name pool for the random/default button (ROADMAP §2).
+    // Five forced text inputs is mobile friction; one tap fills the party.
+    const NAME_POOL = [
+      'Ezra', 'Martha', 'Josiah', 'Abigail', 'Caleb', 'Hannah', 'Amos',
+      'Eliza', 'Nathaniel', 'Sarah', 'Obadiah', 'Ruth', 'Silas', 'Lucinda',
+      'Jedediah', 'Prudence', 'Levi', 'Temperance', 'Asa', 'Mercy',
+    ];
+    function randomParty() {
+      const pool = NAME_POOL.slice();
+      const picked = [];
+      for (let i = 0; i < 5 && pool.length; i++) {
+        const idx = Math.floor(Math.random() * pool.length);
+        picked.push(pool.splice(idx, 1)[0]);
+      }
+      return picked;
+    }
+
     const inputStyle = `
       background: rgba(20,15,10,0.8);
       border: 2px solid #8b4513;
@@ -60,10 +77,23 @@ export default function register(k, engine) {
         <p class="overlay-text" style="margin-top:1rem;font-size:0.85em;opacity:0.6;">
           Press Enter to confirm. (${step + 1} of 5)
         </p>
+        <div style="text-align:center;margin-top:0.5rem;">
+          <button id="name-random" class="overlay-choice" style="padding:0.5rem 1rem;font-size:0.9rem;">
+            Surprise me — random party
+          </button>
+        </div>
       `;
 
       const input = document.getElementById('name-input');
       input.focus();
+
+      // One-tap random party fills all five names and starts (ROADMAP §2).
+      document.getElementById('name-random').addEventListener('click', () => {
+        const party = randomParty();
+        overlay.classList.remove('active');
+        document.removeEventListener('keydown', onGlobalKey);
+        engine.submitNames(party[0], [party[1], party[2], party[3], party[4]]);
+      });
 
       function submit() {
         const cleaned = sanitize(input.value);

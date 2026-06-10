@@ -118,33 +118,44 @@ export default function register(k, engine) {
       }
     });
 
-    // "Download Tombstone" prompt
+    // "Download Tombstone" prompt — tappable area so it works on a phone
+    // (IMPROVEMENT_ROADMAP §1.1).
+    const download = () => {
+      engine.emit("downloadTombstone", { name, date, cause, epitaph: epitaphFull });
+    };
     const dlText = k.add([
       k.text("(D) Download Tombstone", { size: 12 }),
       k.pos(W / 2, 420),
       k.anchor("center"),
       k.color(100, 100, 100),
+      k.area(),
     ]);
-
-    k.onKeyPress("d", () => {
-      engine.emit("downloadTombstone", { name, date, cause, epitaph: epitaphFull });
-    });
+    dlText.onClick(download);
+    k.onKeyPress("d", download);
 
     // Continue prompt
     k.add([
-      k.text("Press ENTER to continue", { size: 13 }),
+      k.text("Press ENTER or tap to continue", { size: 13 }),
       k.pos(W / 2, 450),
       k.anchor("center"),
       k.color(150, 150, 150),
     ]);
 
-    k.onKeyPress("enter", () => {
+    const proceed = () => {
       const alive = engine.aliveMembers;
       if (alive.length === 0) {
         engine.transition("WIPE");
       } else {
         engine.transition("TRAVEL");
       }
+    };
+    k.onKeyPress("enter", proceed);
+    // Tap anywhere (outside the download label) advances. The download label's
+    // own onClick fires first when tapped, and download() doesn't transition,
+    // so the two don't conflict in practice.
+    k.onClick(() => {
+      if (dlText.isHovering?.()) return;
+      proceed();
     });
   });
 }

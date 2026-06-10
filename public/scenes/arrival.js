@@ -164,13 +164,16 @@ export default function register(k, engine) {
 
     // Action buttons
     const btnY = H - 50;
-    // Read Newspaper
-    k.add([
+    // Read Newspaper — key + tap (IMPROVEMENT_ROADMAP §1.1).
+    const readNewspaper = () => engine.generateNewspaper();
+    const npBtn = k.add([
       k.rect(180, 32, { radius: 4 }),
       k.pos(W / 2 - 200, btnY),
       k.color(46, 139, 87),
       k.opacity(0.85),
+      k.area(),
     ]);
+    npBtn.onClick(readNewspaper);
     k.add([
       k.text("(N) Read Newspaper", { size: 14 }),
       k.pos(W / 2 - 110, btnY + 16),
@@ -178,18 +181,25 @@ export default function register(k, engine) {
       k.color(255, 255, 255),
     ]);
 
-    k.onKeyPress("n", () => {
-      engine.generateNewspaper();
-    });
+    k.onKeyPress("n", readNewspaper);
 
     // Share (Daily Trail)
     if (engine.dailyMode) {
-      k.add([
+      const shareDaily = () => {
+        const text = engine.getDailyShareText();
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text);
+        }
+        engine.emit("shareDaily", { text });
+      };
+      const shareBtn = k.add([
         k.rect(160, 32, { radius: 4 }),
         k.pos(W / 2 + 20, btnY),
         k.color(85, 107, 47),
         k.opacity(0.85),
+        k.area(),
       ]);
+      shareBtn.onClick(shareDaily);
       k.add([
         k.text("(S) Share Result", { size: 14 }),
         k.pos(W / 2 + 100, btnY + 16),
@@ -197,13 +207,7 @@ export default function register(k, engine) {
         k.color(255, 255, 255),
       ]);
 
-      k.onKeyPress("s", () => {
-        const text = engine.getDailyShareText();
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(text);
-        }
-        engine.emit("shareDaily", { text });
-      });
+      k.onKeyPress("s", shareDaily);
     }
 
     // Tip jar text

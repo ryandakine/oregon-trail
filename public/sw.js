@@ -4,6 +4,7 @@ const STATIC_ASSETS = [
   '/index.html',
   '/engine.js',
   '/main.js',
+  '/vendor/kaplay.mjs',
   '/html2canvas.min.js',
   '/manifest.json',
   '/fonts/ibm-plex-mono-400.ttf',

@@ -21,6 +21,13 @@
   <script defer data-domain="trail.osi-cyber.com" src="https://analytics.osi-cyber.com/js/script.js"></script>
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <!-- Kaplay is self-hosted at /vendor/kaplay.mjs (IMPROVEMENT_ROADMAP §2) so
+       the service worker can cache it and the game works offline. Warm the
+       connection + parse the module early. main.js imports it on boot. -->
+  <link rel="modulepreload" href="/vendor/kaplay.mjs">
+  <!-- jsDelivr is the runtime CDN fallback in main.js if the self-hosted copy
+       fails to load; preconnect so that fallback path isn't cold. -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -150,7 +157,8 @@
   <div id="html-overlay"><div class="overlay-content" id="overlay-content"></div></div>
   <div id="newspaper-overlay"></div>
   <div id="tombstone-overlay"></div>
-  <script src="html2canvas.min.js"></script>
+  <!-- html2canvas (198KB) is now lazy-loaded on first newspaper share in
+       scenes/newspaper.js (IMPROVEMENT_ROADMAP §2), not eagerly here. -->
   <script src="engine.js"></script>
   <script type="module" src="main.js"></script>
   <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>

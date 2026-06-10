@@ -1,3 +1,21 @@
+// Lazy-load the 198KB html2canvas UMD bundle on first share instead of
+// eagerly on every page load (IMPROVEMENT_ROADMAP §2). It's UMD (sets
+// window.html2canvas), not an ES module, so inject a <script> tag and resolve
+// when the global appears. The promise is cached so repeat shares reuse it.
+let _h2cPromise = null;
+function ensureHtml2Canvas() {
+  if (typeof window.html2canvas === 'function') return Promise.resolve(window.html2canvas);
+  if (_h2cPromise) return _h2cPromise;
+  _h2cPromise = new Promise((resolve) => {
+    const s = document.createElement('script');
+    s.src = '/html2canvas.min.js';
+    s.onload = () => resolve(window.html2canvas);
+    s.onerror = () => { _h2cPromise = null; resolve(null); };
+    document.head.appendChild(s);
+  });
+  return _h2cPromise;
+}
+
 export default function register(k, engine) {
   k.scene("newspaper", (newsData) => {
     // No canvas bg needed — newspaper uses its own overlay
@@ -75,6 +93,14 @@ export default function register(k, engine) {
 
         ${deathSidebar}
 
+        <!-- Watermark + OSI credit INSIDE the capture region so the shared PNG
+             carries a link back and the viral fact. (IMPROVEMENT_ROADMAP §1.2)
+             Strings ported from the dead public/newspaper.js:76-78. -->
+        <div style="margin-top:1.5rem;padding-top:0.8rem;border-top:1px solid #3a2510;text-align:center;font-size:0.78rem;color:#5a3a1a;line-height:1.5;">
+          An AI wrote this run live &mdash; every playthrough is unique.<br>
+          Built by <strong>On-Site Intelligence</strong> &middot; Denver, Colorado &middot; <strong>trail.osi-cyber.com</strong>
+        </div>
+
         <div style="display:flex;gap:0.8rem;justify-content:center;margin-top:1.5rem;flex-wrap:wrap;">
           <button id="np-download" style="
             background:#3a2510;color:#f4e4c1;border:2px solid #2a1a0a;
@@ -95,17 +121,30 @@ export default function register(k, engine) {
       </div>
     `;
 
-    // Download via html2canvas
+    // Branded download filename, e.g. oregon-trail-ezra-1764mi.png
+    // (IMPROVEMENT_ROADMAP §1.2). Falls back to a generic name if no leader.
+    const leaderSlug = (engine.party?.leader_name || engine.leaderName || 'pioneer')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'pioneer';
+    const downloadName = `oregon-trail-${leaderSlug}-${engine.milesTraveled || 0}mi.png`;
+
+    // Download via html2canvas — lazy-loaded on first use (IMPROVEMENT_ROADMAP §2).
     document.getElementById('np-download').addEventListener('click', async () => {
       const el = document.getElementById('newspaper-content');
-      if (typeof html2canvas === 'function') {
+      // Hide the action buttons so they don't bake into the captured PNG.
+      const actions = el.querySelector('#np-download')?.parentElement;
+      const h2c = await ensureHtml2Canvas();
+      if (typeof h2c === 'function') {
         try {
-          const canvas = await html2canvas(el, { backgroundColor: '#f4e4c1', scale: 2 });
+          if (actions) actions.style.visibility = 'hidden';
+          const canvas = await h2c(el, { backgroundColor: '#f4e4c1', scale: 2 });
+          if (actions) actions.style.visibility = '';
           const link = document.createElement('a');
-          link.download = 'oregon-trail-newspaper.png';
+          link.download = downloadName;
           link.href = canvas.toDataURL('image/png');
           link.click();
+          engine.track('newspaper_downloaded', { miles: engine.milesTraveled || 0 });
         } catch (e) {
+          if (actions) actions.style.visibility = '';
           console.error('html2canvas failed:', e);
         }
       }

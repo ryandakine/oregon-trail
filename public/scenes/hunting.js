@@ -92,21 +92,9 @@ export default function register(k, engine) {
       const disabled = opt.ammo > ammo && opt.ammo > 0;
       const btnColor = opt.ammo === 0 ? [178, 34, 34] : disabled ? [100, 100, 100] : [46, 139, 87];
 
-      const bg = k.add([
-        k.rect(btnW, btnH, { radius: 4 }),
-        k.pos(bx, btnY),
-        k.color(btnColor[0], btnColor[1], btnColor[2]),
-        k.opacity(0.85),
-      ]);
-      const txt = k.add([
-        k.text(opt.label, { size: 13 }),
-        k.pos(bx + btnW / 2, btnY + btnH / 2),
-        k.anchor("center"),
-        k.color(255, 255, 255),
-      ]);
-      btnObjs.push({ bg, txt });
-
-      k.onKeyPress(opt.key, () => {
+      // Shared by key + tap so hunting is reachable without a keyboard
+      // (IMPROVEMENT_ROADMAP §1.1).
+      const choose = () => {
         if (hunting || huntDone) return;
 
         if (opt.ammo === 0) {
@@ -127,7 +115,25 @@ export default function register(k, engine) {
         }
 
         engine.submitHunt(opt.ammo);
-      });
+      };
+
+      const bg = k.add([
+        k.rect(btnW, btnH, { radius: 4 }),
+        k.pos(bx, btnY),
+        k.color(btnColor[0], btnColor[1], btnColor[2]),
+        k.opacity(0.85),
+        k.area(),
+      ]);
+      bg.onClick(choose);
+      const txt = k.add([
+        k.text(opt.label, { size: 13 }),
+        k.pos(bx + btnW / 2, btnY + btnH / 2),
+        k.anchor("center"),
+        k.color(255, 255, 255),
+      ]);
+      btnObjs.push({ bg, txt });
+
+      k.onKeyPress(opt.key, choose);
     });
 
     // Listen for hunt results
@@ -141,17 +147,20 @@ export default function register(k, engine) {
 
       let resultText = narrative || `You used ${ammoUsed} rounds and got ${foodGained} lbs of food.`;
       resultsObj.text = resultText;
-      instructObj.text = "Press ENTER to continue";
+      instructObj.text = "Press ENTER or tap to continue";
       ammoText.text = `Ammunition: ${(engine.supplies?.ammo || 0)} rounds`;
     };
     engine.on("huntResults", onResults);
     k.onSceneLeave(() => engine.off("huntResults", onResults));
 
-    k.onKeyPress("enter", () => {
+    // Continue once a hunt resolved — key or tap (IMPROVEMENT_ROADMAP §1.1).
+    const continueAfterHunt = () => {
       if (!huntDone) return;
       engine.resumeAdvance();
       engine.transition("TRAVEL");
-    });
+    };
+    k.onKeyPress("enter", continueAfterHunt);
+    k.onClick(continueAfterHunt);
 
     // Error recovery
     const onError = ({ message }) => {

@@ -82,13 +82,16 @@ export default function register(k, engine) {
       k.color(140, 100, 100),
     ]);
 
-    // Read Newspaper button
-    k.add([
+    // Read Newspaper button — key + tap (IMPROVEMENT_ROADMAP §1.1).
+    const readNewspaper = () => engine.generateNewspaper();
+    const npBtn = k.add([
       k.rect(200, 34, { radius: 4 }),
       k.pos(W / 2 - 100, H - 120),
       k.color(80, 20, 20),
       k.opacity(0.85),
+      k.area(),
     ]);
+    npBtn.onClick(readNewspaper);
     k.add([
       k.text("(N) Read Newspaper", { size: 14 }),
       k.pos(W / 2, H - 103),
@@ -96,18 +99,26 @@ export default function register(k, engine) {
       k.color(200, 150, 150),
     ]);
 
-    k.onKeyPress("n", () => {
-      engine.generateNewspaper();
-    });
+    k.onKeyPress("n", readNewspaper);
 
     // Share (Daily Trail)
+    let shareBtn = null;
     if (engine.dailyMode) {
-      k.add([
+      const shareDaily = () => {
+        const text = engine.getDailyShareText();
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text);
+        }
+        engine.emit("shareDaily", { text });
+      };
+      shareBtn = k.add([
         k.rect(180, 34, { radius: 4 }),
         k.pos(W / 2 - 90, H - 76),
         k.color(60, 20, 20),
         k.opacity(0.85),
+        k.area(),
       ]);
+      shareBtn.onClick(shareDaily);
       k.add([
         k.text("(S) Share Result", { size: 14 }),
         k.pos(W / 2, H - 59),
@@ -115,25 +126,25 @@ export default function register(k, engine) {
         k.color(200, 150, 150),
       ]);
 
-      k.onKeyPress("s", () => {
-        const text = engine.getDailyShareText();
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(text);
-        }
-        engine.emit("shareDaily", { text });
-      });
+      k.onKeyPress("s", shareDaily);
     }
 
     // Restart prompt
     k.add([
-      k.text("Press ENTER to start a new journey", { size: 14 }),
+      k.text("Press ENTER or tap below to start a new journey", { size: 14 }),
       k.pos(W / 2, H - 30),
       k.anchor("center"),
       k.color(100, 60, 60),
     ]);
 
-    k.onKeyPress("enter", () => {
-      engine.restart();
+    const restart = () => engine.restart();
+    k.onKeyPress("enter", restart);
+    // Tap anywhere that isn't a button restarts. Buttons' own onClick fires
+    // first and doesn't restart, so a tap on Newspaper/Share won't also reset.
+    k.onClick(() => {
+      if (npBtn.isHovering?.()) return;
+      if (shareBtn?.isHovering?.()) return;
+      restart();
     });
   });
 }

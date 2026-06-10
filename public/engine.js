@@ -138,6 +138,46 @@ function saveDailyCompletion(result) {
   } catch (_) {}
 }
 
+// ── Meta-progression (localStorage, zero backend) ─────────
+// Persists across runs so the title screen can show a "Best: … · N runs"
+// line and what's still unbeaten. No backend, no signed state — pure local
+// bragging-rights tracking. (IMPROVEMENT_ROADMAP §1.4)
+
+const META_KEY = 'ot_meta';
+
+function defaultMeta() {
+  return {
+    runs: 0,
+    furthestMile: 0,
+    bestSurvivors: 0,
+    tonesCleared: {},        // { low: true, medium: true, high: true }
+    professionsCleared: {},  // { farmer: true, ... }
+    bitterPathDiscovered: false,
+  };
+}
+
+function loadMeta() {
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    if (!raw) return defaultMeta();
+    const parsed = JSON.parse(raw);
+    // Merge over defaults so a meta blob from an older shape never throws on
+    // a missing field.
+    return { ...defaultMeta(), ...parsed,
+      tonesCleared: { ...(parsed.tonesCleared || {}) },
+      professionsCleared: { ...(parsed.professionsCleared || {}) },
+    };
+  } catch (_) {
+    return defaultMeta();
+  }
+}
+
+function saveMeta(meta) {
+  try {
+    localStorage.setItem(META_KEY, JSON.stringify(meta));
+  } catch (_) {}
+}
+
 // ── GameEngine Class ─────────────────────────────
 
 class GameEngine {
@@ -195,6 +235,39 @@ class GameEngine {
     return result;
   }
 
+  // Wordle-style emoji trail strip \u2014 one glyph per major landmark across the
+  // full 1764-mile route. The shareable pattern is the mechanic that made
+  // Wordle viral: glanceable, spoiler-free, copy-pasteable. (ROADMAP \u00a72)
+  //   \u2b1c landmark passed alive   \ud83e\udea6 a party member died at/near it
+  //   \u2b1b never reached            \u2620\ufe0f total wipe (appended)   \ud83c\udfde\ufe0f arrival
+  getDailyTrailStrip() {
+    const LANDMARK_MILES = [319, 554, 640, 838, 914, 1150, 1400, 1630, 1764];
+    const miles = this.milesTraveled || 0;
+    const deaths = this.deaths || [];
+    // Bucket each death to its nearest landmark by mile so a glyph shows where
+    // the party started losing people. Death entries may lack a mile field; if
+    // so they fall to the segment the party had reached.
+    const deathMiles = deaths
+      .map(d => (typeof d.mile === 'number' ? d.mile : null))
+      .filter(m => m !== null);
+    let prev = 0;
+    const strip = LANDMARK_MILES.map((lm) => {
+      let glyph;
+      if (miles >= lm) {
+        const lostHere = deathMiles.some(dm => dm > prev && dm <= lm);
+        glyph = lostHere ? '\u{1FAA6}' : '\u2b1c'; // \ud83e\udea6 grave : \u2b1c white
+      } else {
+        glyph = '\u2b1b'; // \u2b1b never reached
+      }
+      prev = lm;
+      return glyph;
+    }).join('');
+    const alive = this.aliveMembers?.length || 0;
+    const arrived = this.gameState?.position?.arrived || (miles >= 1764 && alive > 0);
+    const suffix = alive === 0 ? '\u2620\ufe0f' : arrived ? '\u{1F3DE}\ufe0f' : '';
+    return strip + suffix;
+  }
+
   getDailyShareText() {
     const num = this.dailyTrailNumber || getDailyTrailNumber();
     const gs = this.gameState;
@@ -204,14 +277,15 @@ class GameEngine {
     const startDate = new Date('1848-04-15');
     const curDate = gs?.position?.date ? new Date(gs.position.date) : startDate;
     const days = Math.max(0, Math.round((curDate - startDate) / 86400000));
+    const strip = this.getDailyTrailStrip();
 
     if (alive === 0) {
-      return `Daily Trail #${num} \u2014 Party wiped \u{1F480}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
+      return `Daily Trail #${num} \u2014 Party wiped \u{1F480}\n${strip}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
     }
     if (alive === total) {
-      return `Daily Trail #${num} \u2014 All survived! \u{1F389}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
+      return `Daily Trail #${num} \u2014 All survived! \u{1F389}\n${strip}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
     }
-    return `Daily Trail #${num} \u2014 ${alive}/${total} survived \u{1FAA6}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
+    return `Daily Trail #${num} \u2014 ${alive}/${total} survived \u{1FAA6}\n${strip}\n${miles} miles | ${days} days\ntrail.osi-cyber.com`;
   }
 
   static getDailyCompletion() {
@@ -220,6 +294,49 @@ class GameEngine {
 
   static getDailyTrailNumber() {
     return getDailyTrailNumber();
+  }
+
+  // ── Meta-progression ──────────────────────────
+
+  static getMeta() {
+    return loadMeta();
+  }
+
+  // One-line title-screen summary, e.g.
+  //   "Best: 847 mi · 12 runs · Horror not yet survived"
+  // before any run: "No runs yet — the trail awaits".
+  static getMetaSummary() {
+    const m = loadMeta();
+    if (!m.runs) return 'No runs yet — the trail awaits';
+    const parts = [`Best: ${m.furthestMile} mi`, `${m.runs} run${m.runs === 1 ? '' : 's'}`];
+    if (!m.tonesCleared.high) {
+      parts.push('Horror not yet survived');
+    } else if (m.bestSurvivors > 0) {
+      parts.push(`Most survivors: ${m.bestSurvivors}`);
+    }
+    return parts.join(' · ');
+  }
+
+  // Update the persisted meta blob from the current run's end state. Called on
+  // arrival (survived) and wipe (everyone dead). "Cleared" a tone/profession =
+  // reached Oregon City with at least one survivor.
+  recordRunOutcome(survived) {
+    const meta = loadMeta();
+    meta.runs += 1;
+    meta.furthestMile = Math.max(meta.furthestMile, this.milesTraveled || 0);
+    const survivors = this.aliveMembers?.length || 0;
+    meta.bestSurvivors = Math.max(meta.bestSurvivors, survivors);
+    if (this.gameState?.simulation?.bitter_path_taken &&
+        this.gameState.simulation.bitter_path_taken !== 'none') {
+      meta.bitterPathDiscovered = true;
+    }
+    if (survived && survivors > 0) {
+      const tier = this.tone;
+      if (tier) meta.tonesCleared[tier] = true;
+      if (this.profession) meta.professionsCleared[this.profession] = true;
+    }
+    saveMeta(meta);
+    return meta;
   }
 
   // ── Run Save/Restore (localStorage) ────────
@@ -418,6 +535,7 @@ class GameEngine {
       this.fullJournal = [];
       localStorage.removeItem('ot_journal');
       this._saveRun();
+      this.track('run_started', { tone: tier, profession: this.profession, daily: this.dailyMode });
       this.emit('loading', false);
       await this._fetchPrices();
       this.transition('STORE', { rumor: this.rumor });
@@ -506,12 +624,16 @@ class GameEngine {
           break;
         case 'arrival':
           this._trackBitterPathOutcome('arrival');
+          this.recordRunOutcome(true);
+          this.track('run_completed', { outcome: 'arrival', miles: this.milesTraveled, tone: this.tone });
           this._clearSavedRun();
           if (this.dailyMode) this.completeDailyTrail();
           this.transition('ARRIVAL');
           break;
         case 'wipe':
           this._trackBitterPathOutcome('wipe');
+          this.recordRunOutcome(false);
+          this.track('run_completed', { outcome: 'wipe', miles: this.milesTraveled, tone: this.tone });
           this._clearSavedRun();
           if (this.dailyMode) this.completeDailyTrail();
           this.transition('WIPE');
@@ -627,6 +749,22 @@ class GameEngine {
     } finally {
       this._resolvingBitterPath = false;
     }
+  }
+
+  // Analytics contract: a thin, never-throwing wrapper over Plausible so
+  // scenes can fire funnel events without each guarding for adblock / offline
+  // / local dev. Silent if window.plausible isn't loaded. The ~7 funnel goals
+  // (run_started, run_completed, share_clicked, osi_link_clicked, etc.) are
+  // configured as Goals in the Plausible dashboard. (IMPROVEMENT_ROADMAP §1.5)
+  track(name, props) {
+    try {
+      if (typeof window.plausible !== 'function') return;
+      if (props && typeof props === 'object') {
+        window.plausible(name, { props });
+      } else {
+        window.plausible(name);
+      }
+    } catch (_) { /* analytics must never break gameplay */ }
   }
 
   _isUnrecoverableBitterPathError(message) {
@@ -754,6 +892,22 @@ class GameEngine {
     if (this.state !== 'TRAVEL') return;
     this.pauseAdvance();
     this.transition('HUNTING');
+  }
+
+  // Landmark → Hunt: /api/hunt is gated to the TRAVEL phase server-side and
+  // startHunt() guards on state==='TRAVEL', so a landmark can't hunt directly.
+  // Return to TRAVEL and let the travel scene honor this flag on mount (before
+  // its auto-advance), then hunt. Pure scene-routing, not simulation logic.
+  requestHuntFromLandmark() {
+    this._pendingHuntOnTravel = true;
+    this.currentLandmark = null;
+    this.transition('TRAVEL');
+  }
+
+  consumePendingHunt() {
+    if (!this._pendingHuntOnTravel) return false;
+    this._pendingHuntOnTravel = false;
+    return true;
   }
 
   async submitHunt(ammoSpent) {
