@@ -34,11 +34,29 @@ export default function register(k, engine) {
       ? `<span style="color:#6aad6a;">Reached Oregon City</span>`
       : `<span style="color:#cc3333;">Perished on the Trail</span>`;
 
+    // Phase 2 per-run share stub (PHASE2_BIG_BETS_PLAN Bets 1+2): when the
+    // worker issued a signed /r/<id> result page for this run, the Twitter
+    // intent + copy-link prefer it so unfurls carry the run's own OG card.
+    // UTM-tagged origin fallbacks remain for runs without one (older runs,
+    // fallback newspaper). The /r URL is used as-is — its CTA carries UTMs.
+    const shareInfo = engine.shareInfo;
+    const shareLink = shareInfo?.url || null;
+    const challengeName = shareInfo?.challenge_id
+      ? ((window.CHALLENGE_INFO || {})[shareInfo.challenge_id]?.name
+          || String(shareInfo.challenge_id).replace(/_/g, ' '))
+      : null;
+    const scoreBit = (shareInfo && typeof shareInfo.score === 'number')
+      ? (challengeName
+          ? ` ${challengeName} challenge — ${shareInfo.score.toLocaleString()} pts.`
+          : ` Final score: ${shareInfo.score.toLocaleString()} pts.`)
+      : '';
+
     // Lead with the viral fact — an AI wrote this run live — so the share
     // says what's novel, not just the score. (IMPROVEMENT_ROADMAP §1.2)
-    const shareText = arrived && alive > 0
+    const baseShareText = arrived && alive > 0
       ? `I led the ${leader} party ${miles} miles to Oregon City! ${alive}/${totalMembers} survived. An AI wrote my whole run live — every playthrough is different. Can you do better?`
       : `The ${leader} party perished after ${miles} miles on the Oregon Trail. ${dead} lost. An AI wrote my whole run live — every playthrough is different. Can you survive?`;
+    const shareText = baseShareText + scoreBit;
 
     // Plain origin for navigator/clipboard; UTM-tagged variants for the OSI
     // links so Plausible can attribute game → site traffic. (ROADMAP §1.2/§1.5)
@@ -47,7 +65,7 @@ export default function register(k, engine) {
     const utm = (base, medium) => `${base}/?utm_source=oregon-trail&utm_medium=${medium}`;
     const dailyUrl = `${shareUrl}/?utm_source=oregon-trail&utm_medium=share&play=daily`;
     const osiSiteUrl = utm('https://osi-cyber.com', 'share-footer');
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(utm(shareUrl, 'twitter'))}`;
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareLink || utm(shareUrl, 'twitter'))}`;
 
     // Streak: count consecutive prior days the daily trail was completed,
     // ending today. Purely local (ROADMAP §1.2). 0 → no streak line.
@@ -113,13 +131,14 @@ export default function register(k, engine) {
       </div>
     `;
 
-    // Copy link
+    // Copy link — prefers the per-run /r URL when present (Phase 2 Bet 1).
     document.getElementById('share-copy').addEventListener('click', async () => {
       try {
-        await navigator.clipboard.writeText(shareUrl);
+        await navigator.clipboard.writeText(shareLink || shareUrl);
         const btn = document.getElementById('share-copy');
         btn.textContent = 'Copied!';
         engine.track('share_clicked', { method: 'copy', outcome: arrived && alive > 0 ? 'arrival' : 'wipe' });
+        if (shareLink) engine.track('share_link_used', { method: 'copy' });
         setTimeout(() => { btn.textContent = 'Copy Link'; }, 2000);
       } catch (_) {}
     });
@@ -127,6 +146,7 @@ export default function register(k, engine) {
     // Twitter share — funnel event (ROADMAP §1.5).
     document.getElementById('share-twitter')?.addEventListener('click', () => {
       engine.track('share_clicked', { method: 'twitter', outcome: arrived && alive > 0 ? 'arrival' : 'wipe' });
+      if (shareLink) engine.track('share_link_used', { method: 'twitter' });
     });
 
     // OSI outbound links — attribution goal (ROADMAP §1.5).

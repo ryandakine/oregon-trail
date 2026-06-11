@@ -184,6 +184,7 @@ class GameEngine {
   constructor() {
     this.state = 'TITLE';
     this.signedState = null;
+    this.shareInfo = null;
     this.currentEvent = null;
     this.currentBitterPath = null;
     this.currentBitterPathMeta = null;
@@ -576,6 +577,11 @@ class GameEngine {
       this.pendingPace = null;
       this.pendingRations = null;
 
+      // Phase 2 share stub: terminal advances (arrival/wipe) carry a
+      // server-issued share object {url, score, challenge_id} for the /r/<id>
+      // result page. Pinned capture point #1 (PHASE2_BIG_BETS_PLAN).
+      if (res.share) this.shareInfo = res.share;
+
       // Save journal entries to local backup
       if (res.summaries) {
         for (const summary of res.summaries) {
@@ -853,6 +859,9 @@ class GameEngine {
         signed_state: this.signedState,
         full_journal: this.fullJournal,
       });
+      // Phase 2 share stub — pinned capture point #2: /api/newspaper re-issues
+      // the share object so resumed terminal states still get a /r link.
+      if (res.share) this.shareInfo = res.share;
       this.emit('loading', false);
       this.transition('NEWSPAPER', res);
     } catch (e) {
@@ -927,6 +936,29 @@ class GameEngine {
     }
   }
 
+  // ── Make Camp (Phase 2 — Bet 3) ─────────────
+  // One rest day, miles unchanged. The server runs the real per-day attrition
+  // tick then applies rest healing; the response is {signed_state, summary:
+  // {date, food_consumed, healed, notes}}. Returns the summary on success.
+  // Errors (resolve_pending_event, wrong_phase, HMAC failures) RE-THROW to
+  // the caller — the scene owns the toast; never swallow silently.
+  async makeCamp() {
+    this.emit('loading', true);
+    try {
+      const res = await this.api('/api/camp', {
+        signed_state: this.signedState,
+      });
+      this.signedState = res.signed_state;
+      this._saveRun();
+      this.emit('loading', false);
+      this.track('camp_made');
+      return res.summary;
+    } catch (e) {
+      this.emit('loading', false);
+      throw e;
+    }
+  }
+
   // ── Epitaph Generation ─────────────────────
 
   async generateEpitaph(name) {
@@ -961,6 +993,7 @@ class GameEngine {
 
   restart() {
     this.signedState = null;
+    this.shareInfo = null;
     this.currentEvent = null;
     this.currentBitterPath = null;
     this.currentBitterPathMeta = null;

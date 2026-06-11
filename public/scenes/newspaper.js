@@ -65,6 +65,23 @@ export default function register(k, engine) {
       ? `<p style="font-style:italic;margin-top:1rem;">Survivors: ${survivors.map(s => esc(s)).join(', ')}</p>`
       : '';
 
+    // Phase 2 (Bet 2): when the server issued a share object with a score,
+    // print a subtle period-styled tally line inside the capture region so
+    // the shared PNG carries the challenge name + score. Absent for runs
+    // without one (older runs, local fallback newspaper).
+    const shareInfo = engine.shareInfo;
+    const challengeName = shareInfo?.challenge_id
+      ? ((window.CHALLENGE_INFO || {})[shareInfo.challenge_id]?.name
+          || String(shareInfo.challenge_id).replace(/_/g, ' '))
+      : null;
+    const scoreLine = (shareInfo && typeof shareInfo.score === 'number')
+      ? `<p style="text-align:center;font-style:italic;font-size:0.85rem;margin-top:1rem;opacity:0.75;">
+          ${esc(challengeName
+            ? `${challengeName} Challenge — ${shareInfo.score.toLocaleString()} points, by the Gazette's reckoning.`
+            : `${shareInfo.score.toLocaleString()} points, by the Gazette's reckoning.`)}
+        </p>`
+      : '';
+
     overlay.innerHTML = `
       <div id="newspaper-content" style="
         max-width:600px;margin:2rem auto;padding:2rem 2.5rem;
@@ -92,6 +109,8 @@ export default function register(k, engine) {
         </div>
 
         ${deathSidebar}
+
+        ${scoreLine}
 
         <!-- Watermark + OSI credit INSIDE the capture region so the shared PNG
              carries a link back and the viral fact. (IMPROVEMENT_ROADMAP §1.2)

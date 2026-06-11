@@ -166,21 +166,23 @@ export default function register(k, engine) {
         engine.pauseAdvance();
         pauseOverlay = k.add([k.rect(640, 480), k.pos(0, 0), k.color(0, 0, 0), k.opacity(0.7), k.z(100)]);
         k.add([k.text("PAUSED", { size: 36 }), k.pos(320, 180), k.anchor("center"), k.color(...draw.PALETTE.gold), k.z(101), "pauseTag"]);
-        const party = engine.party;
-        const sup2 = engine.supplies;
-        const statsLines = [
-          `Date: ${engine.formatDate(engine.currentDate)}`,
-          `Miles: ${engine.milesTraveled} / 1764`,
-          `Food: ${sup2?.food ?? 0} lbs`,
-          `Oxen: ${sup2?.oxen ?? 0}`,
-          `Money: ${engine.formatMoney(sup2?.money ?? 0)}`,
-          "",
-          "Party:",
-          ...(party?.members ?? []).map(m => `  ${m.name}: ${m.alive ? m.health + "/100" : "DEAD"}`),
-          "",
-          "Press P to resume",
-        ];
-        k.add([k.text(statsLines.join("\n"), { size: 13, width: 400 }), k.pos(320, 200), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
+        const buildStatsLines = () => {
+          const party = engine.party;
+          const sup2 = engine.supplies;
+          return [
+            `Date: ${engine.formatDate(engine.currentDate)}`,
+            `Miles: ${engine.milesTraveled} / 1764`,
+            `Food: ${sup2?.food ?? 0} lbs`,
+            `Oxen: ${sup2?.oxen ?? 0}`,
+            `Money: ${engine.formatMoney(sup2?.money ?? 0)}`,
+            "",
+            "Party:",
+            ...(party?.members ?? []).map(m => `  ${m.name}: ${m.alive ? m.health + "/100" : "DEAD"}`),
+            "",
+            "Press P to resume",
+          ];
+        };
+        const statsText = k.add([k.text(buildStatsLines().join("\n"), { size: 13, width: 400 }), k.pos(320, 200), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
 
         // ── Pace + rations controls (IMPROVEMENT_ROADMAP §1.3) ──
         // changePace()/changeRations() previously had zero callers, so the
@@ -216,8 +218,75 @@ export default function register(k, engine) {
           engine.changeRations(curRations);
         }, 352);
 
-        k.add([k.text("(changes apply as you travel on)", { size: 10 }), k.pos(320, 384), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.opacity(0.7), k.z(101), "pauseTag"]);
-        k.add([k.text("Press P or tap top-left to resume", { size: 12 }), k.pos(320, 410), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
+        // ── Make Camp (PHASE2_BIG_BETS_PLAN Bet 3) ──
+        // One rest day via POST /api/camp: real per-day attrition + rest
+        // healing, miles unchanged. Disabled while an event is pending
+        // (server would reject resolve_pending_event anyway — don't offer
+        // a dead button). Errors surface via the pause-overlay notice, not
+        // silence; success shows a brief day summary.
+        const eventPending = !!engine.gameState?.simulation?.pending_event_hash;
+        const campW = 200, campH = 26, campY = 372;
+        const campBtn = k.add([
+          k.rect(campW, campH, { radius: 4 }),
+          k.pos(320 - campW / 2, campY),
+          k.color(...(eventPending ? [90, 90, 90] : [46, 139, 87])),
+          k.opacity(eventPending ? 0.5 : 0.9),
+          k.area(),
+          k.z(102),
+          "pauseTag", "campBtn",
+        ]);
+        k.add([
+          k.text("Make Camp (1 day)", { size: 13 }),
+          k.pos(320, campY + campH / 2),
+          k.anchor("center"),
+          k.color(255, 255, 255),
+          k.opacity(eventPending ? 0.6 : 1),
+          k.z(103), "pauseTag",
+        ]);
+
+        const showCampMsg = (msg) => {
+          k.destroyAll("campMsg");
+          k.add([k.text(msg, { size: 11, width: 480 }), k.pos(320, 452), k.anchor("center"), k.color(...draw.PALETTE.gold), k.z(103), "pauseTag", "campMsg"]);
+        };
+
+        const campSummaryText = (s) => {
+          if (!s) return "The party makes camp for the night.";
+          const bits = [];
+          if (typeof s.food_consumed === "number") bits.push(`${s.food_consumed} lbs of food eaten`);
+          const healed = Array.isArray(s.healed) ? s.healed.length : 0;
+          if (healed > 0) bits.push(`${healed} ${healed === 1 ? "member" : "members"} rested easier`);
+          const head = `Camped for a day${bits.length ? " — " + bits.join(", ") : ""}.`;
+          const note = Array.isArray(s.notes) && s.notes.length ? " " + s.notes[0] : "";
+          return head + note;
+        };
+
+        let campBusy = false;
+        const attemptCamp = async () => {
+          if (campBtn.campDisabled || campBusy) return;
+          campBusy = true;
+          try {
+            const summary = await engine.makeCamp();
+            updateHud(k, engine, hudState);
+            statsText.text = buildStatsLines().join("\n");
+            showCampMsg(campSummaryText(summary));
+          } catch (e) {
+            const code = e?.message || "unknown";
+            const friendly = code.includes("resolve_pending_event")
+              ? "Resolve the pending event before making camp."
+              : code.includes("wrong_phase")
+                ? "You can only make camp while on the trail."
+                : "Camp failed: " + code;
+            showCampMsg(friendly);
+          } finally {
+            campBusy = false;
+          }
+        };
+        campBtn.campDisabled = eventPending;
+        campBtn.doCamp = attemptCamp;
+        campBtn.onClick(() => { attemptCamp(); });
+
+        k.add([k.text("(changes apply as you travel on)", { size: 10 }), k.pos(320, 410), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.opacity(0.7), k.z(101), "pauseTag"]);
+        k.add([k.text("Press P or tap top-left to resume", { size: 12 }), k.pos(320, 430), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
       } else {
         engine.resumeAdvance();
         k.destroyAll("pauseTag");
