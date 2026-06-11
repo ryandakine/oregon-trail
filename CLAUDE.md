@@ -132,7 +132,7 @@ oregon-trail/
 - New game logic goes in `worker/src/simulation.ts` or `worker/src/state.ts`, never in the frontend.
 - New types go in `worker/src/types.ts` — it's the single source of truth.
 - New Kaplay scenes go in `public/scenes/<name>.js`, export a `register(k, engine)` function, and get imported in `main.js`.
-- New primitive draw helpers go in `public/lib/draw.mjs`. Port mechanically from `mockups/primitive-mockup.html` with three substitutions: `P.x` → `...PALETTE.x`, `k.__rectEllipse(w,h)` → `ellipseRect(k,w,h)`, module-level add calls become `export function drawX(k, ...)`. No runtime scale params.
+- New primitive draw helpers go in `public/lib/draw.mjs` — it is the CANONICAL renderer as of the 2026-06-11 graphics detail pass (gradient skies, dual ranges, animated oxen/pioneers, ambient systems). `mockups/primitive-mockup.html` is the historical v3 sandbox and lags behind; do not port from it. Iterate directly in draw.mjs and verify with `node scripts/visual-qa.mjs` screenshots. Keep exported signatures backward-compatible (trailing opts objects only) — 5+ scenes call these helpers. No runtime scale params.
 - Frontend API calls go through `engine.api()` in `engine.js`, never raw `fetch` in scene files.
 - Historical data changes go in `worker/src/historical-context.json`.
 

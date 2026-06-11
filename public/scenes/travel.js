@@ -25,7 +25,7 @@ export default function register(k, engine) {
     const sky = draw.drawSky(k, tone, dayPhase);
     const hills = draw.drawHills(k);
     draw.drawMountains(k);
-    draw.drawGround(k);
+    draw.drawGround(k, { tone });
     draw.drawTrail(k);
 
     // Environment
@@ -46,6 +46,18 @@ export default function register(k, engine) {
       draw.drawDeadTree(k, 610, 345);
     }
 
+    // Ambient birds — light birds normally, slow crows on the horror tier.
+    const birds = [];
+    if (MOTION_OK) {
+      const crow = tone === "high";
+      for (const [bx, by, ph] of [[110, 92, 0], [148, 104, 2.1], [420, 72, 4.4]]) {
+        const b = draw.drawBird(k, bx, by, { crow, scale: crow ? 1.2 : 1 });
+        b.birdPhase = ph;
+        b.birdSpeed = crow ? 0.22 : 0.38;
+        birds.push(b);
+      }
+    }
+
     // ── Hero convoy ──
     const WAGON_X = 300, WAGON_Y = 360;
     draw.drawWagon(k, WAGON_X, WAGON_Y);
@@ -59,13 +71,20 @@ export default function register(k, engine) {
       k.anchor("center"),
     ]);
 
-    draw.drawOx(k, WAGON_X - 140, WAGON_Y + 15);
-    draw.drawOx(k, WAGON_X - 195, WAGON_Y + 15);
-    k.add([k.rect(56, 3), k.pos(WAGON_X - 210, WAGON_Y - 2), k.color(...draw.PALETTE.outline)]);
+    // Yoke beam + hitch rod first — the oxen paint over it, so it reads as
+    // sitting on the necks behind the heads, horns poking above.
+    k.add([k.rect(88, 5, { radius: 2 }), k.pos(WAGON_X - 248, WAGON_Y - 4), k.color(...draw.PALETTE.outline)]);
+    k.add([k.rect(84, 2), k.pos(WAGON_X - 246, WAGON_Y - 3), k.color(...draw.PALETTE.woodLight)]);
+    k.add([k.rect(18, 3), k.pos(WAGON_X - 163, WAGON_Y - 1), k.color(...draw.PALETTE.outline), k.anchor("left"), k.rotate(28)]);
+
+    const oxen = [
+      draw.drawOx(k, WAGON_X - 218, WAGON_Y + 13, { animate: MOTION_OK, phase: 1.6 }),
+      draw.drawOx(k, WAGON_X - 138, WAGON_Y + 13, { animate: MOTION_OK, phase: 0 }),
+    ];
 
     const pioneers = [
-      draw.drawPioneer(k, WAGON_X + 55, WAGON_Y + 20, { hat: "felt",   body: draw.PALETTE.vest,      legs: draw.PALETTE.trousers }),
-      draw.drawPioneer(k, WAGON_X - 75, WAGON_Y + 22, { hat: "bonnet", body: draw.PALETTE.dressBlue, legs: draw.PALETTE.dressBlue }),
+      draw.drawPioneer(k, WAGON_X + 90, WAGON_Y + 24, { hat: "felt",   body: draw.PALETTE.vest,      legs: draw.PALETTE.trousers, animate: MOTION_OK, phase: 0.6 }),
+      draw.drawPioneer(k, WAGON_X - 85, WAGON_Y + 26, { hat: "bonnet", body: draw.PALETTE.dressBlue, legs: draw.PALETTE.dressBlue, animate: MOTION_OK, phase: 2.8 }),
     ];
 
     // ── HUDs ──
@@ -76,7 +95,8 @@ export default function register(k, engine) {
     applyToneOverlay(k, tone);
 
     // ── Animation loop ──
-    let walkPhase = 0;
+    // Pioneers + oxen self-animate (opts.animate); pause toggles their
+    // .walking flags below. This loop drives parallax + bird drift only.
     k.onUpdate(() => {
       if (paused || !MOTION_OK) return;
 
@@ -84,9 +104,21 @@ export default function register(k, engine) {
       for (const h of hills.far)  { h.pos.x -= 0.2;  if (h.pos.x < -80)  h.pos.x = 720; }
       for (const h of hills.near) { h.pos.x -= 0.4;  if (h.pos.x < -60)  h.pos.x = 700; }
 
-      walkPhase += 0.15;
-      for (const p of pioneers) p.pos.y = p.baseY + Math.sin(walkPhase + p.phase) * 1.5;
+      for (const b of birds) {
+        b.pos.x -= b.birdSpeed;
+        b.pos.y += Math.sin(k.time() * 0.7 + b.birdPhase) * 0.08;
+        if (b.pos.x < -20) { b.pos.x = 680; }
+        b.flap(k.time() * 7 + b.birdPhase);
+      }
     });
+
+    // Dust puffs kicked up behind the wheels while traveling.
+    if (MOTION_OK) {
+      loops.push(k.loop(0.4, () => {
+        if (paused) return;
+        draw.spawnDustPuff(k, WAGON_X - 50 + Math.random() * 100, WAGON_Y + 44 + Math.random() * 5);
+      }));
+    }
 
     // ── Weather FX ──
     const miles = engine.milesTraveled ?? 0;
@@ -129,7 +161,12 @@ export default function register(k, engine) {
         }
       }
     });
-    engineOn("error", ({ message }) => showFloatingText("Error: " + message));
+    engineOn("error", ({ message }) => {
+      // Forced renders (visual QA, smoke tests) have no game state; never
+      // paint an error string onto the canvas in that case.
+      if (!engine.gameState) return;
+      showFloatingText("Error: " + message);
+    });
 
     // ── Hunt action (IMPROVEMENT_ROADMAP §1.3) ──
     // startHunt() previously had zero callers — the HUNTING scene was
@@ -162,6 +199,8 @@ export default function register(k, engine) {
     let pauseOverlay = null;
     function togglePause() {
       paused = !paused;
+      for (const p of pioneers) p.walking = !paused;
+      for (const o of oxen) o.walking = !paused;
       if (paused) {
         engine.pauseAdvance();
         pauseOverlay = k.add([k.rect(640, 480), k.pos(0, 0), k.color(0, 0, 0), k.opacity(0.7), k.z(100)]);
@@ -306,8 +345,12 @@ export default function register(k, engine) {
       return;
     }
 
-    engine.resumeAdvance();
-    engine.advance();
+    // No signed state means a forced render (QA/smoke) — auto-advancing would
+    // hit the API with a null state and paint an error. Render statically.
+    if (engine.gameState) {
+      engine.resumeAdvance();
+      engine.advance();
+    }
   });
 }
 
