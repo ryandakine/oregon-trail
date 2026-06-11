@@ -3,11 +3,22 @@ main = "worker/src/index.ts"
 compatibility_date = "2026-04-01"
 workers_dev = true
 
+# Branded share surfaces: Worker routes intercept /r/* and /og/* on the Pages
+# host before Pages serves them. Fallback if these can't bind at deploy:
+# remove SHARE_BASE_URL below → share links fall back to the workers.dev
+# origin (functional, unbranded).
+routes = [
+  { pattern = "trail.osi-cyber.com/r/*", zone_name = "osi-cyber.com" },
+  { pattern = "trail.osi-cyber.com/og/*", zone_name = "osi-cyber.com" },
+]
+
 [vars]
 ENVIRONMENT = "production"
 # Per-IP daily paid-call (Anthropic) volume sub-cap. Tunable without redeploy
 # via dashboard. Defaults to 60 if unset/garbage (see paid-guard.ts:parseDayCap).
 PAID_PER_IP_DAY_CAP = "60"
+# Branded origin for /r/<id> share links + OG image redirect (see routes above).
+SHARE_BASE_URL = "https://trail.osi-cyber.com"
 
 # HMAC_SECRET set via `wrangler secret put HMAC_SECRET`
 # ANTHROPIC_API_KEY set via `wrangler secret put ANTHROPIC_API_KEY`

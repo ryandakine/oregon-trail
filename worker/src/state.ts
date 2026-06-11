@@ -28,6 +28,21 @@ const STARTING_MONEY: Record<Profession, number> = {
   banker: 1600_00,
 };
 
+// Every run departs Independence on this date. Exported so run-length math
+// (scoring.ts) derives days-elapsed from the same constant the initial state
+// is built with — no drift.
+export const TRAIL_START_DATE = "1848-04-15";
+
+// ── Rest / Make Camp tuning (shared) ────────────
+// Extracted from inline literals in handleLandmark (Phase 2, 2026-06-10) so
+// landmark rest and /api/camp heal from the SAME numbers — divergence between
+// the two rest paths is a free-healing exploit.
+export const REST_HEAL_PER_DAY = 10;              // health per rest day, capped at 100
+export const REST_FOOD_PER_MEMBER_PER_DAY = 3;    // landmark rest food cost (filling-rations equivalent)
+// Make Camp also settles nerves. High tier halves this — the horror tier does
+// not get cheap sanity recovery (never soften the High tier).
+export const CAMP_SANITY_RESTORE_PER_DAY = 10;
+
 // ── Weekly Challenge Definitions ────────────────
 export const WEEKLY_CHALLENGES: ChallengeConstraints[] = [
   { id: 'half_rations', money_multiplier: 0.5, force_pace: null, force_rations: null, force_tone: null, no_ammo: false, no_medicine: false, no_spare_parts: false, no_hunting: false },
@@ -88,7 +103,7 @@ export async function createInitialState(
     position: {
       current_segment_id: "seg_01",
       miles_traveled: 0,
-      date: "1848-04-15",
+      date: TRAIL_START_DATE,
     },
     settings: {
       pace: challenge?.force_pace ?? "steady",

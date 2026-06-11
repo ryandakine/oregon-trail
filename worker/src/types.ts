@@ -385,6 +385,15 @@ export interface DaySummary {
   events: string[];
 }
 
+// Share payload attached to terminal responses (advance arrival/wipe,
+// newspaper). Response-only — never part of GameState (a stored score is a
+// replay/forgery surface; computed-on-demand is not).
+export interface ShareInfo {
+  url: string;
+  score: number;
+  challenge_id: string | null;
+}
+
 export interface AdvanceResponse {
   days_advanced: number;
   summaries: DaySummary[];
@@ -399,6 +408,10 @@ export interface AdvanceResponse {
   // event was served (rate-blocked, or Anthropic errored/dead key). Undefined
   // for non-event triggers. Used for fallback-rate observability.
   event_source?: "llm" | "fallback";
+  // Present ONLY when this advance produced the run's terminal transition
+  // (trigger "arrival" | "wipe") — server-detected on the state it just
+  // simulated, never client-claimed.
+  share?: ShareInfo;
   signed_state: SignedGameState;
 }
 
@@ -417,6 +430,23 @@ export interface LandmarkRequest {
 export interface HuntRequest {
   signed_state: SignedGameState;
   ammo_spent: number;
+}
+
+export interface CampRequest {
+  signed_state: SignedGameState;
+}
+
+// Shape pinned for the frontend lane (PHASE2_BIG_BETS_PLAN.md Bet 3).
+export interface CampSummary {
+  date: string; // the day spent camping (pre-advance), mirroring DaySummary
+  food_consumed: number;
+  healed: { name: string; hp_delta: number }[];
+  notes: string[];
+}
+
+export interface CampResponse {
+  signed_state: SignedGameState;
+  summary: CampSummary;
 }
 
 export interface HuntResult {

@@ -1,31 +1,42 @@
-import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES, STORE_PRICES } from "./state";
+import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES, STORE_PRICES, REST_HEAL_PER_DAY, REST_FOOD_PER_MEMBER_PER_DAY, CAMP_SANITY_RESTORE_PER_DAY } from "./state";
 import { assembleEventPrompt } from "./prompt-assembly";
 import { callAnthropic, parseEventResponse, FALLBACK_EVENTS, generateLongNight, buildLongNightFallback, bitterPathConsequences } from "./anthropic";
 import { guardPaidCall, type RateLimitBinding } from "./paid-guard";
-import { advanceDays } from "./simulation";
+import { advanceDays, applyDailyAttrition, parseMonth } from "./simulation";
 import { signState, deepCanonicalize, bufferToHex } from "./hmac";
+import { computeRunScore } from "./scoring";
+import { createShareStub, verifyShareStub } from "./share-stub";
 import type {
   StartRequest,
   StoreRequest,
   AdvanceRequest,
   ChoiceRequest,
   AdvanceResponse,
+  CampRequest,
+  CampResponse,
+  CampSummary,
   EventResponse,
   GameState,
   SignedGameState,
+  ShareInfo,
   HistoricalContext,
   ToneTier,
   LandmarkRequest,
   HuntRequest,
   HuntResult,
 } from "./types";
-import { getLandmarkById } from "./context-loader";
+import { getLandmarkById, getSegmentForMile, getTotalTrailDistance } from "./context-loader";
 import ctx from "./historical-context.json";
 
 export interface Env {
   HMAC_SECRET: string;
   ANTHROPIC_API_KEY: string;
   ALLOWED_ORIGIN: string;
+  // Branded origin for share links (/r/<id>) and the OG image redirect.
+  // Set in wrangler.toml [vars] to https://trail.osi-cyber.com (Worker routes
+  // on that host intercept /r/* and /og/* before Pages). Unset → code falls
+  // back to the request origin (workers.dev — functional, unbranded).
+  SHARE_BASE_URL?: string;
   BITTER_PATH_ENABLED?: string; // "true" | "false"; default "true". Kill switch for the horror-tier hidden path.
   // Per-IP load-shedding for paid (Anthropic) routes. See paid-guard.ts.
   // The real global spend ceiling is a budget on the Anthropic account, not here.
@@ -117,6 +128,150 @@ export async function hashEvent(event: EventResponse): Promise<string> {
   return bufferToHex(digest);
 }
 
+// ── Per-run share page + OG stub (Phase 2 Bet 1) ──
+
+const SHARE_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
+const TONE_LABELS: Record<ToneTier, string> = {
+  low: "Classroom Safe",
+  medium: "Dark Frontier",
+  high: "Psychological Horror",
+};
+
+function shareBase(env: Env, request: Request): string {
+  return env.SHARE_BASE_URL || new URL(request.url).origin;
+}
+
+// EVERY value interpolated into the result page goes through this — including
+// stringified numerics and the challenge id, which is client-supplied at
+// /api/start and NOT validated against the challenge list (review finding).
+function escapeHtml(value: string | number): string {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function shareNotFound(): Response {
+  return new Response("Not found", {
+    status: 404,
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
+
+// Build the terminal-response share object: score + stub computed on demand
+// from a verified state (never stored). Used by /api/advance (terminal
+// transition) and /api/newspaper (resumed terminal states).
+async function buildShareInfo(
+  state: GameState,
+  env: Env,
+  request: Request,
+): Promise<ShareInfo> {
+  const score = computeRunScore(state);
+  const id = await createShareStub(state, score, env);
+  return {
+    url: `${shareBase(env, request)}/r/${id}`,
+    score,
+    challenge_id: state.settings.challenge_id,
+  };
+}
+
+// GET /r/<id> — per-run result page. The id IS the data: verify (length cap →
+// decode → MAC) and render; nothing is stored or looked up.
+export async function handleResultPage(
+  request: Request,
+  env: Env,
+  url: URL,
+): Promise<Response> {
+  const id = url.pathname.slice("/r/".length);
+  const stub = await verifyShareStub(id, env);
+  if (!stub) return shareNotFound();
+
+  const formattedScore = stub.sc !== null ? stub.sc.toLocaleString("en-US") : null;
+  const headline = stub.o === "arrival"
+    ? `Reached Oregon City — ${stub.s}/${stub.p} survived`
+    : `Lost on the trail — ${stub.s}/${stub.p} survived`;
+  const title = formattedScore !== null ? `${headline} · ${formattedScore} pts` : headline;
+  const challengeName = stub.c !== null ? stub.c.replace(/_/g, " ") : null;
+  const descriptionParts = [
+    `${TONE_LABELS[stub.t]} tone`,
+    `${stub.d} days on the trail`,
+  ];
+  if (challengeName !== null) descriptionParts.push(`${challengeName} challenge`);
+  descriptionParts.push("Every event written live by AI");
+  const description = descriptionParts.join(" · "); // raw here; escapeHtml() is applied at every insertion site below
+  const ogImageUrl = `${shareBase(env, request)}/og/${id}.png`;
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<meta property="og:title" content="${escapeHtml(title)}">
+<meta property="og:description" content="${escapeHtml(description)}">
+<meta property="og:image" content="${escapeHtml(ogImageUrl)}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+body{margin:0;font-family:'Courier New',monospace;background:#1a1410;color:#d8cdb4;display:flex;min-height:100vh;align-items:center;justify-content:center}
+main{max-width:420px;padding:32px;border:2px solid #6b5d3f;background:#241d14}
+h1{font-size:20px;color:#d4a017;margin:0 0 16px}
+ul{list-style:none;padding:0;margin:0 0 20px;line-height:1.9}
+a{display:inline-block;padding:10px 16px;background:#d4a017;color:#1a1410;text-decoration:none;font-weight:bold}
+p{margin-top:16px;font-size:12px;color:#8a7d63}
+</style>
+</head>
+<body>
+<main>
+<h1>${escapeHtml(headline)}</h1>
+<ul>
+<li>Leader: ${escapeHtml(stub.n)}</li>
+<li>Survivors: ${escapeHtml(stub.s)}/${escapeHtml(stub.p)}</li>
+<li>Miles traveled: ${escapeHtml(stub.m)}</li>
+<li>Days on the trail: ${escapeHtml(stub.d)}</li>
+${formattedScore !== null ? `<li>Score: ${escapeHtml(formattedScore)} pts</li>` : ""}
+<li>Tone: ${escapeHtml(TONE_LABELS[stub.t])}</li>
+${challengeName !== null ? `<li>Challenge: ${escapeHtml(challengeName)}</li>` : ""}
+</ul>
+<a href="https://trail.osi-cyber.com/?utm_source=oregon-trail&amp;utm_medium=result_page">Blaze your own trail &#8594;</a>
+<p>Every event in this run was written live by AI.</p>
+</main>
+</body>
+</html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": SHARE_CACHE_CONTROL,
+    },
+  });
+}
+
+// GET /og/<id>.png — Tier A: verified ids 302 to the static OG card. Tier B
+// (per-run rendered PNG) is a follow-up behind a measured bundle-size gate;
+// this URL contract does not change.
+export async function handleOgImage(
+  request: Request,
+  env: Env,
+  url: URL,
+): Promise<Response> {
+  let id = url.pathname.slice("/og/".length);
+  if (id.endsWith(".png")) id = id.slice(0, -".png".length);
+  const stub = await verifyShareStub(id, env);
+  if (!stub) return shareNotFound();
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: `${shareBase(env, request)}/og-image.png`,
+      "Cache-Control": SHARE_CACHE_CONTROL,
+    },
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // Support multiple allowed origins
@@ -139,6 +294,17 @@ export default {
     }
 
     try {
+      // Per-run share surfaces — dynamic GETs prefix-matched BEFORE the
+      // exact-match switch (pinned routing pattern, PHASE2_BIG_BETS_PLAN.md
+      // decision 4). NO guardPaidCall here: these routes spend no LLM tokens;
+      // the coarse limiter above already applied.
+      if (request.method === "GET" && url.pathname.startsWith("/r/")) {
+        return await handleResultPage(request, env, url);
+      }
+      if (request.method === "GET" && url.pathname.startsWith("/og/")) {
+        return await handleOgImage(request, env, url);
+      }
+
       switch (url.pathname) {
         case "/api/start":
           return await handleStart(request, env, origin);
@@ -158,6 +324,8 @@ export default {
           return await handleLandmark(request, env, origin);
         case "/api/hunt":
           return await handleHunt(request, env, origin);
+        case "/api/camp":
+          return await handleCamp(request, env, origin);
         case "/api/bitter_path":
           return await handleBitterPath(request, env, origin);
         case "/api/bitter_path_skip":
@@ -509,6 +677,13 @@ async function handleAdvance(
     triggerData = result.triggerData;
   }
 
+  // Terminal transition — server-detected on the state THIS call simulated,
+  // never client-claimed. Attach the per-run share payload (response-only).
+  let share: ShareInfo | undefined;
+  if (result.trigger === "arrival" || result.trigger === "wipe") {
+    share = await buildShareInfo(result.state, env, request);
+  }
+
   const response: AdvanceResponse = {
     days_advanced: result.summaries.length,
     summaries: result.summaries,
@@ -516,6 +691,7 @@ async function handleAdvance(
     trigger_data: triggerData,
     trigger_meta: triggerMeta,
     event_source: eventSource ?? undefined,
+    share,
     signed_state,
   };
 
@@ -757,6 +933,11 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
   const survivors = state.party.members.filter((m) => m.alive).map((m) => m.name);
   const deadList = state.deaths.map((d) => ({ name: d.name, cause: d.cause, date: d.date }));
 
+  // Share stub computed in place from the already-verified state — response-
+  // only, no re-sign (stub creation never mutates state). Covers resumed
+  // terminal states whose /api/advance share response was lost.
+  const share = await buildShareInfo(state, env, request);
+
   const guard = await guardPaidCall(env, request);
   if (guard.allowed) {
     try {
@@ -778,6 +959,7 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
         date: parsed.date || parsed.dateline || state.position.date,
         survivors,
         deaths: deadList,
+        share,
       };
       return jsonResponse(newspaper, 200, origin);
     } catch (e) {
@@ -800,6 +982,7 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
       date: state.position.date,
       survivors,
       deaths: deadList,
+      share,
     }, 200, origin);
   }
 }
@@ -1026,15 +1209,15 @@ export async function handleLandmark(
     d.setUTCDate(d.getUTCDate() + 1);
     next.position.date = d.toISOString().split("T")[0];
 
-    // Heal all living members +10 health (capped 100)
+    // Heal all living members (capped 100) — same constant /api/camp uses
     for (const member of next.party.members) {
       if (!member.alive) continue;
-      member.health = Math.min(100, member.health + 10);
+      member.health = Math.min(100, member.health + REST_HEAL_PER_DAY);
     }
 
     // Deduct food for the day
     const alive = next.party.members.filter(m => m.alive).length;
-    const foodPerDay = 3 * alive; // filling rations equivalent for rest
+    const foodPerDay = REST_FOOD_PER_MEMBER_PER_DAY * alive; // filling rations equivalent for rest
     next.supplies.food = Math.max(0, next.supplies.food - foodPerDay);
 
     const signature = await signState(next, env.HMAC_SECRET);
@@ -1118,6 +1301,75 @@ export async function handleLandmark(
     signed_state: { state: next, signature },
     message: `Traded for ${itemNames} at ${landmark.name}.`,
   }, 200, origin);
+}
+
+// POST /api/camp — Make Camp (Phase 2 Bet 3): one day of rest in place.
+// Miles unchanged; the SAME per-day attrition path advanceDays runs (food at
+// ration rate, starvation/disease/morale ticks, deaths) applies first, then
+// rest healing via the shared landmark-rest constants. Camp must never be
+// cheaper per day than traveling — divergence is a free-healing exploit.
+export async function handleCamp(
+  request: Request,
+  env: Env,
+  origin: string,
+): Promise<Response> {
+  const body = (await request.json()) as CampRequest;
+
+  const verified = await verifyIncomingState(body.signed_state, env.HMAC_SECRET);
+  if (!verified.valid) {
+    return jsonResponse({ error: verified.error }, 403, origin);
+  }
+
+  if (verified.state.simulation.pending_event_hash !== null) {
+    return jsonResponse({ error: "resolve_pending_event" }, 400, origin);
+  }
+
+  // Phase gate: camping is a travel action — after departure, before the run
+  // terminates (arrival or wipe).
+  const historical = ctx as unknown as HistoricalContext;
+  const anyAlive = verified.state.party.members.some((m) => m.alive);
+  const arrived =
+    verified.state.position.miles_traveled >= getTotalTrailDistance(historical);
+  if (verified.state.position.miles_traveled <= 0 || !anyAlive || arrived) {
+    return jsonResponse({ error: "wrong_phase" }, 400, origin);
+  }
+
+  const next = structuredClone(verified.state);
+  const notes: string[] = [];
+
+  // Same segment/month derivation advanceDays uses pre-movement (camp does
+  // not move, so pre = post).
+  const segment = getSegmentForMile(historical, next.position.miles_traveled);
+  const month = parseMonth(next.position.date);
+  const campDate = next.position.date;
+  const foodConsumed = applyDailyAttrition(next, historical, segment, month, notes);
+
+  // Rest healing AFTER attrition — members who died during the tick do not
+  // heal. High tier: sanity restore halved (no cheap recovery on horror).
+  const sanityRestore =
+    next.settings.tone_tier === "high"
+      ? CAMP_SANITY_RESTORE_PER_DAY / 2
+      : CAMP_SANITY_RESTORE_PER_DAY;
+  const healed: CampSummary["healed"] = [];
+  for (const member of next.party.members) {
+    if (!member.alive) continue;
+    const healthBefore = member.health;
+    member.health = Math.min(100, member.health + REST_HEAL_PER_DAY);
+    member.sanity = Math.min(100, member.sanity + sanityRestore);
+    healed.push({ name: member.name, hp_delta: member.health - healthBefore });
+  }
+
+  // One day passes; miles unchanged.
+  const d = new Date(next.position.date + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  next.position.date = d.toISOString().split("T")[0];
+
+  const signature = await signState(next, env.HMAC_SECRET);
+  const response: CampResponse = {
+    signed_state: { state: next, signature },
+    summary: { date: campDate, food_consumed: foodConsumed, healed, notes },
+  };
+  return jsonResponse(response, 200, origin);
 }
 
 export async function handleHunt(

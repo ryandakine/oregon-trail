@@ -3,6 +3,7 @@ import type {
   HistoricalContext,
   DaySummary,
   TriggerType,
+  TrailSegment,
   Pace,
   Rations,
   Month,
@@ -48,7 +49,7 @@ interface AdvanceResult {
   triggerData: unknown;
 }
 
-function parseMonth(dateStr: string): Month {
+export function parseMonth(dateStr: string): Month {
   const m = parseInt(dateStr.split("-")[1], 10);
   if (m >= 4 && m <= 10) return m as Month;
   return 4;
@@ -66,6 +67,129 @@ function aliveCount(state: GameState): number {
 
 export interface AdvanceOptions {
   bitterPathEnabled?: boolean; // server kill switch; defaults true
+}
+
+// One day of survival economy, shared verbatim by advanceDays and /api/camp:
+// food consumption at ration rate, starvation, pace wear, disease onset,
+// disease progression, and the death check. Mutates `next` in place, appends
+// human-readable notes to `dayEvents`, and returns the food actually consumed.
+// Movement and date advancement are deliberately NOT here — callers own those.
+// `segment`/`month` are passed in (not derived) because advanceDays evaluates
+// them BEFORE the day's movement; deriving them here would silently shift the
+// disease region for fast-moving parties. Extracted in Phase 2 so Make Camp
+// cannot drift from the travel attrition path (divergence = free healing).
+export function applyDailyAttrition(
+  next: GameState,
+  ctx: HistoricalContext,
+  segment: TrailSegment,
+  month: Month,
+  dayEvents: string[],
+): number {
+  const alive = aliveCount(next);
+
+  // 1. Consume food
+  const foodPerDay = RATIONS_PER_PERSON[next.settings.rations] * alive;
+  const actualConsumed = Math.min(next.supplies.food, foodPerDay);
+  next.supplies.food -= actualConsumed;
+
+  // 2. Starvation
+  if (next.supplies.food === 0) {
+    next.simulation.starvation_days++;
+    if (next.simulation.starvation_days >= STARVATION_GRACE_DAYS) {
+      for (const member of next.party.members) {
+        if (!member.alive) continue;
+        member.health = Math.max(0, member.health - 10);
+        member.morale = Math.max(0, member.morale - 10);
+      }
+      dayEvents.push("Starvation taking its toll");
+    }
+  } else {
+    next.simulation.starvation_days = 0;
+  }
+
+  // 3. Pace effects
+  if (next.settings.pace === "grueling") {
+    for (const member of next.party.members) {
+      if (!member.alive) continue;
+      member.health = Math.max(0, member.health - 2);
+      member.morale = Math.max(0, member.morale - 3);
+    }
+    dayEvents.push("Grueling pace wearing on the party");
+  }
+
+  // 4. Disease check — max 1 new disease per day
+  let newDiseaseToday = false;
+  for (const member of next.party.members) {
+    if (!member.alive || member.disease !== null || newDiseaseToday) continue;
+    for (const disease of ctx.diseases) {
+      const regionElevated = disease.regions_elevated.includes(segment.region);
+      const monthElevated = disease.months_elevated.includes(month);
+      const riskMultiplier =
+        1 + (regionElevated ? 1 : 0) + (monthElevated ? 0.5 : 0);
+      if (Math.random() < disease.base_probability_per_day * riskMultiplier * DISEASE_PROBABILITY_MULTIPLIER) {
+        member.disease = {
+          id: disease.id,
+          days_sick: 0,
+          stage: "active",
+          medicine_used_today: false,
+        } satisfies DiseaseStatus;
+        dayEvents.push(`${member.name} fell ill with ${disease.name}`);
+        newDiseaseToday = true;
+        break;
+      }
+    }
+  }
+
+  // 5. Disease progression
+  for (const member of next.party.members) {
+    if (!member.alive || !member.disease) continue;
+    member.disease.days_sick++;
+    member.disease.medicine_used_today = false;
+
+    const profile = ctx.diseases.find((d) => d.id === member.disease!.id);
+    if (!profile) continue;
+
+    let dailyLoss = Math.ceil(
+      (100 * profile.mortality_rate) / profile.progression_days,
+    );
+
+    // Medicine halves the loss, consumes 1 dose
+    if (next.supplies.medicine > 0) {
+      dailyLoss = Math.ceil(dailyLoss / 2);
+      next.supplies.medicine--;
+      member.disease.medicine_used_today = true;
+    }
+
+    member.health = Math.max(0, member.health - dailyLoss);
+
+    // After progression_days: 50% cure, 50% continue
+    if (member.disease.days_sick >= profile.progression_days) {
+      if (Math.random() < 0.5) {
+        member.disease = null;
+        dayEvents.push(`${member.name} recovered from illness`);
+      }
+    }
+  }
+
+  // 6. Death check
+  for (const member of next.party.members) {
+    if (!member.alive) continue;
+    if (member.health <= 0) {
+      member.health = 0;
+      member.alive = false;
+      const cause = member.disease ? member.disease.id : "exhaustion";
+      next.deaths.push({
+        name: member.name,
+        date: next.position.date,
+        cause,
+        epitaph: null,
+      });
+      member.disease = null;
+      dayEvents.push(`${member.name} has died`);
+    }
+  }
+
+  return actualConsumed;
 }
 
 export function advanceDays(
@@ -115,109 +239,12 @@ export function advanceDays(
     const milesGained = Math.round(baseMiles * paceModifier * oxenModifier);
     next.position.miles_traveled += milesGained;
 
-    // 2. Consume food
-    const foodPerDay = RATIONS_PER_PERSON[next.settings.rations] * alive;
-    const actualConsumed = Math.min(next.supplies.food, foodPerDay);
-    next.supplies.food -= actualConsumed;
-
-    // 3. Starvation
-    if (next.supplies.food === 0) {
-      next.simulation.starvation_days++;
-      if (next.simulation.starvation_days >= STARVATION_GRACE_DAYS) {
-        for (const member of next.party.members) {
-          if (!member.alive) continue;
-          member.health = Math.max(0, member.health - 10);
-          member.morale = Math.max(0, member.morale - 10);
-        }
-        dayEvents.push("Starvation taking its toll");
-      }
-    } else {
-      next.simulation.starvation_days = 0;
-    }
-
-    // 4. Pace effects
-    if (next.settings.pace === "grueling") {
-      for (const member of next.party.members) {
-        if (!member.alive) continue;
-        member.health = Math.max(0, member.health - 2);
-        member.morale = Math.max(0, member.morale - 3);
-      }
-      dayEvents.push("Grueling pace wearing on the party");
-    }
-
-    // 5. Disease check — max 1 new disease per day
-    let newDiseaseToday = false;
-    for (const member of next.party.members) {
-      if (!member.alive || member.disease !== null || newDiseaseToday) continue;
-      for (const disease of ctx.diseases) {
-        const regionElevated = disease.regions_elevated.includes(segment.region);
-        const monthElevated = disease.months_elevated.includes(month);
-        const riskMultiplier =
-          1 + (regionElevated ? 1 : 0) + (monthElevated ? 0.5 : 0);
-        if (Math.random() < disease.base_probability_per_day * riskMultiplier * DISEASE_PROBABILITY_MULTIPLIER) {
-          member.disease = {
-            id: disease.id,
-            days_sick: 0,
-            stage: "active",
-            medicine_used_today: false,
-          } satisfies DiseaseStatus;
-          dayEvents.push(`${member.name} fell ill with ${disease.name}`);
-          newDiseaseToday = true;
-          break;
-        }
-      }
-    }
-
-    // 6. Disease progression
-    for (const member of next.party.members) {
-      if (!member.alive || !member.disease) continue;
-      member.disease.days_sick++;
-      member.disease.medicine_used_today = false;
-
-      const profile = ctx.diseases.find((d) => d.id === member.disease!.id);
-      if (!profile) continue;
-
-      let dailyLoss = Math.ceil(
-        (100 * profile.mortality_rate) / profile.progression_days,
-      );
-
-      // Medicine halves the loss, consumes 1 dose
-      if (next.supplies.medicine > 0) {
-        dailyLoss = Math.ceil(dailyLoss / 2);
-        next.supplies.medicine--;
-        member.disease.medicine_used_today = true;
-      }
-
-      member.health = Math.max(0, member.health - dailyLoss);
-
-      // After progression_days: 50% cure, 50% continue
-      if (member.disease.days_sick >= profile.progression_days) {
-        if (Math.random() < 0.5) {
-          member.disease = null;
-          dayEvents.push(`${member.name} recovered from illness`);
-        }
-      }
-    }
-
-    // 7. Death check
-    let deathTriggered = false;
-    for (const member of next.party.members) {
-      if (!member.alive) continue;
-      if (member.health <= 0) {
-        member.health = 0;
-        member.alive = false;
-        const cause = member.disease ? member.disease.id : "exhaustion";
-        next.deaths.push({
-          name: member.name,
-          date: next.position.date,
-          cause,
-          epitaph: null,
-        });
-        member.disease = null;
-        dayEvents.push(`${member.name} has died`);
-        deathTriggered = true;
-      }
-    }
+    // 2-7. Daily attrition: food, starvation, pace wear, disease, deaths.
+    // Shared with /api/camp via applyDailyAttrition — keep all survival
+    // economy in that one function.
+    const deathsBefore = next.deaths.length;
+    const actualConsumed = applyDailyAttrition(next, ctx, segment, month, dayEvents);
+    const deathTriggered = next.deaths.length > deathsBefore;
 
     // 8. Segment advancement
     const newSegment = getSegmentForMile(ctx, next.position.miles_traveled);
