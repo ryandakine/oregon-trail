@@ -28,6 +28,7 @@ import { createTerrain, BIOMES } from './terrain.mjs';
 import { createSky } from './sky.mjs';
 import { createWagon, createOxTeam, createPioneer, createContactShadow } from './models.mjs';
 import { createGrass } from './grass.mjs';
+import { createVfx } from './vfx.mjs';
 
 // Scenes that own the 3D world. Menu/UI scenes hide the canvas so they look
 // unchanged (Kaplay transparent → body background shows through).
@@ -111,6 +112,11 @@ export function initThree(engine) {
   const grass = createGrass({ terrain, tuftTexture: textures.grassTuftTexture() });
   scene.add(grass.group);
 
+  // Particle pool: weather (rain/snow/dust) + wagon dust + campfire embers.
+  const vfx = createVfx();
+  scene.add(vfx.points);
+  vfx.setViewport(window.innerHeight, camera.fov);
+
   const sky = createSky({ cloudTexture: textures.cloudTexture() });
   scene.add(sky.group);
 
@@ -165,6 +171,7 @@ export function initThree(engine) {
     camera.aspect = w / h; camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     if (composer) composer.setSize(w, h);
+    vfx.setViewport(h, camera.fov);
   }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', resize);
@@ -236,12 +243,22 @@ export function initThree(engine) {
   }
 
   const clock = new THREE.Clock();
+  let lastDustAt = 0; // scrollZ of the last dust kick — distance-gated, not time-gated
   function frame() {
     requestAnimationFrame(frame);
     const dt = clock.getDelta();
     if (!visible || frozen) return;
     if (moving) scrollZ += WAGON_SPEED * dt;
     pose(scrollZ);
+    // Wagon dust: a puff at each rear wheel every ~0.55u of travel (the vfx
+    // emitter has no internal gate — per-frame calls would flood the pool).
+    if (moving && scrollZ - lastDustAt > 0.55) {
+      lastDustAt = scrollZ;
+      const cy = caravan.position.y + 0.1;
+      vfx.wagonDust(caravan.position.x - 1.02, cy, 1.25);
+      vfx.wagonDust(caravan.position.x + 1.02, cy, 1.25);
+    }
+    vfx.update(dt);
     renderOnce();
   }
   frame();
@@ -249,7 +266,7 @@ export function initThree(engine) {
 
   const api = {
     THREE, renderer, scene, camera, composer, gfx, sun, hemi,
-    terrain, sky, wagon, team, walkers,
+    terrain, sky, wagon, team, walkers, vfx,
     preset, renderOnce,
     get lantern() { return wagon.lantern; },
     show() { visible = true; canvas.style.display = 'block'; resize(); },

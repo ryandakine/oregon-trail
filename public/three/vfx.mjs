@@ -381,13 +381,18 @@ export function createVfx() {
   // All spawn-probability gates use rng(), not Math.random().
 
   function _emitRain(dt, intensity) {
-    // number of particles to spawn this frame: rate × dt × intensity
-    const rate = 180 * intensity;
+    // number of particles to spawn this frame: rate × dt × intensity.
+    // Tuned against screenshots: at 180/s with a ~1s fall the steady state was
+    // ~180 specks of 0.05u spread over a 56×54u volume — literally invisible.
+    // Rain has to READ: ~500 streaks at 0.2-0.35u world size.
+    const rate = 700 * intensity;
     const count = Math.floor(rate * dt + (rng() < (rate * dt % 1) ? 1 : 0));
     for (let i = 0; i < count; i++) {
-      const x  = (rng() - 0.5) * 56;           // ±28
-      const z  = -40 + rng() * 54;             // -40 to +14
-      const y  = 10 + rng() * 6;               // spawn height 10-16
+      // Volume hugs the camera/caravan zone (cameras live in z -10..+12):
+      // rain reads from streaks NEAR the lens; drops 30u out are sub-pixel.
+      const x  = (rng() - 0.5) * 44;           // ±22
+      const z  = -22 + rng() * 36;             // -22 to +14
+      const y  = 8 + rng() * 6;                // spawn height 8-14
       const vx = (rng() - 0.5) * 0.8;
       const vy = -12 - rng() * 3;
       const vz = (rng() - 0.5) * 0.4;
@@ -395,7 +400,7 @@ export function createVfx() {
       // cool blue-grey
       const br = 0.75 + rng() * 0.25;
       _c.setRGB(br * 0.76, br * 0.84, br * 1.0);
-      _spawn(x, y, z, vx, vy, vz, _c, 0.04 + rng() * 0.03, lt, 0, SPR.trace, 0);
+      _spawn(x, y, z, vx, vy, vz, _c, 0.2 + rng() * 0.15, lt, 0, SPR.trace, 0);
     }
   }
 
