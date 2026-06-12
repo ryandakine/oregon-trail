@@ -25,6 +25,57 @@ function std(color, opts = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
 }
 
+// Fresnel rim light (§5a #5): view-angle emissive rim so hero silhouettes pop
+// off the terrain. Patches the emissive chunk — works on Standard + Lambert.
+function addRim(mat, color = [0.5, 0.6, 0.8], strength = 0.12) {
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+      totalEmissiveRadiance += vec3(${color[0]}, ${color[1]}, ${color[2]}) * ${strength.toFixed(3)} *
+        pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);`,
+    );
+  };
+  return mat;
+}
+
+// Baked contact shadow (§5a #2): a soft dark radial decal under each
+// ground-contact object — the cheap AO stand-in that grounds wagon wheels and
+// hooves without SSAO (which is off the no-pmndrs build).
+let _contactTex = null;
+function contactShadowTexture() {
+  if (_contactTex) return _contactTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 6, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.55, 'rgba(255,255,255,0.55)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  _contactTex = new THREE.CanvasTexture(c);
+  return _contactTex;
+}
+
+export function createContactShadow(width, length, peak = 0.42) {
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, length),
+    new THREE.MeshBasicMaterial({
+      color: 0x141008, // warm near-black, not pure black
+      transparent: true,
+      opacity: peak,
+      alphaMap: contactShadowTexture(),
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.renderOrder = 1; // above terrain
+  return mesh;
+}
+
 function shadowed(mesh) {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -73,6 +124,7 @@ export function createWagon({ textures } = {}) {
   const clothMat = cloth
     ? new THREE.MeshStandardMaterial({ map: cloth.map, normalMap: cloth.normalMap, roughness: 0.78 })
     : std(C.canvas);
+  addRim(clothMat, [0.55, 0.6, 0.75], 0.10); // soft sky rim sells the bonnet's curve
 
   // Bed box + side boards rising slightly outward
   const bed = shadowed(new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.9, 1.7), woodMat));
@@ -213,9 +265,9 @@ export function createOxTeam() {
 export function createOx({ tint = 0 } = {}) {
   const group = new THREE.Group();
   const bodyColor = new THREE.Color(C.oxBrown).offsetHSL(0, 0, tint * 0.04);
-  const bodyMat = std(bodyColor, { roughness: 0.92 });
+  const bodyMat = addRim(std(bodyColor, { roughness: 0.92 }), [0.5, 0.6, 0.8], 0.14);
   const darkMat = std(C.oxDark, { roughness: 0.92 });
-  const creamMat = std(C.oxCream, { roughness: 0.92 });
+  const creamMat = addRim(std(C.oxCream, { roughness: 0.92 }), [0.5, 0.6, 0.8], 0.12);
 
   const body = shadowed(new THREE.Mesh(new THREE.CapsuleGeometry(0.44, 0.92, 6, 12), bodyMat));
   body.rotation.z = Math.PI / 2;
@@ -313,8 +365,8 @@ export function createOx({ tint = 0 } = {}) {
 // ── Pioneer: simple biped walker with hat variants from draw.mjs ──
 export function createPioneer({ hat = 'felt', dress = false } = {}) {
   const group = new THREE.Group();
-  const shirtMat = std(C.shirt);
-  const vestMat = std(dress ? C.dressBlue : C.vest);
+  const shirtMat = addRim(std(C.shirt), [0.5, 0.6, 0.8], 0.12);
+  const vestMat = addRim(std(dress ? C.dressBlue : C.vest), [0.5, 0.6, 0.8], 0.12);
   const legMat = std(dress ? C.dressBlue : C.trousers);
   const skinMat = std(C.skin, { roughness: 0.7 });
 

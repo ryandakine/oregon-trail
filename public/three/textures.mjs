@@ -639,13 +639,16 @@ export function grassTuftTexture(blades = 18) {
     const x = 8 + rnd() * 48;
     const sway = (rnd() - 0.5) * 14;
     const h = 26 + rnd() * 30;
-    // Prairie green: root dark, tip lighter/more gold
-    const gr = Math.round(100 + rnd() * 55);
+    // Prairie green: root dark, tip lighter/more gold. Strokes are OPAQUE and
+    // wide: canvas2D stores premultiplied alpha, so thin/translucent strokes
+    // leave mostly low-alpha edge texels whose RGB samples near-black in WebGL
+    // — the tufts rendered as black spikes until this was fixed.
+    const gr = Math.round(125 + rnd() * 60);
     const grad = ctx.createLinearGradient(x, 64, x + sway, 64 - h);
-    grad.addColorStop(0, `rgba(${Math.round(gr * 0.58)},${Math.round(gr * 0.78)},${Math.round(gr * 0.08)},0.90)`);
-    grad.addColorStop(1, `rgba(${Math.round(gr * 0.72)},${gr},${Math.round(gr * 0.14)},0.90)`);
+    grad.addColorStop(0, `rgb(${Math.round(gr * 0.55)},${Math.round(gr * 0.72)},${Math.round(gr * 0.14)})`);
+    grad.addColorStop(1, `rgb(${Math.round(gr * 0.78)},${gr},${Math.round(gr * 0.22)})`);
     ctx.strokeStyle = grad;
-    ctx.lineWidth = 1.5 + rnd();
+    ctx.lineWidth = 2.6 + rnd() * 1.4;
     ctx.beginPath();
     ctx.moveTo(x, 64);
     // quadraticCurveTo for natural curve — no straight blades

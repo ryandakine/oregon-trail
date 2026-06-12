@@ -26,7 +26,8 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import * as textures from './textures.mjs';
 import { createTerrain, BIOMES } from './terrain.mjs';
 import { createSky } from './sky.mjs';
-import { createWagon, createOxTeam, createPioneer } from './models.mjs';
+import { createWagon, createOxTeam, createPioneer, createContactShadow } from './models.mjs';
+import { createGrass } from './grass.mjs';
 
 // Scenes that own the 3D world. Menu/UI scenes hide the canvas so they look
 // unchanged (Kaplay transparent → body background shows through).
@@ -92,14 +93,23 @@ export function initThree(engine) {
   // Ground backstop: a huge fogged disc below the terrain band. Rays that clear
   // a crest or exit the band hit fogged prairie color instead of the dome's
   // below-horizon haze — without this, falling terrain reads as a pale void.
+  // Lambert (not Basic) so it darkens correctly at night, with a low-frequency
+  // tiled grass map so near views don't read as flat paint.
+  const backstopTex = textures.grassMaps().map.clone();
+  backstopTex.repeat.set(260, 260);
+  backstopTex.needsUpdate = true;
   const backstop = new THREE.Mesh(
     new THREE.CircleGeometry(1500, 48),
-    new THREE.MeshBasicMaterial({ color: 0x4a6e2e, fog: true }),
+    new THREE.MeshLambertMaterial({ color: 0xb9c4a0, map: backstopTex, fog: true }),
   );
   backstop.rotation.x = -Math.PI / 2;
   backstop.position.y = -4;
   backstop.renderOrder = -5; // after the dome, before world geometry
   scene.add(backstop);
+
+  // Grass tufts — the single biggest "this is a real place" lift for the prairie.
+  const grass = createGrass({ terrain, tuftTexture: textures.grassTuftTexture() });
+  scene.add(grass.group);
 
   const sky = createSky({ cloudTexture: textures.cloudTexture() });
   scene.add(sky.group);
@@ -124,6 +134,19 @@ export function initThree(engine) {
   walkers[0].group.position.set(2.0, 0, 1.2);
   walkers[1].group.position.set(-2.4, 0, 3.2);
   for (const w of walkers) caravan.add(w.group);
+
+  // Baked contact shadows under every ground-contact object (cheap AO, §5a #2).
+  const wagonShadow = createContactShadow(2.8, 5.0, 0.4);
+  wagonShadow.position.y = 0.04;
+  caravan.add(wagonShadow);
+  const teamShadow = createContactShadow(2.6, 3.2, 0.36);
+  teamShadow.position.set(0, 0.04, -3.0);
+  caravan.add(teamShadow);
+  for (const w of walkers) {
+    const s = createContactShadow(0.8, 0.8, 0.34);
+    s.position.set(w.group.position.x, 0.04, w.group.position.z);
+    caravan.add(s);
+  }
 
   // ── Post: RenderPass → UnrealBloom → OutputPass(ACES). No pmndrs. ──
   let composer = null;
@@ -186,6 +209,7 @@ export function initThree(engine) {
 
   function pose(d) {
     terrain.update(0, d);
+    grass.update(d);
     // The caravan tracks the trail's sway/height at its own absolute position.
     const tx = terrain.trailXAt(d);
     caravan.position.set(tx, terrain.heightAt(tx, d), 0);
