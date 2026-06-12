@@ -74,7 +74,7 @@ function waterColors(d) {
 }
 
 /** widthFt (40..900) → world units (6..26) */
-function ftToWorld(widthFt) {
+export function ftToWorld(widthFt) {
   const t = Math.max(0, Math.min(1, (widthFt - 40) / 860));
   return 6 + t * 20;
 }
@@ -140,28 +140,46 @@ const WATER_FRAG = /* glsl */`
     float fresnel = 0.05 + 0.95 * pow(1.0 - cosTheta, 4.0);
 
     // --- Depth tint shallow → deep ---
-    float depth = clamp(vShoreDepth / 5.5, 0.0, 1.0);
+    // Scaled to the terrain carve's actual channel depth (~1.5u), not the
+    // reference's multi-unit lakes — /5.5 left the whole river "shallow".
+    float depth = clamp(vShoreDepth / 1.4, 0.0, 1.0);
     vec3 col = mix(uShallow, uDeep, depth);
 
-    // --- Fresnel sky reflection ---
-    col = mix(col, uSkyColor, min(fresnel * 0.65, 0.42));
+    // --- Ripple shading ---
+    // dot(N, sun) is useless here: with a near-vertical N and a high sun it is
+    // ~0.95 everywhere (no variation). Drive luminance straight from the
+    // scrolled normal-map's horizontal components — stylized moving streaks.
+    float streak = nm.x * 0.6 + nm.y * 0.4;
+    col *= 0.82 + 0.30 * streak;
 
-    // --- Sun glints: two lobes (fires the bloom pass) ---
+    // --- Fresnel sky reflection ---
+    // Gameplay cameras view the sheet at glancing angles where Schlick
+    // saturates — a high cap turns the whole river into sky-colored glare.
+    col = mix(col, uSkyColor, min(fresnel * 0.45, 0.22));
+
+    // --- Sun glints ---
+    // Sharp sparkle only (HDR, bloom-feeding). The wide lobe at 0.30 washed
+    // the full sheet white at noon sun angles.
     float sunAlign = max(dot(reflect(-uSunDir, N), V), 0.0);
-    col += uSunColor * pow(sunAlign, 130.0) * 2.6;   // sharp sparkle (HDR, bloom)
-    col += uSunColor * pow(sunAlign, 28.0) * 0.30;   // wide lobe survives steep camera
+    col += uSunColor * pow(sunAlign, 130.0) * 1.8;
+    col += uSunColor * pow(sunAlign, 28.0) * 0.10;
 
     // --- Shoreline foam ---
     // Band driven by aShoreDepth: tightest near shore, animated by wave phase.
-    float foamBand = smoothstep(3.0, 0.1, vShoreDepth + n1raw.x * 0.6);
+    // Range matches the ~1.5u carved channel: a 3.0 band covered the entire
+    // river in foam (every texel was "near shore" relative to a 3u falloff).
+    float foamBand = smoothstep(0.85, 0.05, vShoreDepth + n1raw.x * 0.35);
     foamBand *= foamBand; // square for sharper inner edge
     float foamWave = 0.60 + 0.40 * sin(uTime * 1.8 + vWPos.x * 1.3
                                        + vWPos.z * 0.9 + n2raw.y * 5.5);
     float foam = foamBand * foamWave;
-    // Slightly over-white (1.06) so bloom catches the foam band
-    col = mix(col, vec3(1.06), clamp(foam, 0.0, 0.90));
+    // Soft off-white, sub-bloom-threshold: 1.06 foam fed UnrealBloom and
+    // smeared white glow across the whole sheet.
+    col = mix(col, vec3(0.93), clamp(foam, 0.0, 0.55));
 
-    float alpha = max(mix(0.82, 0.96, depth), foam * 0.94);
+    // Mostly opaque: the carved bed is bright sand, and showthrough pales the
+    // whole sheet at gameplay angles.
+    float alpha = max(mix(0.93, 0.99, depth), foam * 0.94);
     gl_FragColor = vec4(col, alpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -194,6 +212,7 @@ export function createRiver({
   fordDifficulty = 2,
   terrain,
   riverZ = 0,
+  waterY: waterYIn = null, // integrator passes bedY + clearance when terrain is carved to a level bed
 } = {}) {
   const d = Math.max(1, Math.min(5, fordDifficulty));
   const worldWidth = ftToWorld(widthFt);
@@ -204,17 +223,24 @@ export function createRiver({
   const segsZ = 24; // enough for shore depth variation across the narrow width
 
   // River is narrow (perpendicular to travel), so Z extent = worldWidth and
-  // X extent = wide enough to fill the view (+/-24u each side).
-  const riverXExtent = 48;
+  // X extent must cover the FULL terrain band (±90u): the carve spans all X,
+  // and a shorter sheet leaves visibly empty channel showing the fogged
+  // backstop — which reads as a white "river" continuing past the water.
+  const riverXExtent = 190;
 
   const geo = new THREE.PlaneGeometry(riverXExtent, worldWidth, Math.round(riverXExtent / 2), segsZ);
   geo.rotateX(-Math.PI / 2);
 
-  // Water level sits just below the nominal terrain bank height at the trail
-  // crossing. We pick -0.15 below the centre bank, then per-vertex shore depth
-  // measures how far each vertex is above the terrain (positive = open water,
-  // negative = mudflat / barely wet).
-  const waterY = (terrain ? terrain.heightAt(0, riverZ) : 0) - 0.15;
+  // Water level: prefer the integrator's explicit level (bed + clearance when
+  // the terrain is carved to a level bed). Fallback: anchor under the lower
+  // bank — never the channel center, which is the riverbed after carving.
+  let waterY = waterYIn;
+  if (waterY == null) {
+    const bankOff = worldWidth * 0.5 + 3.5;
+    const bankA = terrain ? terrain.heightAt(0, riverZ - bankOff) : 0;
+    const bankB = terrain ? terrain.heightAt(0, riverZ + bankOff) : 0;
+    waterY = Math.min(bankA, bankB) - 0.12;
+  }
 
   const pos = geo.attributes.position;
   const shoreDepth = new Float32Array(pos.count);

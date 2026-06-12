@@ -46,19 +46,46 @@ function clamp01(v) {
 // tables, differentiable for analytic normals).
 // The seed modulates phase so different trail seeds produce distinct terrain.
 
+// River channel carve — module state consulted by terrainHeight so geometry,
+// analytic normals, splat painting, and heightAt() all see the same banks.
+// Set via the instance's setRiver(); null = no river.
+//
+// The channel mixes terrain toward a FIXED bed elevation (not a subtracted
+// depth): a level water sheet needs a level bed under its whole length, and
+// terrain height varies along X — a subtract-carve left half the sheet above
+// ground, which the foam shader read as one giant shoreline.
+let _riverCarve = null; // { absZ, halfWidth, bedY }
+
+// 0..1 channel profile across the trail axis (1 = channel center).
+// Plateau-bottomed: the profile saturates to 1 across the middle ~55% so the
+// bed is genuinely FLAT and the deep-water strip is wide — a pure hermite
+// peak left only a thin line at full depth, and from gameplay camera angles
+// the visible water surface was all shallow foam shelf.
+function riverCarveAt(absZ) {
+  if (!_riverCarve) return 0;
+  const dz = Math.abs(absZ - _riverCarve.absZ);
+  if (dz >= _riverCarve.halfWidth) return 0;
+  const t = Math.min(1, (1 - dz / _riverCarve.halfWidth) / 0.45);
+  return t * t * (3 - 2 * t);
+}
+
 function terrainHeight(x, absZ, biome) {
   const amp = biome ? biome.hillAmp : 1.0;
   // Three octaves of smooth noise
   const h0 = Math.sin(x * 0.08 + absZ * 0.05) * Math.cos(absZ * 0.07 - x * 0.04) * 2.8;
   const h1 = Math.sin(x * 0.19 + absZ * 0.14 + 1.3) * Math.cos(absZ * 0.18 + 0.7) * 1.1;
   const h2 = Math.sin(x * 0.41 - absZ * 0.29 + 2.1) * 0.42;
-  const base = (h0 + h1 + h2) * amp;
+  let h = (h0 + h1 + h2) * amp;
   // Rock/mountain biome adds high-frequency crags
   if (biome && biome.rockiness > 0.5) {
     const crag = Math.sin(x * 0.9 + absZ * 0.7 + 3.7) * Math.cos(x * 0.6 - absZ * 0.5) * 0.6;
-    return base + crag * biome.rockiness;
+    h += crag * biome.rockiness;
   }
-  return base;
+  if (_riverCarve) {
+    const s = riverCarveAt(absZ);
+    if (s > 0) h = h + (_riverCarve.bedY - h) * s; // cut to a level bed
+  }
+  return h;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +129,7 @@ const C_DIRT       = new THREE.Color(0x8b6033);
 const C_DIRT_DARK  = new THREE.Color(0x6d4520);
 const C_ROCK       = new THREE.Color(0x968e84);
 const C_ROCK_LIGHT = new THREE.Color(0xbab2a8);
+const C_SAND_BED   = new THREE.Color(0xc49a6c); // dirtLight — riverbed/shore
 
 // Biome grass tint colour objects (created once, lerped into per-vertex)
 const C_TMP  = new THREE.Color();
@@ -178,6 +206,17 @@ function sampleVertex(x, absZ, biome) {
     const t = 0.85 * (1 - (rd - 1.4) / 1.2);
     C_TMP.lerp(C_DIRT, t);
     lerpSplat(w, 1, t);
+  }
+
+  // Riverbed + banks: sand splat where the channel carves, sandy color toward
+  // the waterline so the shore reads as a ford, not green grass underwater.
+  if (_riverCarve) {
+    const carve = riverCarveAt(absZ); // 0..1 channel profile
+    if (carve > 0.12) {
+      const t = clamp01((carve - 0.12) / 0.5);
+      C_TMP.lerp(C_SAND_BED, t * 0.8);
+      lerpSplat(w, 3, t * 0.85);
+    }
   }
 
   // Rock on steep slopes
@@ -651,11 +690,31 @@ export function createTerrain({ textures = null, biome = null } = {}) {
     }
   }
 
+  // ── setRiver ──
+  // Carve (or clear, with null) a river channel crossing the trail at absZ.
+  // Same immediate-rewrite pattern as setBiome — deterministic, no lerp.
+  function setRiver(r) {
+    _riverCarve = r ? { absZ: r.absZ, halfWidth: r.halfWidth, bedY: r.bedY } : null;
+    for (const chunk of chunks) {
+      const ok = rewriteChunkGeometry(chunk.mesh.geometry, chunk.absZ0, chunk.spacing, currentBiome);
+      if (!ok) {
+        chunk.mesh.geometry.dispose();
+        chunk.mesh.geometry = buildChunkGeometry(chunk.absZ0, chunk.spacing, currentBiome);
+      }
+    }
+  }
+
   // ── Public helpers ──
 
   /** Height of the terrain surface at absolute world coords (x, absZ). */
   function heightAt(x, absZ) {
     return terrainHeight(x, absZ, currentBiome);
+  }
+
+  /** River-carve depth at absZ (0 = no channel). Scatter systems use this to
+   *  keep grass/props out of the water. */
+  function carveDepthAt(absZ) {
+    return riverCarveAt(absZ);
   }
 
   // ── Dispose ──
@@ -675,7 +734,9 @@ export function createTerrain({ textures = null, biome = null } = {}) {
     group,
     update,
     setBiome,
+    setRiver,
     heightAt,
+    carveDepthAt,
     trailXAt,  // re-export for integrator (wagon/oxen placement)
     dispose,
   };

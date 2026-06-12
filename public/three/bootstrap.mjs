@@ -29,6 +29,7 @@ import { createSky } from './sky.mjs';
 import { createWagon, createOxTeam, createPioneer, createContactShadow } from './models.mjs';
 import { createGrass } from './grass.mjs';
 import { createVfx } from './vfx.mjs';
+import { createRiver, createBankDressing, ftToWorld } from './water.mjs';
 
 // Scenes that own the 3D world. Menu/UI scenes hide the canvas so they look
 // unchanged (Kaplay transparent → body background shows through).
@@ -117,6 +118,44 @@ export function initThree(engine) {
   scene.add(vfx.points);
   vfx.setViewport(window.innerHeight, camera.fov);
 
+  // ── River crossing (M3): carve the terrain channel + mount the water sheet.
+  // Mounted on demand (RIVER scene / river preset), torn down on exit.
+  let river = null; // { water, dressing, absZ }
+  function enterRiver({ widthFt = 230, fordDifficulty = 3 } = {}) {
+    if (river) exitRiver();
+    const absZ = scrollZ - 9.5; // just ahead of the halted wagon
+    const w = ftToWorld(widthFt);
+    // Cut the channel to a LEVEL bed below the average bank height, then float
+    // the water sheet a fixed clearance above that bed — depth is uniform along
+    // the whole sheet, so foam hugs only the real shorelines.
+    const bankAvg = (terrain.heightAt(0, absZ - (w / 2 + 4)) + terrain.heightAt(0, absZ + (w / 2 + 4))) / 2;
+    const bedY = bankAvg - 1.6;
+    terrain.setRiver({ absZ, halfWidth: w / 2 + 3.0, bedY });
+    const water = createRiver({
+      waterNormals: textures.waterNormalMaps(),
+      widthFt, fordDifficulty, terrain, riverZ: absZ,
+      waterY: bedY + 1.25,
+    });
+    water.group.position.z = -scrollZ; // abs → world (scroll frozen at crossings)
+    scene.add(water.group);
+    const dressing = createBankDressing({ terrain, riverZ: absZ, textures });
+    dressing.position.z = -scrollZ;
+    scene.add(dressing);
+    river = { water, dressing, absZ };
+    grass.invalidate(); // re-seed tufts around the carved channel
+    moving = false; // travel halts at a crossing
+  }
+  function exitRiver() {
+    if (!river) return;
+    scene.remove(river.water.group);
+    scene.remove(river.dressing);
+    river.water.dispose();
+    terrain.setRiver(null);
+    grass.invalidate();
+    river = null;
+    moving = true;
+  }
+
   const sky = createSky({ cloudTexture: textures.cloudTexture() });
   scene.add(sky.group);
 
@@ -191,12 +230,18 @@ export function initThree(engine) {
     // Fog far stays INSIDE the terrain band's Z extent (5×60u chunks) so the
     // world edge is always behind haze, never a visible hard line.
     travel: { t: 0.40, fov: 38, cam: [-7.0, 2.9, -7.5], look: [1.2, 1.5, 0.5], fog: [50, 240], lantern: 3.2 },
-    river: { t: 0.52, fov: 40, cam: [12, 3.2, 7], look: [-1, 0.9, 0], fog: [40, 220], lantern: 3.2 },
+    // Elevated establishing shot from the near bank: high enough to look INTO
+    // the channel (a grazing camera sees only the far foam shelf, never the
+    // deep teal strip), halted wagon frame-left, noon sun for glints (§5a).
+    river: { t: 0.52, fov: 40, cam: [10, 5.6, 4.0], look: [-4.5, -0.2, -10], fog: [40, 220], lantern: 3.2 },
     fort: { t: 0.62, fov: 38, cam: [5, 1.9, 12], look: [0, 2.4, 0], fog: [45, 230], lantern: 3.2 },
     night: { t: 0.005, fov: 36, cam: [4, 3.0, 8], look: [0, 1.4, 0], fog: [20, 120], lantern: 6 },
   };
   function preset(name) {
     const p = PRESETS[name] || PRESETS.travel;
+    // The river preset owns a mounted crossing; every other preset clears it.
+    if (name === 'river' && !river) enterRiver({});
+    else if (name !== 'river' && river) exitRiver();
     todT = p.t;
     camera.fov = p.fov;
     camera.position.set(...p.cam);
@@ -231,6 +276,11 @@ export function initThree(engine) {
     // 200u out on the sun arc, far outside the shadow camera.
     sun.position.copy(sky.sunDirAt(todT)).multiplyScalar(34);
     sun.target.position.set(0, 0, 0);
+    if (river) {
+      river.water.update(0, riverTime);
+      river.water.setSun(sky.sunDirAt(todT), sun.color);
+      river.water.setSky(scene.fog.color);
+    }
   }
 
   // renderer.info auto-resets on every internal render() call, and the composer
@@ -244,10 +294,12 @@ export function initThree(engine) {
 
   const clock = new THREE.Clock();
   let lastDustAt = 0; // scrollZ of the last dust kick — distance-gated, not time-gated
+  let riverTime = 0; // water flows even while the wagon is halted at the bank
   function frame() {
     requestAnimationFrame(frame);
     const dt = clock.getDelta();
     if (!visible || frozen) return;
+    riverTime += dt;
     if (moving) scrollZ += WAGON_SPEED * dt;
     pose(scrollZ);
     // Wagon dust: a puff at each rear wheel every ~0.55u of travel (the vfx
@@ -273,8 +325,9 @@ export function initThree(engine) {
     hide() { visible = false; canvas.style.display = 'none'; frozen = false; },
     setMoving(m) { moving = !!m; },
     // Pin the world to scroll-distance d and render one frame synchronously.
-    // Pure function of (d, current preset) → identical pixels across runs.
-    freezeAt(d) { frozen = true; scrollZ = d; pose(d); return renderOnce(); },
+    // Pure function of (d, current preset) → identical pixels across runs
+    // (riverTime is pinned to d too, so water phase is deterministic).
+    freezeAt(d) { frozen = true; scrollZ = d; riverTime = d; pose(d); return renderOnce(); },
     unfreeze() { frozen = false; },
     ready: true,
   };
