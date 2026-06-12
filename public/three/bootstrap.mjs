@@ -1,30 +1,44 @@
-// 3D render layer bootstrap (M0 scaffolding).
+// 3D render layer bootstrap (M1: travel world).
 //
 // Mounts a Three.js canvas BEHIND the Kaplay canvas (z-index 0; Kaplay canvas is
-// transparent so the HUD/overlays composite on top). Sets up the renderer with
-// ACES tonemapping + PCFSoft shadows + a hand-rolled bloom/output EffectComposer
-// (no n8ao / no pmndrs — importmap-clean, see THREEJS_REBUILD_PLAN §3.3), and
-// renders a placeholder lit world to prove the pipeline + the screenshot harness.
+// transparent so the HUD/overlays composite on top). Renderer: ACES tonemapping,
+// PCFSoft shadows, hand-rolled RenderPass→UnrealBloom→OutputPass composer (no
+// n8ao/pmndrs — importmap-clean, THREEJS_REBUILD_PLAN §3.3).
 //
-// Resilience: if anything in here throws, the caller swallows it and the existing
-// Kaplay 2D game keeps working. The 3D layer is strictly additive and read-only
-// on engine state.
+// World (M1): procedural terrain band with the trail painted in (terrain.mjs),
+// procedural time-of-day sky dome (sky.mjs), canvas-painted textures
+// (textures.mjs), and a caravan of procedural models (models.mjs) — wagon with
+// rolling wheels, two oxen with diagonal-pair gaits, two pioneers walking.
+//
+// MOTION MODEL (§3.1): the caravan is STATIONARY at the origin; the WORLD
+// scrolls past along +Z. scrollZ is the total distance traveled; every
+// animation poses as a pure function of scrollZ, so freezeAt(d) renders a
+// deterministic frame for the screenshot harness.
+//
+// Resilience: if anything here throws, the caller swallows it and the 2D game
+// keeps working. The 3D layer is strictly additive and read-only on engine state.
 
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import * as textures from './textures.mjs';
+import { createTerrain, BIOMES } from './terrain.mjs';
+import { createSky } from './sky.mjs';
+import { createWagon, createOxTeam, createPioneer } from './models.mjs';
 
 // Scenes that own the 3D world. Menu/UI scenes hide the canvas so they look
 // unchanged (Kaplay transparent → body background shows through).
 const WORLD_STATES = new Set(['TRAVEL', 'RIVER', 'LANDMARK', 'HUNTING', 'DEATH', 'ARRIVAL']);
 
+const WAGON_SPEED = 1.9; // world-units/sec — plodding ox pace, drives scroll + gaits
+
 function tierFromQuery() {
   const p = new URLSearchParams(location.search).get('gfx');
   if (p === 'low' || p === 'high') return p;
-  // M0 default: high on desktop. A real mobile tier + device detection is the
-  // DEC-B/M0 perf kill-gate (needs a real device), not implemented here yet.
+  // Default high on desktop. A real mobile tier + device detect is the DEC-B
+  // kill-gate (needs a real device), still open.
   return 'high';
 }
 
@@ -35,7 +49,6 @@ export function initThree(engine) {
   const canvas = document.createElement('canvas');
   canvas.id = 'three-canvas';
   canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:0;display:none;';
-  // Insert as the first body child so it sits behind the Kaplay canvas.
   document.body.insertBefore(canvas, document.body.firstChild);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
@@ -43,19 +56,19 @@ export function initThree(engine) {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;     // OutputPass applies this
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; // OutputPass applies this
   renderer.toneMappingExposure = 1.1;
 
   const scene = new THREE.Scene();
-  const SKY = new THREE.Color(0x9fc4e8);
-  scene.background = SKY;
-  scene.fog = new THREE.Fog(0xb8d4e8, 60, 520);
+  scene.background = null; // the sky dome paints every background pixel
+  scene.fog = new THREE.Fog(0xc9ddec, 60, 520);
 
   const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 950);
-  camera.position.set(6.5, 4.2, 11);
-  camera.lookAt(0, 1.4, 0);
+  camera.position.set(6.5, 3.6, 11);
+  camera.lookAt(0, 1.5, 0);
 
-  // ── Lighting: warm directional key + cool hemisphere fill (§5a #3) ──
+  // ── Lighting: warm directional key + cool hemisphere fill. Colors and
+  // intensities are driven per-frame by sky.applyTo(t); these are bind points.
   const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x46603a, 0.5);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffedd0, 2.8);
@@ -63,7 +76,7 @@ export function initThree(engine) {
   sun.castShadow = true;
   sun.shadow.mapSize.set(HIGH ? 2048 : 1024, HIGH ? 2048 : 1024);
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 60;
+  sun.shadow.camera.far = 80;
   const S = 24;
   sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
   sun.shadow.camera.top = S; sun.shadow.camera.bottom = -S;
@@ -72,55 +85,47 @@ export function initThree(engine) {
   scene.add(sun);
   scene.add(sun.target);
 
-  // ── Placeholder world (M0 proof — replaced by real terrain/wagon in M1) ──
-  const world = new THREE.Group();
-  scene.add(world);
+  // ── World modules ──
+  const terrain = createTerrain({ textures, biome: BIOMES.prairie });
+  scene.add(terrain.group);
 
-  // Ground
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(400, 400),
-    new THREE.MeshStandardMaterial({ color: 0x6f9a3e, roughness: 0.95, metalness: 0 }),
+  // Ground backstop: a huge fogged disc below the terrain band. Rays that clear
+  // a crest or exit the band hit fogged prairie color instead of the dome's
+  // below-horizon haze — without this, falling terrain reads as a pale void.
+  const backstop = new THREE.Mesh(
+    new THREE.CircleGeometry(1500, 48),
+    new THREE.MeshBasicMaterial({ color: 0x4a6e2e, fog: true }),
   );
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  world.add(ground);
+  backstop.rotation.x = -Math.PI / 2;
+  backstop.position.y = -4;
+  backstop.renderOrder = -5; // after the dome, before world geometry
+  scene.add(backstop);
 
-  // A worn dirt "trail" strip painted toward the camera
-  const trail = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.2, 400),
-    new THREE.MeshStandardMaterial({ color: 0x8b6033, roughness: 1 }),
-  );
-  trail.rotation.x = -Math.PI / 2;
-  trail.position.y = 0.01;
-  trail.receiveShadow = true;
-  world.add(trail);
+  const sky = createSky({ cloudTexture: textures.cloudTexture() });
+  scene.add(sky.group);
 
-  // Placeholder covered wagon: bed (box) + canvas arch (half-cylinder) + 4 wheels
-  const wagon = new THREE.Group();
-  const wood = new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.85 });
-  const cloth = new THREE.MeshStandardMaterial({ color: 0xece2c8, roughness: 0.75 });
-  const iron = new THREE.MeshStandardMaterial({ color: 0x2b2620, roughness: 0.6, metalness: 0.3 });
-  const bed = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.0, 1.8), wood);
-  bed.position.y = 1.25; bed.castShadow = true; bed.receiveShadow = true; wagon.add(bed);
-  const arch = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 3.2, 20, 1, true, 0, Math.PI), cloth);
-  arch.rotation.z = Math.PI / 2; arch.position.y = 1.85; arch.castShadow = true; wagon.add(arch);
-  for (const [x, z] of [[-1.2, 0.95], [1.2, 0.95], [-1.2, -0.95], [1.2, -0.95]]) {
-    const r = z > 0 ? 0.7 : 0.55;
-    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.18, 18), iron);
-    wheel.rotation.x = Math.PI / 2; wheel.position.set(x, r, z); wheel.castShadow = true;
-    wheel.userData.spin = true; wagon.add(wheel);
-  }
-  world.add(wagon);
+  // Caravan: stationary group at the trail anchor; forward = -Z.
+  const caravan = new THREE.Group();
+  scene.add(caravan);
 
-  // Emissive lantern sphere to prove bloom fires through the composer
-  const lantern = new THREE.Mesh(
-    new THREE.SphereGeometry(0.14, 12, 12),
-    new THREE.MeshStandardMaterial({ color: 0xffcc55, emissive: 0xffaa22, emissiveIntensity: 4 }),
-  );
-  lantern.position.set(-1.9, 1.55, 0.7);
-  world.add(lantern);
+  const wagon = createWagon({ textures });
+  wagon.group.rotation.y = -Math.PI / 2; // model forward (-X, tongue) → world -Z
+  caravan.add(wagon.group);
 
-  // ── Post: RenderPass → UnrealBloom → OutputPass(ACES). Hand-rolled, no pmndrs ──
+  // Yoked pair + pole reaching back toward the wagon tongue.
+  const team = createOxTeam();
+  team.group.position.set(0, 0, -3.0);
+  caravan.add(team.group);
+
+  const walkers = [
+    createPioneer({ hat: 'felt' }),
+    createPioneer({ hat: 'bonnet', dress: true }),
+  ];
+  walkers[0].group.position.set(2.0, 0, 1.2);
+  walkers[1].group.position.set(-2.4, 0, 3.2);
+  for (const w of walkers) caravan.add(w.group);
+
+  // ── Post: RenderPass → UnrealBloom → OutputPass(ACES). No pmndrs. ──
   let composer = null;
   if (HIGH) {
     composer = new EffectComposer(renderer);
@@ -142,82 +147,93 @@ export function initThree(engine) {
   window.addEventListener('orientationchange', resize);
 
   // M0: swallow context-loss so the 2D game stays alive; a webglcontextrestored
-  // rebuild lands with the full dispose/lifecycle work in M1.
+  // rebuild lands with the full dispose/lifecycle work later in M1.
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); }, false);
 
-  const clock = new THREE.Clock();
-  let visible = false;
-  let frozen = false;
-  let raf = 0;
-  function pose(t) {
-    // All time-driven animation goes through here so freezeAt() can pin an
-    // exact phase — required for deterministic screenshots (plan §3.1: pixel
-    // diffs are meaningless if the wheel angle varies run-to-run).
-    wagon.children.forEach((c) => { if (c.userData.spin) c.rotation.z = t * 2.2; });
-    arch.position.y = 1.85 + Math.sin(t * 1.3) * 0.015;
+  // ── Per-scene presets (§5a): camera framing + fog depth + time-of-day.
+  // Sun/hemi/fog COLOR all derive from the sky palette at todT, so a preset is
+  // just framing + atmosphere depth + the fixed sun position on its arc.
+  // Every preset re-states every knob — order independence is load-bearing.
+  let todT = 0.34;
+  const PRESETS = {
+    // Front-quarter view: ox team leads into frame-left, wagon right-of-center
+    // (rule of thirds), trail receding diagonally — not down the lens axis.
+    // Fog far stays INSIDE the terrain band's Z extent (5×60u chunks) so the
+    // world edge is always behind haze, never a visible hard line.
+    travel: { t: 0.40, fov: 38, cam: [-7.0, 2.9, -7.5], look: [1.2, 1.5, 0.5], fog: [50, 240], lantern: 3.2 },
+    river: { t: 0.52, fov: 40, cam: [12, 3.2, 7], look: [-1, 0.9, 0], fog: [40, 220], lantern: 3.2 },
+    fort: { t: 0.62, fov: 38, cam: [5, 1.9, 12], look: [0, 2.4, 0], fog: [45, 230], lantern: 3.2 },
+    night: { t: 0.005, fov: 36, cam: [4, 3.0, 8], look: [0, 1.4, 0], fog: [20, 120], lantern: 6 },
+  };
+  function preset(name) {
+    const p = PRESETS[name] || PRESETS.travel;
+    todT = p.t;
+    camera.fov = p.fov;
+    camera.position.set(...p.cam);
+    camera.lookAt(...p.look);
+    camera.updateProjectionMatrix();
+    scene.fog.near = p.fog[0];
+    scene.fog.far = p.fog[1];
+    wagon.lantern.material.emissiveIntensity = p.lantern;
+    pose(scrollZ); // re-light + re-pose under the new preset immediately
   }
+
+  // ── Animation: everything is a pure function of scrollZ (+ todT) ──
+  let scrollZ = 0;
+  let moving = true;
+  let frozen = false;
+  let visible = false;
+
+  function pose(d) {
+    terrain.update(0, d);
+    // The caravan tracks the trail's sway/height at its own absolute position.
+    const tx = terrain.trailXAt(d);
+    caravan.position.set(tx, terrain.heightAt(tx, d), 0);
+    wagon.setPhase(d);
+    team.setPhase(d);
+    walkers[0].setPhase(d + 0.2);
+    walkers[1].setPhase(d + 1.1);
+    sky.update(0, todT, camera.position);
+    sky.applyTo({ sun, hemi, scene }, todT);
+    // Re-anchor the sun close to the caravan so the ortho shadow frustum
+    // (near 1 / far 80) actually contains the world — sky.applyTo parks it
+    // 200u out on the sun arc, far outside the shadow camera.
+    sun.position.copy(sky.sunDirAt(todT)).multiplyScalar(34);
+    sun.target.position.set(0, 0, 0);
+  }
+
   // renderer.info auto-resets on every internal render() call, and the composer
-  // makes several per frame (scene, bloom, output) — so a read after
-  // composer.render() would see only the final fullscreen pass (1 triangle).
-  // Accumulate manually across the whole chain instead.
+  // makes several per frame — accumulate manually so probes see the whole frame.
   renderer.info.autoReset = false;
   function renderOnce() {
     renderer.info.reset();
     if (composer) composer.render(); else renderer.render(scene, camera);
     return { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
   }
+
+  const clock = new THREE.Clock();
   function frame() {
-    raf = requestAnimationFrame(frame);
+    requestAnimationFrame(frame);
+    const dt = clock.getDelta();
     if (!visible || frozen) return;
-    pose(clock.getElapsedTime());
+    if (moving) scrollZ += WAGON_SPEED * dt;
+    pose(scrollZ);
     renderOnce();
   }
   frame();
-
-  // Per-scene camera + lighting presets (§5a per-scene cinematography). M0 uses
-  // the same placeholder world; each preset proves the harness can frame and
-  // light the four hero shots distinctly. Real scene content lands in M1–M5.
-  function preset(name) {
-    // Every preset re-states EVERY mutable knob (camera, sun, hemi, fog,
-    // lantern) so presets are order-independent — a one-branch-only mutation
-    // leaks into later presets and corrupts live scene cycling.
-    if (name === 'travel') {
-      camera.position.set(6.5, 3.6, 11); camera.lookAt(0, 1.5, 0); camera.fov = 35;
-      sun.position.set(11, 9, 6); sun.color.set(0xffe0b0); sun.intensity = 3.0;
-      hemi.intensity = 0.5; scene.background.set(0x9fc4e8); scene.fog.color.set(0xc9ddec);
-      scene.fog.near = 60; scene.fog.far = 520;
-      lantern.material.emissiveIntensity = 4;
-    } else if (name === 'river') {
-      camera.position.set(12, 3.2, 7); camera.lookAt(-1, 0.9, 0); camera.fov = 40;
-      sun.position.set(4, 16, 8); sun.color.set(0xfff2d6); sun.intensity = 3.4;
-      hemi.intensity = 0.6; scene.background.set(0xaccbe6); scene.fog.color.set(0xb6cfe0);
-      scene.fog.near = 40; scene.fog.far = 400;
-      lantern.material.emissiveIntensity = 4;
-    } else if (name === 'fort') {
-      camera.position.set(5, 1.9, 12); camera.lookAt(0, 2.4, 0); camera.fov = 38;
-      sun.position.set(9, 11, 4); sun.color.set(0xffedd0); sun.intensity = 2.8;
-      hemi.intensity = 0.5; scene.background.set(0x9fc4e8); scene.fog.color.set(0xc9ddec);
-      scene.fog.near = 50; scene.fog.far = 470;
-      lantern.material.emissiveIntensity = 4;
-    } else if (name === 'night') {
-      camera.position.set(4, 3.0, 8); camera.lookAt(0, 1.4, 0); camera.fov = 36;
-      sun.position.set(-6, 8, -4); sun.color.set(0x3a4a78); sun.intensity = 0.25;
-      hemi.intensity = 0.12; scene.background.set(0x0a0f1e); scene.fog.color.set(0x070b16);
-      scene.fog.near = 20; scene.fog.far = 120;
-      lantern.material.emissiveIntensity = 6;
-    }
-    camera.updateProjectionMatrix();
-  }
+  pose(0); // build the first terrain band + light state eagerly
 
   const api = {
-    THREE, renderer, scene, camera, composer, gfx, sun, hemi, lantern, preset, renderOnce,
+    THREE, renderer, scene, camera, composer, gfx, sun, hemi,
+    terrain, sky, wagon, team, walkers,
+    preset, renderOnce,
+    get lantern() { return wagon.lantern; },
     show() { visible = true; canvas.style.display = 'block'; resize(); },
     hide() { visible = false; canvas.style.display = 'none'; frozen = false; },
-    // Pin all animation to a fixed phase and render one frame synchronously.
-    // Screenshot/smoke harnesses call freezeAt(0) before capture; returns the
-    // frame's render stats ({calls, triangles}) as a "world actually drew"
-    // probe (info.render.calls alone reads 1 from the composer's output pass).
-    freezeAt(t) { frozen = true; pose(t); return renderOnce(); },
+    setMoving(m) { moving = !!m; },
+    // Pin the world to scroll-distance d and render one frame synchronously.
+    // Pure function of (d, current preset) → identical pixels across runs.
+    freezeAt(d) { frozen = true; scrollZ = d; pose(d); return renderOnce(); },
     unfreeze() { frozen = false; },
     ready: true,
   };
