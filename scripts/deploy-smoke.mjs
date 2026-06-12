@@ -48,8 +48,10 @@ page.on("console", (msg) => {
   }
 });
 
-// Cache-bust the URL to dodge any CDN/browser staleness.
-const bust = `?smoke=${Date.now()}`;
+// Cache-bust the URL to dodge any CDN/browser staleness. gfx=high pins the 3D
+// layer's tier explicitly so the §7 assertion below exercises the real
+// bloom/shadow pipeline (and doesn't silently depend on the tier default).
+const bust = `?smoke=${Date.now()}&gfx=high`;
 await page.goto(URL + "/" + bust, { waitUntil: "domcontentloaded" });
 await page.waitForFunction(() => !!window.k && !!window.engine, { timeout: 15000 });
 await page.waitForTimeout(1500);
@@ -174,6 +176,45 @@ for (const [scene, data] of tapScenes) {
       pageErrors: [`scene "${scene}" has 0 clickable (area) objects — unwinnable without a keyboard`],
       kaplayErrors: [],
     });
+  }
+}
+
+// ── 7. 3D render layer mounts + draws (THREEJS_REBUILD_PLAN R10) ──
+// main.js dynamic-imports the 3D layer at end of boot; a failed init lands in
+// window.__ERRORS (not a pageerror), so without this section a fully broken 3D
+// build would pass the promotion gate silently. Assert: layer ready, no init
+// errors, and a forced frame draws real geometry. freezeAt(0) renders
+// synchronously and returns {calls, triangles} measured across the full frame.
+{
+  const threeReady = await page
+    .waitForFunction(() => window.__three?.ready === true, { timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  const initErrors = await page.evaluate(
+    () => (window.__ERRORS || []).filter((e) => String(e.msg).startsWith("3d-init")).map((e) => e.msg),
+  );
+  if (!threeReady || initErrors.length) {
+    findings.push({
+      scene: "3d-layer (boot)",
+      pageErrors: threeReady ? initErrors : ["window.__three never became ready", ...initErrors],
+      kaplayErrors: [],
+    });
+  } else {
+    const stats = await page.evaluate(() => {
+      window.__three.show();
+      window.__three.preset("travel");
+      const s = window.__three.freezeAt(0);
+      window.__three.hide();
+      return s;
+    });
+    assertClean("3d-layer (travel preset render)");
+    if (!(stats.triangles > 100)) {
+      findings.push({
+        scene: "3d-layer (travel preset render)",
+        pageErrors: [`3D frame drew only ${stats.triangles} triangles — world did not render`],
+        kaplayErrors: [],
+      });
+    }
   }
 }
 
