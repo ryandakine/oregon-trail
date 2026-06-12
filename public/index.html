@@ -28,6 +28,19 @@
   <!-- jsDelivr is the runtime CDN fallback in main.js if the self-hosted copy
        fails to load; preconnect so that fallback path isn't cold. -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <!-- 3D render layer (THREEJS_REBUILD_PLAN). Three.js + its jsm addons are
+       self-hosted under /vendor/three (SW-cacheable, no build step), resolved via
+       this importmap exactly like Kaplay's vendored ESM. The importmap MUST appear
+       before any module script that imports "three". Deliberately NO eager
+       modulepreload: 1.3MB of three core must not compete with kaplay + fonts on
+       the first-paint critical path (plan R7) — main.js dynamic-imports the 3D
+       layer at the END of boot instead, and the SW runtime-caches it for visit 2. -->
+  <script type="importmap">
+  { "imports": {
+    "three": "/vendor/three/three.module.js",
+    "three/addons/": "/vendor/three/jsm/"
+  }}
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
