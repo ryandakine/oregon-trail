@@ -153,17 +153,33 @@ setTimeout(() => engine.init(), 100);
 // engine state. Initialized LAST and NON-blocking (fire-and-forget): creating the
 // WebGLRenderer + shadow maps + composer is heavy, so it must never gate the 2D
 // game boot. If Three fails to load/init, the existing Kaplay 2D game is unaffected.
-// Skipped under ?test=1 (the existing 2D scene-smoke harness) so the heavy
-// software-GL renderer init can't stall Kaplay's loop during those timing-sensitive
-// smokes; the dedicated 3D screenshot/smoke harness opts in via ?gfx=high. ──
-if (!new URLSearchParams(location.search).has("test")) {
-  import("./three/bootstrap.mjs")
-    .then((m) => m.initThree(engine))
-    .catch((err) => {
-      // Push into __ERRORS (not just console.warn) so deploy-smoke and the test
-      // harnesses can see a broken 3D layer — a swallowed warn would let a dead
-      // 3D build pass the promotion gate silently.
-      window.__ERRORS.push({ msg: "3d-init-failed: " + (err?.message || String(err)) });
-      console.warn("3D render layer failed to init; continuing with 2D:", err?.message);
-    });
+//
+// DESKTOP-ONLY (DEC-B b2 / status-correction P0): the layer's only tier is the
+// desktop 'high' profile (2048 shadows + composer + bloom). Phones autodetect it
+// and choke (single-digit fps / WebGL context loss), so don't even download the
+// ~1.3 MB three bundle on a touch device. Gate on a fine (mouse) pointer with no
+// coarse (touch) pointer — the conservative "clearly a desktop" test. The 2D
+// Kaplay game remains the path for phones (and for any desktop where 3D fails).
+//
+// Skipped under ?test=1 (the 2D scene-smoke harness, which never wants 3D). An
+// explicit ?gfx= param force-inits regardless of pointer: the screenshot +
+// deploy-smoke harnesses run headless (no real pointer) and need the layer, and
+// it doubles as a manual escape hatch (?gfx=high / ?gfx=low). ──
+{
+  const params = new URLSearchParams(location.search);
+  const gfxOverride = params.has("gfx");
+  const isDesktop = !!window.matchMedia
+    && window.matchMedia("(pointer: fine)").matches
+    && !window.matchMedia("(pointer: coarse)").matches;
+  if (!params.has("test") && (gfxOverride || isDesktop)) {
+    import("./three/bootstrap.mjs")
+      .then((m) => m.initThree(engine))
+      .catch((err) => {
+        // Push into __ERRORS (not just console.warn) so deploy-smoke and the test
+        // harnesses can see a broken 3D layer — a swallowed warn would let a dead
+        // 3D build pass the promotion gate silently.
+        window.__ERRORS.push({ msg: "3d-init-failed: " + (err?.message || String(err)) });
+        console.warn("3D render layer failed to init; continuing with 2D:", err?.message);
+      });
+  }
 }

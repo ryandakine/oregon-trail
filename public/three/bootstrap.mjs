@@ -432,16 +432,22 @@ export function initThree(engine) {
     audio.setWeather(weatherKind, weatherIntensity);
   }
 
-  function preset(name) {
+  // `opts` carries live trigger data from the engine state→3D adapter (river
+  // width/difficulty, landmark type/name). Defaults preserve the harness's
+  // zero-arg calls. The owned-scene mounts read it so a real crossing/landmark
+  // renders the server's actual payload, not a hardcoded stand-in.
+  function preset(name, opts = {}) {
     const p = PRESETS[name] || PRESETS.travel;
     // The river preset owns a mounted crossing; every other preset clears it.
-    if (name === 'river' && !river) enterRiver({});
+    if (name === 'river' && !river) enterRiver(opts);
     else if (name !== 'river' && river) exitRiver();
     // The night preset owns a mounted camp; every other preset clears it.
     if (name === 'night' && !camp) enterCamp();
     else if (name !== 'night' && camp) exitCamp();
     // The fort preset owns a mounted landmark; every other preset clears it.
-    if (name === 'fort' && !landmark) enterLandmark({ type: 'fort', name: 'Fort Laramie' });
+    // type/name come from the live `currentLandmark` (server-enriched); the
+    // fort defaults are the harness fallback only.
+    if (name === 'fort' && !landmark) enterLandmark({ type: opts.type || 'fort', name: opts.name || 'Fort Laramie' });
     else if (name !== 'fort' && landmark) exitLandmark();
     // Each remaining mounted scene is owned by its matching preset.
     if (name === 'hunting' && !hunting) enterHunting(); else if (name !== 'hunting' && hunting) exitHunting();
@@ -581,11 +587,56 @@ export function initThree(engine) {
     ready: true,
   };
 
-  // Show only for world scenes; hide for menu/UI scenes so they look unchanged.
+  // ── state→3D adapter (THREEJS_REBUILD_PLAN §3.4, status-correction P0) ──
+  // Before this, the bridge only show/hid the canvas, so in real play the world
+  // was stuck on the constant-scroll travel preset — blind to river, landmark,
+  // death, hunting, arrival. Map each world state to its camera preset and feed
+  // the server's trigger payload (`data` === `res.trigger_data`, also mirrored
+  // on engine.currentRiver / engine.currentLandmark). Read-only: never mutates
+  // state, never calls the API. Non-world states hide the canvas (the 2D event/
+  // menu UI shows over the body background) — overlay cohesion is a later pass.
   if (engine && engine.on) {
-    engine.on('stateChange', ({ to }) => {
-      if (WORLD_STATES.has(to)) api.show(); else api.hide();
-    });
+    const applyState = (to, data) => {
+      if (!WORLD_STATES.has(to)) { api.hide(); return; }
+      switch (to) {
+        case 'TRAVEL':
+          api.setMoving(true);
+          preset('travel');
+          break;
+        case 'RIVER': {
+          const r = data || engine.currentRiver || {};
+          preset('river', {
+            widthFt: r.width_ft ?? r.width,
+            fordDifficulty: r.ford_difficulty ?? r.difficulty,
+          });
+          break;
+        }
+        case 'LANDMARK': {
+          const lm = data || engine.currentLandmark || {};
+          // type union (fort|natural|river_crossing|settlement|destination)
+          // matches landmarks.mjs 1:1. EXCEPT river_crossing: its landmark
+          // model is dry bank dressing (the water sheet is owned by the RIVER
+          // state / enterRiver), so the fort preset would paint a ferry on dry
+          // land. A river_crossing landmark (e.g. the mile-83 Kansas Crossing,
+          // emitted as a LANDMARK waypoint before the river check) is just a
+          // waypoint here — show the travel world, not a dry ferry.
+          if (lm.type === 'river_crossing') { preset('travel'); break; }
+          preset('fort', { type: lm.type, name: lm.name });
+          break;
+        }
+        case 'HUNTING':
+          preset('hunting');
+          break;
+        case 'DEATH':
+          preset('death');
+          break;
+        case 'ARRIVAL':
+          preset('arrival');
+          break;
+      }
+      api.show();
+    };
+    engine.on('stateChange', ({ to, data }) => applyState(to, data));
   }
 
   window.__three = api;
