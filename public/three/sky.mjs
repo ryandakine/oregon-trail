@@ -483,6 +483,24 @@ export function createSky({ cloudTexture }) {
   // ── Internal state ──
   const _tmpSunDir = new THREE.Vector3();
 
+  // Overcast 0..1 — storms grey the dome, desaturate + dim the sun, raise cloud
+  // cover. Applied to the palette in both update() and applyTo() so the dome,
+  // lights, and fog all darken together (particles alone don't read as a storm).
+  let _overcast = 0;
+  const _ovTint = rgb(150, 152, 156); // overwritten by setOvercast(v, color)
+  function applyOvercast(pal) {
+    const k = _overcast;
+    if (k <= 0) return pal;
+    pal.zenith.lerp(_ovTint, 0.72 * k);
+    pal.horizon.lerp(_ovTint, 0.82 * k);
+    pal.fogColor.lerp(_ovTint, 0.78 * k);
+    pal.hemiSky.lerp(_ovTint, 0.6 * k);
+    pal.sunColor.lerp(_ovTint, 0.7 * k);
+    pal.sunIntensity *= (1 - 0.78 * k);
+    pal.hemiIntensity *= (1 - 0.18 * k);
+    return pal;
+  }
+
   // ── update ────────────────────────────────────────────────────────────────
   // Pure function of t for all visual state (dt used only for cloud drift
   // which is also driven by t so remains deterministic across equal-t calls).
@@ -493,7 +511,7 @@ export function createSky({ cloudTexture }) {
       group.position.copy(cameraPos);
     }
 
-    const pal = lerpPalette(t);
+    const pal = applyOvercast(lerpPalette(t));
     const sunDir = sunDirAt(t);
 
     // ── Dome uniforms ──
@@ -522,7 +540,9 @@ export function createSky({ cloudTexture }) {
     const dayUnits = 400;   // world-units to traverse over one full t cycle
     const cloudOpacityDay = 0.82;
     const cloudOpacityNight = 0.22;
-    const cloudOpacity = cloudOpacityDay + (cloudOpacityNight - cloudOpacityDay) * nightFade;
+    let cloudOpacity = cloudOpacityDay + (cloudOpacityNight - cloudOpacityDay) * nightFade;
+    // Overcast thickens the cloud deck.
+    cloudOpacity = Math.max(cloudOpacity, 0.45 + 0.5 * _overcast);
 
     for (let i = 0; i < cloudSprites.length; i++) {
       const sprite = cloudSprites[i];
@@ -531,6 +551,9 @@ export function createSky({ cloudTexture }) {
       const wrap = CLOUD_WRAP_X * 2;
       sprite.position.x = ((((rawX + CLOUD_WRAP_X) % wrap) + wrap) % wrap) - CLOUD_WRAP_X;
       sprite.material.opacity = cloudOpacity;
+      // Grey the clouds toward storm-cloud under overcast.
+      if (_overcast > 0) sprite.material.color.setRGB(1 - 0.35 * _overcast, 1 - 0.33 * _overcast, 1 - 0.3 * _overcast);
+      else sprite.material.color.setRGB(1, 1, 1);
     }
   }
 
@@ -542,7 +565,7 @@ export function createSky({ cloudTexture }) {
   const SUN_DIST  = 200;
 
   function applyTo(targets, t) {
-    const pal    = lerpPalette(t);
+    const pal    = applyOvercast(lerpPalette(t));
     const sunDir = sunDirAt(t);
 
     if (targets.sun) {
@@ -584,11 +607,19 @@ export function createSky({ cloudTexture }) {
     }
   }
 
+  // v: 0..1 cover. color: optional THREE.Color the dome/light grey toward
+  // (cool grey for rain/snow, warm ochre for a dust storm). LINEAR space.
+  function setOvercast(v, color) {
+    _overcast = Math.max(0, Math.min(1, v));
+    if (color) _ovTint.copy(color);
+  }
+
   return {
     group,
     update,
     sunDirAt,
     applyTo,
+    setOvercast,
     dispose,
   };
 }

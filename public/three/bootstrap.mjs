@@ -308,6 +308,23 @@ export function initThree(engine) {
     // beside the wagon (§5a): fire frame-left as the only key, wagon behind.
     night: { t: 0.005, fov: 40, cam: [-7.5, 3.4, 5.5], look: [-2.6, 0.7, 1.2], fog: [16, 90], lantern: 6 },
   };
+  // Weather mood: storms grey the sky + pull fog in + emit particles, all from
+  // one call, applied in pose() so live + frozen frames match.
+  let weatherKind = 'none';
+  let weatherIntensity = 0;
+  const OVERCAST_BY_KIND = { none: 0, rain: 0.9, snow: 0.5, dust: 0.8 };
+  // Overcast tint per kind (sRGB→linear): cool storm grey vs warm dust ochre.
+  const OVERCAST_TINT = {
+    rain: new THREE.Color(0x9598a0).convertSRGBToLinear(),
+    snow: new THREE.Color(0xb9c0cc).convertSRGBToLinear(),
+    dust: new THREE.Color(0xc2a065).convertSRGBToLinear(),
+  };
+  function setWeather(kind, intensity = 1) {
+    weatherKind = kind in OVERCAST_BY_KIND ? kind : 'none';
+    weatherIntensity = weatherKind === 'none' ? 0 : Math.max(0, Math.min(1, intensity));
+    vfx.setWeather(weatherKind, weatherIntensity);
+  }
+
   function preset(name) {
     const p = PRESETS[name] || PRESETS.travel;
     // The river preset owns a mounted crossing; every other preset clears it.
@@ -324,8 +341,8 @@ export function initThree(engine) {
     camera.position.set(...p.cam);
     camera.lookAt(...p.look);
     camera.updateProjectionMatrix();
-    scene.fog.near = p.fog[0];
-    scene.fog.far = p.fog[1];
+    baseFogNear = p.fog[0];
+    baseFogFar = p.fog[1];
     wagon.lantern.material.emissiveIntensity = p.lantern;
     pose(scrollZ); // re-light + re-pose under the new preset immediately
   }
@@ -335,6 +352,8 @@ export function initThree(engine) {
   let moving = true;
   let frozen = false;
   let visible = false;
+  let baseFogNear = 50;
+  let baseFogFar = 240;
 
   function pose(d) {
     terrain.update(0, d);
@@ -346,8 +365,21 @@ export function initThree(engine) {
     team.setPhase(d);
     walkers[0].setPhase(d + 0.2);
     walkers[1].setPhase(d + 1.1);
+    // Weather darkens the dome + lights BEFORE the sky writes them.
+    sky.setOvercast(OVERCAST_BY_KIND[weatherKind] * weatherIntensity, OVERCAST_TINT[weatherKind]);
     sky.update(0, todT, camera.position);
     sky.applyTo({ sun, hemi, scene }, todT);
+    // Weather pulls fog in (denser air). A dust storm collapses visibility to a
+    // tan murk — that loss of distance IS the storm — so it gets a hard tight
+    // fog, not a proportional pull.
+    if (weatherKind === 'dust') {
+      scene.fog.near = baseFogNear + (8 - baseFogNear) * weatherIntensity;
+      scene.fog.far = baseFogFar + (46 - baseFogFar) * weatherIntensity;
+    } else {
+      const fogPull = weatherIntensity * 0.55;
+      scene.fog.near = baseFogNear * (1 - fogPull * 0.6);
+      scene.fog.far = baseFogFar * (1 - fogPull * 0.7);
+    }
     // Re-anchor the sun close to the caravan so the ortho shadow frustum
     // (near 1 / far 80) actually contains the world — sky.applyTo parks it
     // 200u out on the sun arc, far outside the shadow camera.
@@ -409,6 +441,7 @@ export function initThree(engine) {
     show() { visible = true; canvas.style.display = 'block'; resize(); },
     hide() { visible = false; canvas.style.display = 'none'; frozen = false; },
     setMoving(m) { moving = !!m; },
+    setWeather,
     get camp() { return camp; },
     // Deterministically warm the campfire ember pool: emit from the fire tip +
     // step the seeded particle sim N times. Used by the night screenshot so the

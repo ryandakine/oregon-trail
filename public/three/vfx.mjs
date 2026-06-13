@@ -405,36 +405,45 @@ export function createVfx() {
   }
 
   function _emitSnow(dt, intensity) {
-    const rate = 60 * intensity;
+    // Tuned against screenshots: 60/s × 0.15u flakes over a 56×54u volume read
+    // as a clear day. Snow needs density + size + a camera-hugging volume.
+    const rate = 320 * intensity;
     const count = Math.floor(rate * dt + (rng() < (rate * dt % 1) ? 1 : 0));
     for (let i = 0; i < count; i++) {
-      const x  = (rng() - 0.5) * 56;
-      const z  = -40 + rng() * 54;
-      const y  = 10 + rng() * 6;
-      const vx = (rng() - 0.5) * 0.6;
-      const vy = -1.5 - rng() * 0.5;
-      const vz = (rng() - 0.5) * 0.6;
+      const x  = (rng() - 0.5) * 46;     // ±23, near the lens
+      const z  = -22 + rng() * 36;       // -22..+14
+      const y  = 7 + rng() * 6;
+      const vx = (rng() - 0.5) * 0.8;
+      const vy = -1.4 - rng() * 0.5;
+      const vz = (rng() - 0.5) * 0.8;
       const lt = (y / Math.abs(vy)) * (0.85 + rng() * 0.30);
-      _spawn(x, y, z, vx, vy, vz, 0xeef4ff, 0.12 + rng() * 0.08, lt, 0.1, SPR.snow, rng() * Math.PI * 2);
+      _spawn(x, y, z, vx, vy, vz, 0xf4f8ff, 0.2 + rng() * 0.16, lt, 0.1, SPR.snow, rng() * Math.PI * 2);
     }
   }
 
   function _emitDust(dt, intensity) {
-    const rate = 90 * intensity;
+    // Spawn ACROSS the visible frame (not a thin far band at +x) so blowing
+    // dust fills the view; ground-hugging, big and semi-opaque to read as a
+    // wall of dust, plus a few higher streaks.
+    const rate = 360 * intensity;
     const count = Math.floor(rate * dt + (rng() < (rate * dt % 1) ? 1 : 0));
     for (let i = 0; i < count; i++) {
-      // Spawn from the windward side (+x) and blow toward -x
-      const x  = 28 + rng() * 8;
-      const y  = 0.2 + rng() * 3.5;
-      const z  = -40 + rng() * 54;
-      const vx = -(7 + rng() * 3);
-      const vy =  0.3 + rng() * 0.8;
+      const x  = -22 + rng() * 52;       // -22..+30, fills the frame
+      const z  = -26 + rng() * 40;
+      const vx = -(7 + rng() * 5);       // blow fast toward -x
       const vz = (rng() - 0.5) * 1.5;
-      const lt = 2.0 + rng() * 2.0;
-      // Tan/ochre tones from PALETTE.dust [205,180,140]
-      const br = 0.7 + rng() * 0.3;
-      _c.setRGB(br * 0.80, br * 0.70, br * 0.55);
-      _spawn(x, y, z, vx, vy, vz, _c, 0.5 + rng() * 0.6, lt, 0.5, SPR.smoke, rng() * Math.PI * 2);
+      // Warm ochre (PALETTE.dust [205,180,140]).
+      const br = 0.75 + rng() * 0.25;
+      _c.setRGB(br * 0.86, br * 0.74, br * 0.56);
+      // 65% fine grit (small fast debris specks near the ground) + 35% soft
+      // haze puffs — the mix reads as blowing dust, not floating orbs.
+      if (rng() < 0.65) {
+        const y = 0.1 + rng() * 2.6;
+        _spawn(x, y, z, vx, 0.1 + rng() * 0.4, vz, _c, 0.2 + rng() * 0.3, 1.0 + rng() * 1.0, 0.3, SPR.debris, rng() * Math.PI * 2);
+      } else {
+        const y = 0.3 + rng() * 4.0;
+        _spawn(x, y, z, vx * 0.7, 0.2 + rng() * 0.6, vz, _c, 0.6 + rng() * 0.7, 1.4 + rng() * 1.4, 0.3, SPR.smoke, rng() * Math.PI * 2);
+      }
     }
   }
 

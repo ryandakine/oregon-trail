@@ -66,8 +66,12 @@ await page.evaluate(() => {
   window.__three.show();
 });
 
-const SHOTS = ['travel', 'river', 'fort', 'night', 'rain'];
-const NAMES = { travel: '01-travel', river: '02-river-crossing', fort: '03-fort', night: '04-night-camp', rain: '05-travel-rain' };
+const SHOTS = ['travel', 'river', 'fort', 'night', 'rain', 'snow', 'dust'];
+const NAMES = {
+  travel: '01-travel', river: '02-river-crossing', fort: '03-fort', night: '04-night-camp',
+  rain: '05-travel-rain', snow: '06-travel-snow', dust: '07-dust-storm',
+};
+const WEATHER = { rain: 'rain', snow: 'snow', dust: 'dust' };
 
 const shotStats = {};
 const shotHashes = {};
@@ -75,26 +79,21 @@ for (const shot of SHOTS) {
   // freezeAt(0): pin every animation to a fixed phase + render synchronously,
   // so the same code always produces the same pixels (plan §3.1 determinism —
   // a free-running wheel angle would defeat pixel-diff regression).
-  shotStats[shot] = await page.evaluate((s) => {
-    if (s === 'rain') {
-      // Weather variant: travel framing + storm mood + a deterministic rain
-      // state (seeded pool + fixed-step warmup — never wall-clock). Mood
-      // overrides must come AFTER freezeAt: its pose() runs sky.applyTo,
-      // which resets sun intensity and fog from the palette.
-      window.__three.preset('travel');
-      window.__three.vfx.reset(7);
-      window.__three.vfx.setWeather('rain', 1.0);
-      window.__three.vfx.simulate(150, 1 / 60);
-      window.__three.freezeAt(0);
-      window.__three.scene.fog.near = 18;
-      window.__three.scene.fog.far = 110;
-      window.__three.sun.intensity *= 0.4;
-      window.__three.hemi.intensity *= 0.75;
-      return window.__three.renderOnce();
-    }
+  shotStats[shot] = await page.evaluate(({ s, weatherMap }) => {
     const t = window.__three;
+    const weather = weatherMap[s];
+    if (weather) {
+      // Weather variants: travel framing + the real storm mood (sky overcast +
+      // fog pull + particles, all coupled in setWeather/pose) + a deterministic
+      // particle warmup (seeded pool + fixed steps — never wall-clock).
+      t.preset('travel');
+      t.vfx.reset(7);
+      t.setWeather(weather, 1.0);
+      t.vfx.simulate(150, 1 / 60);
+      return t.freezeAt(0); // pose() applies the coupled overcast + fog
+    }
     t.vfx.reset(7);
-    t.vfx.setWeather('none', 0);
+    t.setWeather('none', 0);
     t.preset(s);
     if (s === 'night') {
       // Warm the ember pool to a reproducible rising state (the live emitter is
@@ -102,7 +101,7 @@ for (const shot of SHOTS) {
       t.emitCampEmbers(140, 1 / 60);
     }
     return t.freezeAt(0);
-  }, shot);
+  }, { s: shot, weatherMap: WEATHER });
   await page.waitForTimeout(120); // composer output flush
   const out = path.join(OUT, `${NAMES[shot]}.png`);
   const buf = await page.screenshot({ path: out });
