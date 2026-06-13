@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { advanceDays } from "../src/simulation";
-import type { GameState, HistoricalContext } from "../src/types";
+import type { GameState, HistoricalContext, PendingEffect } from "../src/types";
 import ctx from "../src/historical-context.json";
 
 const historical = ctx as unknown as HistoricalContext;
 
 function makeState(overrides: Partial<GameState> = {}): GameState {
   return {
+    state_version: 2,
     party: {
       leader_name: "Alice",
       members: [
@@ -49,6 +50,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
       landmark_rest_used: [],
       bitter_path_taken: "none",
       recent_event_titles: [],
+      pending_effects: [],
     },
     meta: {
       run_id: "test-run",
@@ -610,5 +612,155 @@ describe("advanceDays - river trigger", () => {
     // Should reach mile 27 and trigger river
     expect(result.trigger).toBe("river");
     expect(result.triggerData).toHaveProperty("id");
+  });
+});
+
+describe("advanceDays - pending_effects drain", () => {
+  beforeEach(() => {
+    vi.spyOn(Math, "random").mockReturnValue(1);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Open stretch in seg_03 with all nearby landmarks/crossings cleared, so the
+  // only trigger that can fire is the event check — letting us advance exactly
+  // one sim-day at a time by parking days_since_last_event at the >=5 guarantee.
+  function makeOpenState(): GameState {
+    const state = makeState();
+    state.position.miles_traveled = 320;
+    state.position.current_segment_id = "seg_03";
+    state.simulation.visited_landmarks = ["lm_independence", "lm_kansas_river", "lm_alcove_spring", "lm_fort_kearney"];
+    state.simulation.resolved_crossings = ["rc_wakarusa_creek", "rc_kansas_river", "rc_big_blue_river", "rc_little_blue_river_multiple_fords"];
+    return state;
+  }
+
+  it("effect does NOT fire early, fires on the scheduled day, clamped by CONSEQUENCE_BOUNDS", () => {
+    const state = makeOpenState();
+    state.simulation.days_since_last_event = 4; // event triggers after the 1st sim-day
+    const effect: PendingEffect = {
+      id: "fester",
+      days_remaining: 2,
+      consequences: { health: -999 }, // exceeds the health bound (-40)
+      source: "Snakebite",
+      member_name: "Alice",
+    };
+    state.simulation.pending_effects = [effect];
+
+    // Advance #1 — exactly one sim-day. days_remaining 2 -> 1, NOT fired.
+    const r1 = advanceDays(state, historical);
+    expect(r1.summaries).toHaveLength(1);
+    expect(r1.state.party.members.find((m) => m.name === "Alice")!.health).toBe(100);
+    expect(r1.state.simulation.pending_effects).toHaveLength(1);
+    expect(r1.state.simulation.pending_effects[0].days_remaining).toBe(1);
+
+    // Advance #2 — one more sim-day. days_remaining 1 -> 0, FIRES.
+    const r2 = advanceDays(r1.state, historical);
+    // 100 + clamp(-999) === 100 - 40 === 60. Unclamped would be 0 (dead).
+    expect(r2.state.party.members.find((m) => m.name === "Alice")!.health).toBe(60);
+    expect(r2.state.simulation.pending_effects).toHaveLength(0);
+  });
+
+  it("a lethal delayed effect ends the run the same day, before the event-trigger check", () => {
+    const state = makeOpenState();
+    state.simulation.days_since_last_event = 4; // an event WOULD fire this day if not preempted
+    const bob = state.party.members.find((m) => m.name === "Bob")!;
+    bob.health = 30; // a single clamped blow (-40) is lethal
+    const effect: PendingEffect = {
+      id: "wound",
+      days_remaining: 1,
+      consequences: { health: -999 },
+      source: "Festering wound",
+      member_name: "Bob",
+    };
+    state.simulation.pending_effects = [effect];
+
+    const result = advanceDays(state, historical);
+
+    // Death short-circuits the day BEFORE the event check would have fired.
+    expect(result.trigger).toBe("death");
+    const bobAfter = result.state.party.members.find((m) => m.name === "Bob")!;
+    expect(bobAfter.alive).toBe(false);
+    expect(bobAfter.health).toBe(0);
+    expect(
+      result.state.deaths.some((d) => d.name === "Bob" && d.cause === "Festering wound"),
+    ).toBe(true);
+    expect(result.state.simulation.pending_effects).toHaveLength(0);
+  });
+
+  it("member_name targets one member; others are untouched", () => {
+    const state = makeOpenState();
+    state.simulation.days_since_last_event = 4;
+    state.simulation.pending_effects = [{
+      id: "bob-only",
+      days_remaining: 1,
+      consequences: { health: -20, morale: -15 },
+      source: "Bad dream",
+      member_name: "Bob",
+    }];
+
+    const r = advanceDays(state, historical);
+    const bob = r.state.party.members.find((m) => m.name === "Bob")!;
+    const alice = r.state.party.members.find((m) => m.name === "Alice")!;
+    expect(bob.health).toBe(80);
+    expect(bob.morale).toBe(85);
+    expect(alice.health).toBe(100);
+    expect(alice.morale).toBe(100);
+  });
+
+  it("an untargeted effect hits all living members (event semantics)", () => {
+    const state = makeOpenState();
+    state.simulation.days_since_last_event = 4;
+    state.party.members[2].alive = false; // Carol is dead
+    state.party.members[2].health = 0;
+    state.simulation.pending_effects = [{
+      id: "all",
+      days_remaining: 1,
+      consequences: { morale: -10 },
+      source: "Grim news",
+    }];
+
+    const r = advanceDays(state, historical);
+    for (const m of r.state.party.members) {
+      if (m.name === "Carol") expect(m.morale).toBe(100); // dead member untouched
+      else expect(m.morale).toBe(90);
+    }
+  });
+
+  it("clamps morale on the drain path too (not just health)", () => {
+    const state = makeOpenState();
+    state.simulation.days_since_last_event = 4;
+    state.simulation.pending_effects = [{
+      id: "despair",
+      days_remaining: 1,
+      consequences: { morale: -999 }, // exceeds the morale bound (-30)
+      source: "Despair",
+      member_name: "Alice",
+    }];
+
+    const r = advanceDays(state, historical);
+    // 100 + clamp(-999) === 100 - 30 === 70. Unclamped would floor at 0.
+    expect(r.state.party.members.find((m) => m.name === "Alice")!.morale).toBe(70);
+  });
+
+  it("fires once on the correct day within a single multi-day advance (no double-decrement)", () => {
+    const state = makeOpenState();
+    // Low days_since_last_event + cleared landmarks/crossings → the loop runs the
+    // full 5 sim-days (the event only fires at the day-5 guarantee), so the effect
+    // is decremented across iterations of ONE advanceDays call.
+    state.simulation.days_since_last_event = 0;
+    state.simulation.pending_effects = [{
+      id: "rot",
+      days_remaining: 3,
+      consequences: { health: -10 },
+      source: "Slow rot",
+      member_name: "Alice",
+    }];
+
+    const r = advanceDays(state, historical);
+    expect(r.summaries).toHaveLength(5);
+    // Decrements 3→2→1→0: fires exactly once on the 3rd sim-day. 100 - 10 = 90.
+    expect(r.state.party.members.find((m) => m.name === "Alice")!.health).toBe(90);
+    expect(r.state.simulation.pending_effects).toHaveLength(0);
   });
 });

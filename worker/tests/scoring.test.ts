@@ -13,6 +13,7 @@ function makeState(opts: {
 }): GameState {
   const names = ["Alice", "Bob", "Carol", "Dave", "Eve"];
   return {
+    state_version: 2,
     party: {
       leader_name: "Alice",
       members: names.map((name, i) => ({
@@ -39,6 +40,7 @@ function makeState(opts: {
       landmark_rest_used: [],
       bitter_path_taken: "none",
       recent_event_titles: [],
+      pending_effects: [],
     },
     meta: { run_id: "score-test", event_count: 0 },
   };

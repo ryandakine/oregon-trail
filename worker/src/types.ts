@@ -274,6 +274,21 @@ export interface ChallengeConstraints {
 // and telemetry distinguish opt-out from dignified choice.
 export type BitterPathOutcome = "none" | "dignified" | "hopeful" | "taken" | "refused";
 
+// A consequence delta scheduled to land on a future simulated day — the
+// delayed-consequence primitive (a wound that festers, food found spoiled days
+// later, a morale ripple). Enqueued server-side only; drained inside
+// advanceDays. The consequences carry the SAME delta shape as events and are
+// clamped by CONSEQUENCE_BOUNDS at drain time (not at enqueue). See
+// docs/spec/gamestate-v2.md §3.2.
+export interface PendingEffect {
+  id: string;                 // uuid; de-dup + journal/debug
+  days_remaining: number;     // decremented per simulated day; fires at <= 0
+  consequences: EventChoice["consequences"]; // same delta shape as events
+  member_name?: string;       // optional target for health/morale; else all living
+  source: string;             // e.g. "Snakebite", "disease:cholera" — provenance
+  journal_entry?: string;     // optional line emitted when it fires
+}
+
 export interface SimulationState {
   starvation_days: number;
   days_since_last_event: number;
@@ -291,9 +306,15 @@ export interface SimulationState {
   // "do NOT repeat these titles" anti-repetition signal so the same event does
   // not fire back-to-back. Capped at 5 entries (oldest dropped).
   recent_event_titles: string[];
+  // v2+; default []. Delayed consequences scheduled to fire on a future
+  // simulated day. Server-enqueued only, capped at MAX_PENDING_EFFECTS.
+  pending_effects: PendingEffect[];
 }
 
 export interface GameState {
+  // Schema version for the migration framework. v2+; legacy signed states have
+  // no marker and are treated as v1. See docs/spec/gamestate-v2.md §2.
+  state_version: number;
   party: {
     leader_name: string;
     members: PartyMember[];

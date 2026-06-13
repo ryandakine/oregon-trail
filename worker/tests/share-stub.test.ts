@@ -15,6 +15,7 @@ const ENV = { HMAC_SECRET: "share-stub-test-secret" };
 
 function makeTerminalState(overrides: Partial<GameState> = {}): GameState {
   return {
+    state_version: 2,
     party: {
       leader_name: "Alice",
       members: [
@@ -47,6 +48,7 @@ function makeTerminalState(overrides: Partial<GameState> = {}): GameState {
       landmark_rest_used: [],
       bitter_path_taken: "none",
       recent_event_titles: [],
+      pending_effects: [],
     },
     meta: { run_id: "stub-test-run", event_count: 10 },
     ...overrides,

@@ -28,18 +28,28 @@ export const STATE_VERSION = 2;
 Runs **after** `verifyState` succeeds, on a `structuredClone` of the verified state (the signature covered the legacy shape; the next re-sign includes the new fields — identical posture to the existing shim). It upgrades any older state to `STATE_VERSION` by injecting defaults, never removing or renaming.
 
 ```ts
-// worker/src/state.ts — replaces the inline back-compat block in verifyIncomingState
+// worker/src/state.ts — replaces the inline back-compat block in verifyIncomingState.
+// Fields are read through local optional-typed views (omitted here for brevity)
+// so the absence checks compile without `as` casts — see the implementation.
 function migrateState(input: GameState): GameState {
   const state = structuredClone(input);
   const v = state.state_version ?? 1;
 
-  // v1 → v2: the two pre-versioning shims, now formalized, plus pending_effects.
+  // v1 → v2: inject defaults for EVERY field added to the signed schema since the
+  // original game loop, so a migrated state is byte-identical to a fresh one (§4).
+  // This formalizes the two Bitter Path shims AND folds in the other un-versioned
+  // adds (challenge_id, recent_event_titles, landmark_rest_used) per §2.3, plus
+  // the new pending_effects.
   if (v < 2) {
+    const settings = state.settings;
     const sim = state.simulation;
+    if (settings.challenge_id === undefined) settings.challenge_id = null;
     if (sim.bitter_path_taken === undefined) sim.bitter_path_taken = "none";
     if (sim.pending_event_trigger === undefined) {
       sim.pending_event_trigger = sim.pending_event_hash ? "event" : null;
     }
+    if (sim.recent_event_titles === undefined) sim.recent_event_titles = [];
+    if (sim.landmark_rest_used === undefined) sim.landmark_rest_used = [];
     if (sim.pending_effects === undefined) sim.pending_effects = [];
   }
 
@@ -47,6 +57,8 @@ function migrateState(input: GameState): GameState {
   return state;
 }
 ```
+
+> **Why more than `pending_effects`:** the byte-identity invariant (§4) is only true if the migration injects *every* signed field a genuine pre-versioning state can lack. Three fields were added un-versioned over time (`settings.challenge_id`, `simulation.recent_event_titles`, `simulation.landmark_rest_used`) and were never folded into a migration — only read-site `?? []`/null guards covered them. v2 folds all of them in, per §2.3.
 
 `verifyIncomingState` becomes: `verifyState → if !ok return invalid → return { valid: true, state: migrateState(signed.state) }`. No casts (`rules/typescript/style.md`): `SimulationState`'s new fields are declared optional-on-read only via the type evolution below, and the function reads them as possibly-`undefined` without `as`.
 
@@ -89,7 +101,9 @@ export interface GameState {
 
 **Enqueue:** server-side only — by event consequence handlers and the sim. The client cannot add effects (it can't mutate the signed blob). Enqueue does **not** clamp (delay magnitudes are intentional); the queue is capped at `MAX_PENDING_EFFECTS = 24`, dropping the **oldest** on overflow (defensive — effects are server-enqueued, so overflow signals a bug, but bound it so a runaway can't bloat the signed state).
 
-**Drain:** inside `advanceDays`, on **each simulated day**: decrement every effect's `days_remaining`; for each that reaches `<= 0`, apply its `consequences` through the **existing `clampConsequences`** (so `CONSEQUENCE_BOUNDS` stays the single source of truth — anti-cheat preserved), apply optional `member_name` effects, push `journal_entry` if present, and remove it from the queue. Order: drain BEFORE the day's event-trigger check so a delayed death is reflected in that day's state.
+**Drain:** inside `advanceDays`, on **each simulated day**: decrement every effect's `days_remaining`; for each that reaches `<= 0`, apply its `consequences` through the **existing `clampConsequences`** (so `CONSEQUENCE_BOUNDS` stays the single source of truth — anti-cheat preserved), apply optional `member_name` effects, push `journal_entry` if present, and remove it from the queue. Order: drain BEFORE the day's event-trigger check so a delayed death is reflected in that day's state. `miles`/`days` deltas are clamped but **not applied** by the drain — `advanceDays` owns movement and the calendar; the consequences pillar adds loop-safe spatial/temporal handling if it ever needs it.
+
+**Scope of the drain — `advanceDays` only.** `/api/camp` (`handleCamp`) advances a calendar day via `applyDailyAttrition` but does **not** drain, so delayed effects do **not** tick on a camped day. This is intentional for V1 (no path enqueues effects yet), but the consequences pillar MUST account for it before it starts enqueuing — otherwise a player could stall a festering effect by camping. Either drain in `handleCamp` too, or design effects that tolerate camp-stalling, when that pillar lands.
 
 ### 3.3 Events — **no new signed field** (descope)
 Per the approved descope (`ai-event-engine.md` §10): pool-by-default + live only `meta.event_count === 0`. `event_count` already exists and is server-signed. `seen_event_ids` is **deferred** (added later via this same framework only if repeat-rate telemetry justifies it). Events touch zero of the schema in V1.
@@ -136,3 +150,4 @@ Full suite (`npx vitest run`) green before commit.
 
 ## Change log
 - 2026-06-13 — Created. Establishes `state_version` + `migrateState` framework and the `pending_effects` queue. Formalizes the two pre-existing ad-hoc shims (`bitter_path_taken`, `pending_event_trigger`) into the versioned path.
+- 2026-06-13 — Implementation amendment (adversarial review). The v1→v2 migration also defaults `settings.challenge_id`, `simulation.recent_event_titles`, and `simulation.landmark_rest_used` — un-versioned signed-field adds that the §2.2 sketch originally omitted. Without them the §4/§5 byte-identity invariant is false for genuine pre-2026-06-10 states (the §5 test now strips all of them to prove a true v1 shape round-trips). Added the explicit camp-scoping note to §3.2 (drain is `advanceDays`-only) and documented that the drain clamps but does not apply `miles`/`days`.

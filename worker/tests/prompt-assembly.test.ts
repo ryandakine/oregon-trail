@@ -122,6 +122,7 @@ function makeNation(overrides: Partial<IndigenousNation> = {}): IndigenousNation
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
   return {
+    state_version: 2,
     party: {
       leader_name: 'Ezra',
       members: [
@@ -167,6 +168,7 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
       landmark_rest_used: [],
       bitter_path_taken: "none",
       recent_event_titles: [],
+      pending_effects: [],
     },
     meta: {
       run_id: 'test-run-001',
