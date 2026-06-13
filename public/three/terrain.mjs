@@ -69,6 +69,25 @@ function riverCarveAt(absZ) {
   return t * t * (3 - 2 * t);
 }
 
+// Flatten pad — levels terrain toward a fixed Y inside a radius, so large
+// structures (forts, settlements) sit on level ground instead of clipping
+// through rolling hills. Same instance-state + immediate-rewrite pattern as
+// the river carve. null = no pad.
+let _flatPad = null; // { absZ, x, radius, y }
+
+function flatPadWeight(x, absZ) {
+  if (!_flatPad) return 0;
+  const dx = x - _flatPad.x;
+  const dz = absZ - _flatPad.absZ;
+  const d = Math.sqrt(dx * dx + dz * dz);
+  if (d >= _flatPad.radius) return 0;
+  // Inner 70% fully flat (weight 1); outer 30% hermite-feathers back to natural.
+  const edge = _flatPad.radius * 0.7;
+  if (d <= edge) return 1;
+  const t = 1 - (d - edge) / (_flatPad.radius - edge);
+  return t * t * (3 - 2 * t);
+}
+
 function terrainHeight(x, absZ, biome) {
   const amp = biome ? biome.hillAmp : 1.0;
   // Three octaves of smooth noise
@@ -84,6 +103,10 @@ function terrainHeight(x, absZ, biome) {
   if (_riverCarve) {
     const s = riverCarveAt(absZ);
     if (s > 0) h = h + (_riverCarve.bedY - h) * s; // cut to a level bed
+  }
+  if (_flatPad) {
+    const w = flatPadWeight(x, absZ);
+    if (w > 0) h = h + (_flatPad.y - h) * w;
   }
   return h;
 }
@@ -693,8 +716,7 @@ export function createTerrain({ textures = null, biome = null } = {}) {
   // ── setRiver ──
   // Carve (or clear, with null) a river channel crossing the trail at absZ.
   // Same immediate-rewrite pattern as setBiome — deterministic, no lerp.
-  function setRiver(r) {
-    _riverCarve = r ? { absZ: r.absZ, halfWidth: r.halfWidth, bedY: r.bedY } : null;
+  function rewriteAll() {
     for (const chunk of chunks) {
       const ok = rewriteChunkGeometry(chunk.mesh.geometry, chunk.absZ0, chunk.spacing, currentBiome);
       if (!ok) {
@@ -702,6 +724,17 @@ export function createTerrain({ textures = null, biome = null } = {}) {
         chunk.mesh.geometry = buildChunkGeometry(chunk.absZ0, chunk.spacing, currentBiome);
       }
     }
+  }
+
+  function setRiver(r) {
+    _riverCarve = r ? { absZ: r.absZ, halfWidth: r.halfWidth, bedY: r.bedY } : null;
+    rewriteAll();
+  }
+
+  // Level the terrain inside a radius (for forts/settlements). null clears it.
+  function setFlatPad(p) {
+    _flatPad = p ? { absZ: p.absZ, x: p.x || 0, radius: p.radius, y: p.y } : null;
+    rewriteAll();
   }
 
   // ── Public helpers ──
@@ -715,6 +748,12 @@ export function createTerrain({ textures = null, biome = null } = {}) {
    *  keep grass/props out of the water. */
   function carveDepthAt(absZ) {
     return riverCarveAt(absZ);
+  }
+
+  /** Flatten-pad weight at (x, absZ), 0..1 (0 = no pad). Scatter systems use
+   *  this to keep grass off the leveled ground under a fort/settlement. */
+  function padWeightAt(x, absZ) {
+    return flatPadWeight(x, absZ);
   }
 
   // ── Dispose ──
@@ -735,8 +774,10 @@ export function createTerrain({ textures = null, biome = null } = {}) {
     update,
     setBiome,
     setRiver,
+    setFlatPad,
     heightAt,
     carveDepthAt,
+    padWeightAt,
     trailXAt,  // re-export for integrator (wagon/oxen placement)
     dispose,
   };

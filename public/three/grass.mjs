@@ -87,11 +87,13 @@ export function createGrass({ terrain, tuftTexture, count = 2400 } = {}) {
         if (Math.abs(x - terrain.trailXAt(absZ)) < TRAIL_CLEAR) continue;
         // Keep grass out of river channels (blades poking out of the water).
         if (terrain.carveDepthAt && terrain.carveDepthAt(absZ) > 0.12) continue;
+        // Keep grass off leveled structure pads (fort/settlement footprints).
+        if (terrain.padWeightAt && terrain.padWeightAt(x, absZ) > 0.35) continue;
         const y = terrain.heightAt(x, absZ) - 0.04; // sink the base
-        const s = 0.55 + hash2(gx, gz, 44) * 0.75;
+        const s = 0.5 + hash2(gx, gz, 44) * 0.55; // 0.5-1.05u — knee height, not waist
         pos.set(x, y, absZ - scrollZ);          // group-local at build time
         quat.setFromAxisAngle(Y_AXIS, hash2(gx, gz, 45) * Math.PI);
-        scl.set(s, s * (0.85 + hash2(gx, gz, 46) * 0.5), s);
+        scl.set(s, s * (0.8 + hash2(gx, gz, 46) * 0.35), s);
         m4.compose(pos, quat, scl);
         mesh.setMatrixAt(n, m4);
         n++;

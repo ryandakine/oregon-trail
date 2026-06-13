@@ -31,6 +31,7 @@ import { createGrass } from './grass.mjs';
 import { createVfx } from './vfx.mjs';
 import { createRiver, createBankDressing, ftToWorld } from './water.mjs';
 import { createCampfire, createCampDressing } from './camp.mjs';
+import { createLandmark } from './landmarks.mjs';
 
 // Scenes that own the 3D world. Menu/UI scenes hide the canvas so they look
 // unchanged (Kaplay transparent → body background shows through).
@@ -192,6 +193,35 @@ export function initThree(engine) {
     moving = true;
   }
 
+  // ── Landmark (M5): fort / Chimney Rock / settlement / etc. The wagon halts
+  // outside; the landmark scene sits ahead of it (toward -Z), grounded on a
+  // leveled pad so a large stockade doesn't clip the rolling terrain.
+  let landmark = null; // { lm, worldZ }
+  function enterLandmark({ type = 'fort', name = 'Fort Kearney' } = {}) {
+    if (landmark) exitLandmark();
+    moving = false;
+    const worldZ = -16; // ahead of the parked wagon at world origin
+    const absZ = scrollZ + worldZ;
+    // Big structures get a level pad; natural rock formations sit on raw terrain.
+    const padded = type === 'fort' || type === 'settlement' || type === 'destination';
+    if (padded) terrain.setFlatPad({ absZ, x: 0, radius: 22, y: terrain.heightAt(0, absZ) });
+    const lm = createLandmark({ type, name, textures });
+    const gy = padded ? terrain.heightAt(0, absZ) : terrain.heightAt(0, absZ);
+    lm.group.position.set(0, gy, worldZ);
+    scene.add(lm.group);
+    grass.invalidate();
+    landmark = { lm, worldZ, padded };
+  }
+  function exitLandmark() {
+    if (!landmark) return;
+    scene.remove(landmark.lm.group);
+    landmark.lm.dispose();
+    if (landmark.padded) terrain.setFlatPad(null);
+    grass.invalidate();
+    landmark = null;
+    moving = true;
+  }
+
   const sky = createSky({ cloudTexture: textures.cloudTexture() });
   scene.add(sky.group);
 
@@ -270,7 +300,10 @@ export function initThree(engine) {
     // the channel (a grazing camera sees only the far foam shelf, never the
     // deep teal strip), halted wagon frame-left, noon sun for glints (§5a).
     river: { t: 0.52, fov: 40, cam: [10, 5.6, 4.0], look: [-4.5, -0.2, -10], fog: [40, 220], lantern: 3.2 },
-    fort: { t: 0.62, fov: 38, cam: [5, 1.9, 12], look: [0, 2.4, 0], fog: [45, 230], lantern: 3.2 },
+    // Low hero angle looking up at the palisade gate, wagon small in the
+    // foreground for scale (§5a). Fort sits at worldZ=-16; camera offset to one
+    // side so the gate mouth and one side wall both read (not a flat-on shot).
+    fort: { t: 0.60, fov: 44, cam: [4.5, 2.6, 7.5], look: [-1.0, 3.0, -14], fog: [50, 260], lantern: 3.2 },
     // Tight, intimate, slightly high angle looking down at the fire circle
     // beside the wagon (§5a): fire frame-left as the only key, wagon behind.
     night: { t: 0.005, fov: 40, cam: [-7.5, 3.4, 5.5], look: [-2.6, 0.7, 1.2], fog: [16, 90], lantern: 6 },
@@ -283,6 +316,9 @@ export function initThree(engine) {
     // The night preset owns a mounted camp; every other preset clears it.
     if (name === 'night' && !camp) enterCamp();
     else if (name !== 'night' && camp) exitCamp();
+    // The fort preset owns a mounted landmark; every other preset clears it.
+    if (name === 'fort' && !landmark) enterLandmark({ type: 'fort', name: 'Fort Laramie' });
+    else if (name !== 'fort' && landmark) exitLandmark();
     todT = p.t;
     camera.fov = p.fov;
     camera.position.set(...p.cam);
