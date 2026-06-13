@@ -229,3 +229,16 @@ Each: build → `screenshot-3d-loop.mjs --gfx=high` → **look at PNGs** → ite
 | 20 | feas/eng | P2 | Kaplay transparent compositing DPI/tap risks | M0 spike at real phone DPI; DOM-HUD fallback + ported tap-reachability |
 
 **Outstanding before build:** DEC-A, DEC-B, DEC-C owner sign-off.
+
+---
+
+## Status correction (post-build gauntlet, 2026-06-13)
+
+The 3D modules M0–M7 are built and screenshot-beautiful, but a code-reading review found the pillar is **NOT shippable as a V1 feature yet** — it is currently **debt**, not a feature:
+
+- **P0 — not state-wired in real play.** The only runtime bridge is `engine.on('stateChange', show/hide)`. Every state-consuming method (`preset/setMoving/setWeather/enterRiver/enterLandmark/enterDeath/...`) is called ONLY by the screenshot harness + deploy-smoke. In real play the canvas mounts but is stuck on the constant-scroll `travel` preset, blind to miles, river, landmark, death, weather, tone. RIVER shows no water; LANDMARK shows no fort; DEATH shows no grave. **Fix:** a `state→3D` adapter in `main.js`/`three-bridge.mjs` (~a few hundred lines; the API already accepts the opts). Until it exists, don't promote to prod — a 3D prairie that never changes reads as *broken*, worse than absent.
+- **P0 — "desktop-only" (DEC-B b2) is paper, not code.** `tierFromQuery()` returns `'high'` for all devices; `main.js` inits 3D for every non-`?test=1` request with no desktop gate. A phone downloads 1.3 MB three + inits 2048 shadows + composer + bloom. **Fix:** gate the `main.js` import behind a desktop check (pointer:fine / no coarse pointer) before shipping.
+- **P0 — perf never measured on real hardware.** The kill-gate ran only in the software-GL harness (frame times "meaningless" per R5). "Desktop == capable GPU" is false (integrated-GPU laptops). Run a real frame-time probe at 1080p, hard ≥30fps gate.
+- **P1 — dual-renderer, unowned.** The 2D Kaplay world scenes (~2,157 LOC) were never thinned; desktop double-renders 2D + 3D, and every future world change must land in both idioms by a solo dev. Decide: 2D canonical + 3D cosmetic, or delete 2D-world-on-desktop once 3D is wired.
+- **P1 — deploy-smoke can't catch the wiring gap** (it drives the API directly, never `stateChange`). Extend it to seed a river/landmark/death state, fire the real `stateChange`, assert the 3D switched.
+- **P1 — DEC-A silently resolved to pure-procedural** (the "flatter hero" path the plan warned about; no `.glb`, no GLTFLoader vendored). Get an explicit call with eyes on a real procedural-ox screenshot at marketing scale.
