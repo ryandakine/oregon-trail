@@ -32,6 +32,9 @@ import { createVfx } from './vfx.mjs';
 import { createRiver, createBankDressing, ftToWorld } from './water.mjs';
 import { createCampfire, createCampDressing } from './camp.mjs';
 import { createLandmark } from './landmarks.mjs';
+import { createDeer, createBison } from './fauna.mjs';
+import { createTombstone } from './markers.mjs';
+import { createTrailAudio } from './audio.mjs';
 
 // Scenes that own the 3D world. Menu/UI scenes hide the canvas so they look
 // unchanged (Kaplay transparent → body background shows through).
@@ -119,6 +122,16 @@ export function initThree(engine) {
   const vfx = createVfx();
   scene.add(vfx.points);
   vfx.setViewport(window.innerHeight, camera.fov);
+
+  // ── Procedural audio (M6). Gated on first user gesture (autoplay policy);
+  // never throws if WebAudio is unavailable. Scene/weather/moving are wired
+  // through the same calls that drive the visuals.
+  const audio = createTrailAudio();
+  const AUDIO_SCENE = { travel: 'travel', river: 'river', fort: 'fort', night: 'camp', hunting: 'hunting', death: 'travel', arrival: 'arrival' };
+  for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
+    window.addEventListener(ev, () => audio.start(), { once: true });
+  }
+  document.addEventListener('visibilitychange', () => (document.hidden ? audio.suspend() : audio.resume()));
 
   // ── River crossing (M3): carve the terrain channel + mount the water sheet.
   // Mounted on demand (RIVER scene / river preset), torn down on exit.
@@ -222,6 +235,89 @@ export function initThree(engine) {
     moving = true;
   }
 
+  // ── Hunting (M7): grazing game scattered across the meadow ahead. ──
+  let hunting = null; // { animals: [{a, x, z, phase}] }
+  function enterHunting() {
+    if (hunting) exitHunting();
+    moving = false;
+    const animals = [];
+    // Deterministic scatter ahead-and-left of the halted wagon (the hunting
+    // grounds), placed at absolute world positions so they sit on the terrain.
+    const placements = [
+      { kind: 'deer', x: -6, z: -14, pose: 'graze', tint: 0 },
+      { kind: 'deer', x: 3, z: -19, pose: 'graze', tint: 0.5 },
+      { kind: 'deer', x: -11, z: -22, pose: 'alert', tint: 1 },
+      { kind: 'bison', x: 9, z: -25, pose: 'graze', tint: 0 },
+    ];
+    for (const p of placements) {
+      const a = p.kind === 'bison' ? createBison({ tint: p.tint }) : createDeer({ tint: p.tint });
+      const absZ = scrollZ + p.z;
+      a.group.position.set(p.x, terrain.heightAt(p.x, absZ), p.z);
+      a.group.rotation.y = p.x < 0 ? 0.6 : -0.5; // quartered toward the trail
+      if (a.setPose) a.setPose(p.pose);
+      scene.add(a.group);
+      animals.push({ a, phase: (p.x + p.z) * 0.1 });
+    }
+    hunting = { animals };
+  }
+  function exitHunting() {
+    if (!hunting) return;
+    for (const { a } of hunting.animals) { scene.remove(a.group); a.dispose(); }
+    hunting = null;
+    moving = true;
+  }
+
+  // ── Death (M7): a trailside grave beside the halted wagon, somber mood. ──
+  let death = null; // { stone }
+  function enterDeath() {
+    if (death) exitDeath();
+    moving = false;
+    const stone = createTombstone({ name: 'Pioneer', variant: 'headstone' });
+    const gx = 3.4, gz = -5.5;
+    const absZ = scrollZ + gz;
+    // A small flat pad gives the grave a bare-earth plot AND clears the
+    // foreground grass that would otherwise bury the headstone.
+    terrain.setFlatPad({ absZ, x: gx, radius: 5.5, y: terrain.heightAt(gx, absZ) });
+    stone.group.position.set(gx, terrain.heightAt(gx, absZ), gz);
+    stone.group.rotation.y = 0.4; // face the approaching camera
+    scene.add(stone.group);
+    grass.invalidate();
+    death = { stone };
+  }
+  function exitDeath() {
+    if (!death) return;
+    scene.remove(death.stone.group);
+    death.stone.dispose();
+    terrain.setFlatPad(null);
+    grass.invalidate();
+    death = null;
+    moving = true;
+  }
+
+  // ── Arrival (M7): Oregon City vista — the destination landmark. ──
+  let arrival = null;
+  function enterArrival() {
+    if (arrival) exitArrival();
+    moving = false;
+    const worldZ = -18;
+    const absZ = scrollZ + worldZ;
+    terrain.setFlatPad({ absZ, x: 0, radius: 26, y: terrain.heightAt(0, absZ) });
+    const lm = createLandmark({ type: 'destination', name: 'Oregon City' });
+    lm.group.position.set(0, terrain.heightAt(0, absZ), worldZ);
+    scene.add(lm.group);
+    grass.invalidate();
+    arrival = { lm };
+  }
+  function exitArrival() {
+    if (!arrival) return;
+    scene.remove(arrival.lm.group);
+    arrival.lm.dispose();
+    terrain.setFlatPad(null);
+    grass.invalidate();
+    arrival = null;
+    moving = true;
+  }
+
   const sky = createSky({ cloudTexture: textures.cloudTexture() });
   scene.add(sky.group);
 
@@ -307,6 +403,15 @@ export function initThree(engine) {
     // Tight, intimate, slightly high angle looking down at the fire circle
     // beside the wagon (§5a): fire frame-left as the only key, wagon behind.
     night: { t: 0.005, fov: 40, cam: [-7.5, 3.4, 5.5], look: [-2.6, 0.7, 1.2], fog: [16, 90], lantern: 6 },
+    // Hunting: golden-hour meadow, camera across the open ground at the grazing
+    // game (deer/bison sit at z -14..-25), low and wide.
+    hunting: { t: 0.46, fov: 46, cam: [11, 3.0, 3], look: [-3, 0.9, -18], fog: [60, 280], lantern: 3.2 },
+    // Death: grey, overcast, desaturated; the grave foreground-center with the
+    // wagon behind-left. Somber, low-key (mood applied in pose()).
+    death: { t: 0.30, fov: 36, cam: [5.6, 1.25, -1.8], look: [3.4, 0.55, -5.5], fog: [28, 150], lantern: 3.2 },
+    // Arrival: warm golden hour, welcoming wide vista of Oregon City. Camera
+    // raised to look OVER the near meadow grass at the settlement.
+    arrival: { t: 0.66, fov: 42, cam: [7, 4.8, 11], look: [-0.5, 2.2, -16], fog: [55, 300], lantern: 3.2 },
   };
   // Weather mood: storms grey the sky + pull fog in + emit particles, all from
   // one call, applied in pose() so live + frozen frames match.
@@ -319,10 +424,12 @@ export function initThree(engine) {
     snow: new THREE.Color(0xb9c0cc).convertSRGBToLinear(),
     dust: new THREE.Color(0xc2a065).convertSRGBToLinear(),
   };
+  const DEATH_GREY = new THREE.Color(0x8a8c92).convertSRGBToLinear();
   function setWeather(kind, intensity = 1) {
     weatherKind = kind in OVERCAST_BY_KIND ? kind : 'none';
     weatherIntensity = weatherKind === 'none' ? 0 : Math.max(0, Math.min(1, intensity));
     vfx.setWeather(weatherKind, weatherIntensity);
+    audio.setWeather(weatherKind, weatherIntensity);
   }
 
   function preset(name) {
@@ -336,6 +443,10 @@ export function initThree(engine) {
     // The fort preset owns a mounted landmark; every other preset clears it.
     if (name === 'fort' && !landmark) enterLandmark({ type: 'fort', name: 'Fort Laramie' });
     else if (name !== 'fort' && landmark) exitLandmark();
+    // Each remaining mounted scene is owned by its matching preset.
+    if (name === 'hunting' && !hunting) enterHunting(); else if (name !== 'hunting' && hunting) exitHunting();
+    if (name === 'death' && !death) enterDeath(); else if (name !== 'death' && death) exitDeath();
+    if (name === 'arrival' && !arrival) enterArrival(); else if (name !== 'arrival' && arrival) exitArrival();
     todT = p.t;
     camera.fov = p.fov;
     camera.position.set(...p.cam);
@@ -344,6 +455,8 @@ export function initThree(engine) {
     baseFogNear = p.fog[0];
     baseFogFar = p.fog[1];
     wagon.lantern.material.emissiveIntensity = p.lantern;
+    audio.setScene(AUDIO_SCENE[name] || 'travel');
+    audio.setMoving(moving);
     pose(scrollZ); // re-light + re-pose under the new preset immediately
   }
 
@@ -365,8 +478,12 @@ export function initThree(engine) {
     team.setPhase(d);
     walkers[0].setPhase(d + 0.2);
     walkers[1].setPhase(d + 1.1);
-    // Weather darkens the dome + lights BEFORE the sky writes them.
-    sky.setOvercast(OVERCAST_BY_KIND[weatherKind] * weatherIntensity, OVERCAST_TINT[weatherKind]);
+    // Overcast darkens the dome + lights BEFORE the sky writes them — driven by
+    // weather, or forced grey for the somber death scene.
+    let ov = OVERCAST_BY_KIND[weatherKind] * weatherIntensity;
+    let ovTint = OVERCAST_TINT[weatherKind];
+    if (death) { ov = Math.max(ov, 0.6); ovTint = DEATH_GREY; }
+    sky.setOvercast(ov, ovTint);
     sky.update(0, todT, camera.position);
     sky.applyTo({ sun, hemi, scene }, todT);
     // Weather pulls fog in (denser air). A dust storm collapses visibility to a
@@ -391,6 +508,7 @@ export function initThree(engine) {
       river.water.setSky(scene.fog.color);
     }
     if (camp) camp.fire.setPhase(fxTime);
+    if (hunting) for (const { a, phase } of hunting.animals) a.setPhase(fxTime * 0.4 + phase);
   }
 
   // renderer.info auto-resets on every internal render() call, and the composer
@@ -440,8 +558,9 @@ export function initThree(engine) {
     get lantern() { return wagon.lantern; },
     show() { visible = true; canvas.style.display = 'block'; resize(); },
     hide() { visible = false; canvas.style.display = 'none'; frozen = false; },
-    setMoving(m) { moving = !!m; },
+    setMoving(m) { moving = !!m; audio.setMoving(moving); },
     setWeather,
+    audio,
     get camp() { return camp; },
     // Deterministically warm the campfire ember pool: emit from the fire tip +
     // step the seeded particle sim N times. Used by the night screenshot so the

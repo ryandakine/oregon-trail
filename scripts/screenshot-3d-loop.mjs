@@ -66,10 +66,11 @@ await page.evaluate(() => {
   window.__three.show();
 });
 
-const SHOTS = ['travel', 'river', 'fort', 'night', 'rain', 'snow', 'dust'];
+const SHOTS = ['travel', 'river', 'fort', 'night', 'rain', 'snow', 'dust', 'hunting', 'death', 'arrival'];
 const NAMES = {
   travel: '01-travel', river: '02-river-crossing', fort: '03-fort', night: '04-night-camp',
   rain: '05-travel-rain', snow: '06-travel-snow', dust: '07-dust-storm',
+  hunting: '08-hunting', death: '09-death', arrival: '10-arrival',
 };
 const WEATHER = { rain: 'rain', snow: 'snow', dust: 'dust' };
 
