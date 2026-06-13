@@ -1,12 +1,16 @@
 import type {
   GameState,
   SignedGameState,
+  SimulationState,
   Profession,
   ToneTier,
   Supplies,
+  EventChoice,
   EventResponse,
   StoreItem,
   ChallengeConstraints,
+  BitterPathOutcome,
+  PendingEffect,
   Pace,
   Rations,
 } from "./types";
@@ -66,6 +70,27 @@ export function getCurrentChallenge(): ChallengeConstraints {
   return WEEKLY_CHALLENGES[weekNum % WEEKLY_CHALLENGES.length];
 }
 
+// ── GameState schema version + migration framework ──
+// Current schema version. Bump on every signed-field addition; legacy states
+// without a `state_version` are treated as v1. See docs/spec/gamestate-v2.md §2.
+export const STATE_VERSION = 2;
+
+// Defensive cap on the delayed-effects queue. Effects are server-enqueued, so a
+// queue this deep signals a bug — but bound it so a runaway can't bloat the
+// signed (and HMAC'd) state blob. See docs/spec/gamestate-v2.md §3.2.
+export const MAX_PENDING_EFFECTS = 24;
+
+// Append a delayed effect, dropping the OLDEST on overflow. Server-side only
+// (event/consequence handlers + the sim) — the client can't mutate the signed
+// blob. Does NOT clamp: delay magnitudes are intentional and are clamped at
+// drain time via CONSEQUENCE_BOUNDS (the single source of truth). Mutates `sim`.
+export function enqueuePendingEffect(sim: SimulationState, effect: PendingEffect): void {
+  sim.pending_effects.push(effect);
+  if (sim.pending_effects.length > MAX_PENDING_EFFECTS) {
+    sim.pending_effects = sim.pending_effects.slice(-MAX_PENDING_EFFECTS);
+  }
+}
+
 export async function createInitialState(
   leaderName: string,
   memberNames: [string, string, string, string],
@@ -80,6 +105,7 @@ export async function createInitialState(
     : STARTING_MONEY[profession];
 
   const state: GameState = {
+    state_version: STATE_VERSION,
     party: {
       leader_name: leaderName,
       members: [leaderName, ...memberNames].map((name) => ({
@@ -123,6 +149,7 @@ export async function createInitialState(
       landmark_rest_used: [],
       bitter_path_taken: "none",
       recent_event_titles: [],
+      pending_effects: [],
     },
     meta: {
       run_id: crypto.randomUUID(),
@@ -134,6 +161,53 @@ export async function createInitialState(
   return { state, signature };
 }
 
+// Single upgrade path for legacy signed states. Runs AFTER verifyState succeeds
+// on a structuredClone — the signature covered the legacy shape; the next
+// re-sign covers the migrated shape (identical posture to the pre-versioning
+// shim this replaces). Additive only: never removes or renames a signed field.
+// To add a field later: bump STATE_VERSION, add one `if (v < N)` block, and add
+// one legacy-round-trip test (docs/spec/gamestate-v2.md §2.3).
+function migrateState(input: GameState): GameState {
+  const state = structuredClone(input);
+
+  // A genuine pre-versioning (v1) state lacks EVERY field added to the signed
+  // schema since the original game loop, even though the canonical types mark
+  // them required. Read them through local optional-typed views so the absence
+  // checks are honest — no `as`, no false "no overlap".
+  const versioned: { state_version?: number } = state;
+  const settings: { challenge_id?: string | null } = state.settings;
+  const sim: {
+    bitter_path_taken?: BitterPathOutcome;
+    pending_event_trigger?: SimulationState["pending_event_trigger"];
+    pending_event_hash?: string | null;
+    recent_event_titles?: string[];
+    landmark_rest_used?: string[];
+    pending_effects?: PendingEffect[];
+  } = state.simulation;
+
+  // v1 → v2: inject defaults for every field added un-versioned since the
+  // original schema — settings.challenge_id, the two Bitter Path shims,
+  // recent_event_titles, landmark_rest_used — plus the new pending_effects.
+  // Folding the older un-versioned adds in here is what makes a migrated state
+  // byte-identical to a fresh one (spec §4) and satisfies §2.3 (fold un-versioned
+  // adds into the framework). Each defaults to the same value createInitialState uses.
+  if ((versioned.state_version ?? 1) < 2) {
+    if (settings.challenge_id === undefined) settings.challenge_id = null;
+    if (sim.bitter_path_taken === undefined) sim.bitter_path_taken = "none";
+    if (sim.pending_event_trigger === undefined) {
+      // Legacy state with a pending hash is mid-event; without one, idle.
+      // Bitter Path triggers never pre-dated this field — never default to it.
+      sim.pending_event_trigger = sim.pending_event_hash ? "event" : null;
+    }
+    if (sim.recent_event_titles === undefined) sim.recent_event_titles = [];
+    if (sim.landmark_rest_used === undefined) sim.landmark_rest_used = [];
+    if (sim.pending_effects === undefined) sim.pending_effects = [];
+  }
+
+  state.state_version = STATE_VERSION;
+  return state;
+}
+
 export async function verifyIncomingState(
   signed: SignedGameState,
   secret: string,
@@ -142,26 +216,7 @@ export async function verifyIncomingState(
   if (!ok) {
     return { valid: false, error: "invalid_signature" };
   }
-  // Back-compat: legacy signed states from before the Bitter Path mechanic
-  // (pre-2026-04-18) did not have `simulation.bitter_path_taken` or
-  // `simulation.pending_event_trigger`. Inject defaults AFTER HMAC verify
-  // (the signature covers the legacy shape). The next re-sign includes them.
-  const state = structuredClone(signed.state);
-  const sim = state.simulation as {
-    bitter_path_taken?: unknown;
-    pending_event_trigger?: unknown;
-    pending_event_hash?: string | null;
-  };
-  if (sim && sim.bitter_path_taken === undefined) {
-    state.simulation.bitter_path_taken = "none";
-  }
-  if (sim && sim.pending_event_trigger === undefined) {
-    // Legacy state with a pending hash is from a normal event; legacy without
-    // a hash gets null. Bitter Path triggers never pre-dated this field, so
-    // we never default to "bitter_path".
-    state.simulation.pending_event_trigger = sim.pending_event_hash ? "event" : null;
-  }
-  return { valid: true, state };
+  return { valid: true, state: migrateState(signed.state) };
 }
 
 export async function applyEventAndSign(
@@ -174,8 +229,8 @@ export async function applyEventAndSign(
   const choice = event.choices[choiceIndex];
   const c = choice.consequences;
 
-  // Clamp negative days/miles from LLM
-  clampConsequences(c as Record<string, number | undefined>);
+  // Clamp negative days/miles from LLM (and all other per-field bounds).
+  clampConsequences(c);
 
   // Apply supply consequences (clamped to 0)
   const supplyKeys: (keyof Supplies)[] = [
@@ -303,10 +358,23 @@ function clampToBounds(key: string, val: number): number {
   return Math.max(bounds[0], Math.min(bounds[1], val));
 }
 
-export function clampConsequences(c: Record<string, number | undefined>): void {
-  for (const key of Object.keys(c)) {
-    if (c[key] === undefined) continue;
-    c[key] = clampToBounds(key, c[key]!);
+// The numeric fields an event/effect consequence delta can carry. Iterating
+// this typed list (rather than Object.keys) lets clampConsequences take the
+// consequence shape directly — no `as` cast — and only ever touches real
+// consequence keys.
+const CONSEQUENCE_DELTA_KEYS: readonly (keyof EventChoice["consequences"])[] = [
+  "health", "food", "ammo", "clothing", "spare_parts",
+  "medicine", "money", "oxen", "morale", "miles", "days",
+];
+
+// Clamp each present field to CONSEQUENCE_BOUNDS, in place. Shared by immediate
+// event resolution (applyEventAndSign) and the delayed-effect drain so both
+// honor the same anti-cheat bounds — the single clamp path (spec §4).
+export function clampConsequences(c: EventChoice["consequences"]): void {
+  for (const key of CONSEQUENCE_DELTA_KEYS) {
+    const val = c[key];
+    if (val === undefined) continue;
+    c[key] = clampToBounds(key, val);
   }
 }
 

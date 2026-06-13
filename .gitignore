@@ -7,3 +7,6 @@ node_modules/
 
 # atomic signals prev-scan diff artifact
 .claude/project/.deterministic-signals.prev.md
+
+# 3D screenshot harness output (regenerable; baselines would be committed deliberately)
+screenshots/3d/

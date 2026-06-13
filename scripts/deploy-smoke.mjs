@@ -48,8 +48,10 @@ page.on("console", (msg) => {
   }
 });
 
-// Cache-bust the URL to dodge any CDN/browser staleness.
-const bust = `?smoke=${Date.now()}`;
+// Cache-bust the URL to dodge any CDN/browser staleness. gfx=high pins the 3D
+// layer's tier explicitly so the §7 assertion below exercises the real
+// bloom/shadow pipeline (and doesn't silently depend on the tier default).
+const bust = `?smoke=${Date.now()}&gfx=high`;
 await page.goto(URL + "/" + bust, { waitUntil: "domcontentloaded" });
 await page.waitForFunction(() => !!window.k && !!window.engine, { timeout: 15000 });
 await page.waitForTimeout(1500);
@@ -174,6 +176,107 @@ for (const [scene, data] of tapScenes) {
       pageErrors: [`scene "${scene}" has 0 clickable (area) objects — unwinnable without a keyboard`],
       kaplayErrors: [],
     });
+  }
+}
+
+// ── 7. 3D render layer mounts + draws (THREEJS_REBUILD_PLAN R10) ──
+// main.js dynamic-imports the 3D layer at end of boot; a failed init lands in
+// window.__ERRORS (not a pageerror), so without this section a fully broken 3D
+// build would pass the promotion gate silently. Assert: layer ready, no init
+// errors, and a forced frame draws real geometry. freezeAt(0) renders
+// synchronously and returns {calls, triangles} measured across the full frame.
+{
+  const threeReady = await page
+    .waitForFunction(() => window.__three?.ready === true, { timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  const initErrors = await page.evaluate(
+    () => (window.__ERRORS || []).filter((e) => String(e.msg).startsWith("3d-init")).map((e) => e.msg),
+  );
+  if (!threeReady || initErrors.length) {
+    findings.push({
+      scene: "3d-layer (boot)",
+      pageErrors: threeReady ? initErrors : ["window.__three never became ready", ...initErrors],
+      kaplayErrors: [],
+    });
+  } else {
+    const stats = await page.evaluate(() => {
+      window.__three.show();
+      window.__three.preset("travel");
+      const s = window.__three.freezeAt(0);
+      window.__three.hide();
+      return s;
+    });
+    assertClean("3d-layer (travel preset render)");
+    if (!(stats.triangles > 100)) {
+      findings.push({
+        scene: "3d-layer (travel preset render)",
+        pageErrors: [`3D frame drew only ${stats.triangles} triangles — world did not render`],
+        kaplayErrors: [],
+      });
+    }
+  }
+}
+
+// ── 8. state→3D adapter wires real play (THREEJS_REBUILD_PLAN status-correction P0/P1) ──
+// Sections 1-7 drive __three.preset() directly, so they cannot catch the bug
+// where the engine→3D bridge is unwired (canvas mounts but never switches scene
+// in real play). Fire the REAL engine stateChange for each world state and
+// assert the camera framing actually changed — the path a real player hits.
+// camera.fov is a deterministic per-preset fingerprint.
+{
+  // TRAVEL is the most common world state, so cover it too. camera.fov is a
+  // per-preset fingerprint (travel 38 / river 40 / fort 44 / death 36 /
+  // hunting 46 / arrival 42 — all distinct).
+  const FRAMING = { TRAVEL: 38, RIVER: 40, LANDMARK: 44, DEATH: 36, HUNTING: 46, ARRIVAL: 42 };
+  const TRIGGER = {
+    RIVER: { width_ft: 320, ford_difficulty: 5 },
+    LANDMARK: { type: "natural", name: "Chimney Rock" },
+  };
+  // Readiness guard: if section 7 found the 3D layer never booted, window.__three
+  // is undefined — dereferencing .camera here would crash the whole script with a
+  // raw Playwright TypeError, masking section 7's structured boot finding. Probe
+  // first and degrade to a clean finding instead.
+  const ready = await page.evaluate(() => !!(window.__three && window.__three.ready && window.__three.camera));
+  if (!ready) {
+    findings.push({
+      scene: "3d-layer (state→3D adapter wiring)",
+      pageErrors: ["window.__three not ready — adapter wiring unverified (see the 3d-layer boot finding above for the root cause)"],
+      kaplayErrors: [],
+    });
+  } else {
+    const got = await page.evaluate(({ framing, trigger }) => {
+      const out = {};
+      for (const state of Object.keys(framing)) {
+        window.engine.emit("stateChange", { from: "TRAVEL", to: state, data: trigger[state] });
+        out[state] = {
+          fov: Math.round(window.__three.camera.fov),
+          visible: document.getElementById("three-canvas").style.display,
+        };
+      }
+      // A river_crossing landmark must fall back to the travel world (fov 38),
+      // NOT the fort preset (fov 44) — its landmark model is dry bank dressing
+      // and the actual ford is the RIVER state. Regression pin for the dry-ferry bug.
+      window.engine.emit("stateChange", { from: "TRAVEL", to: "LANDMARK", data: { type: "river_crossing", name: "Kansas River Crossing" } });
+      out.LANDMARK_RIVER = { fov: Math.round(window.__three.camera.fov), visible: document.getElementById("three-canvas").style.display };
+      // Non-world state must hide the canvas (2D UI shows over body background).
+      window.engine.emit("stateChange", { from: "TRAVEL", to: "EVENT", data: {} });
+      out.EVENT = { visible: document.getElementById("three-canvas").style.display };
+      window.__three.hide();
+      return out;
+    }, { framing: FRAMING, trigger: TRIGGER });
+
+    const wiringErrors = [];
+    for (const [state, fov] of Object.entries(FRAMING)) {
+      if (got[state].fov !== fov) wiringErrors.push(`${state}: camera.fov=${got[state].fov}, expected ${fov} (adapter did not switch preset)`);
+      if (got[state].visible !== "block") wiringErrors.push(`${state}: canvas display=${got[state].visible}, expected block`);
+    }
+    if (got.LANDMARK_RIVER.fov !== 38) wiringErrors.push(`LANDMARK(river_crossing): camera.fov=${got.LANDMARK_RIVER.fov}, expected 38 (must fall back to travel, not mount the dry fort/ferry scene)`);
+    if (got.LANDMARK_RIVER.visible !== "block") wiringErrors.push(`LANDMARK(river_crossing): canvas display=${got.LANDMARK_RIVER.visible}, expected block`);
+    if (got.EVENT.visible !== "none") wiringErrors.push(`EVENT (non-world): canvas display=${got.EVENT.visible}, expected none`);
+    if (wiringErrors.length) {
+      findings.push({ scene: "3d-layer (state→3D adapter wiring)", pageErrors: wiringErrors, kaplayErrors: [] });
+    }
   }
 }
 

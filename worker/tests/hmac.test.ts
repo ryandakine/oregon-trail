@@ -7,8 +7,10 @@ import {
   hexToBuffer,
   getHmacKey,
 } from "../src/hmac";
+import { createInitialState, verifyIncomingState } from "../src/state";
 
 const TEST_SECRET = "test-hmac-secret-do-not-use-in-prod";
+const MIGRATION_MEMBERS: [string, string, string, string] = ["Beth", "Carl", "Dana", "Earl"];
 
 describe("bufferToHex / hexToBuffer round-trip", () => {
   it("converts buffer to hex and back", () => {
@@ -118,5 +120,80 @@ describe("getHmacKey", () => {
     expect(key).toBeDefined();
     expect(key.type).toBe("secret");
     expect(key.algorithm).toMatchObject({ name: "HMAC" });
+  });
+});
+
+// GameState v2 migration framework (docs/spec/gamestate-v2.md §5). These live
+// here because they exercise the HMAC verify → migrate boundary: a state signed
+// under the OLD shape must still verify, then migrate, then re-sign/re-verify
+// under the new shape — the whole point of the versioned migration path.
+describe("GameState v2 migration (verifyIncomingState)", () => {
+  // Build a genuine pre-versioning (v1) signed state: take a fresh v2 state and
+  // strip EVERY field added to the signed schema since the original game loop —
+  // the exact shape migrateState must reconstruct. (challenge_id, the two Bitter
+  // Path fields, recent_event_titles, landmark_rest_used were all added
+  // un-versioned over time; state_version + pending_effects are the v2 adds.)
+  async function makeLegacyV1Signed() {
+    const { state: fresh } = await createInitialState(
+      "Alice", MIGRATION_MEMBERS, "farmer", "high", TEST_SECRET,
+    );
+    const legacy: Record<string, unknown> = JSON.parse(JSON.stringify(fresh));
+    delete legacy.state_version;
+    delete (legacy.settings as Record<string, unknown>).challenge_id;
+    const legacySim = legacy.simulation as Record<string, unknown>;
+    delete legacySim.bitter_path_taken;
+    delete legacySim.pending_event_trigger;
+    delete legacySim.recent_event_titles;
+    delete legacySim.landmark_rest_used;
+    delete legacySim.pending_effects;
+    const signature = await signState(legacy, TEST_SECRET);
+    return { legacy, signature, fresh };
+  }
+
+  it("legacy v1 state verifies and migrates to v2 with all defaults injected", async () => {
+    const { legacy, signature } = await makeLegacyV1Signed();
+    const verified = await verifyIncomingState(
+      { state: legacy as never, signature }, TEST_SECRET,
+    );
+    expect(verified.valid).toBe(true);
+    if (!verified.valid) throw new Error("unreachable");
+
+    expect(verified.state.state_version).toBe(2);
+    expect(verified.state.simulation.pending_effects).toEqual([]);
+    expect(verified.state.simulation.bitter_path_taken).toBe("none");
+    // Shim: no pending_event_hash on a fresh state → trigger defaults to null.
+    expect(verified.state.simulation.pending_event_trigger).toBeNull();
+  });
+
+  it("legacy state WITH a pending hash gets pending_event_trigger='event' (shim)", async () => {
+    const { legacy, fresh } = await makeLegacyV1Signed();
+    const legacySim = legacy.simulation as Record<string, unknown>;
+    legacySim.pending_event_hash = "deadbeef";
+    // Re-sign the mutated legacy shape so it verifies.
+    const signature = await signState(legacy, TEST_SECRET);
+    const verified = await verifyIncomingState(
+      { state: legacy as never, signature }, TEST_SECRET,
+    );
+    expect(verified.valid).toBe(true);
+    if (!verified.valid) throw new Error("unreachable");
+    expect(verified.state.simulation.pending_event_trigger).toBe("event");
+    // sanity: fresh state had no pending hash, so this is purely the shim path
+    expect(fresh.simulation.pending_event_hash).toBeNull();
+  });
+
+  it("migrated state re-signs, re-verifies, and canonicalizes identically to a fresh v2 state", async () => {
+    const { legacy, signature, fresh } = await makeLegacyV1Signed();
+    const verified = await verifyIncomingState(
+      { state: legacy as never, signature }, TEST_SECRET,
+    );
+    if (!verified.valid) throw new Error("unreachable");
+
+    // Round-trip: the migrated shape signs and verifies cleanly.
+    const reSig = await signState(verified.state, TEST_SECRET);
+    expect(await verifyState(verified.state, reSig, TEST_SECRET)).toBe(true);
+
+    // A migrated legacy state is byte-identical (post-canonicalize) to a fresh
+    // createInitialState of the same content — fresh and migrated never diverge.
+    expect(deepCanonicalize(verified.state)).toBe(deepCanonicalize(fresh));
   });
 });

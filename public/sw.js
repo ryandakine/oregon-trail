@@ -1,4 +1,4 @@
-const CACHE_NAME = 'oregon-trail-kaplay-v3-primitive';
+const CACHE_NAME = 'oregon-trail-kaplay-v4-three';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -32,6 +32,20 @@ const OPTIONAL_ASSETS = [
   '/lib/draw.mjs',
   '/lib/hud.mjs',
   '/lib/tone.mjs',
+  // 3D render layer (THREEJS_REBUILD_PLAN). Optional: a 404 between commit
+  // landings must not brick the install, and the 2D game works without them.
+  '/three/bootstrap.mjs',
+  '/vendor/three/three.module.js',
+  '/vendor/three/jsm/postprocessing/EffectComposer.js',
+  '/vendor/three/jsm/postprocessing/RenderPass.js',
+  '/vendor/three/jsm/postprocessing/ShaderPass.js',
+  '/vendor/three/jsm/postprocessing/MaskPass.js',
+  '/vendor/three/jsm/postprocessing/Pass.js',
+  '/vendor/three/jsm/postprocessing/OutputPass.js',
+  '/vendor/three/jsm/postprocessing/UnrealBloomPass.js',
+  '/vendor/three/jsm/shaders/CopyShader.js',
+  '/vendor/three/jsm/shaders/LuminosityHighPassShader.js',
+  '/vendor/three/jsm/shaders/OutputShader.js',
 ];
 
 self.addEventListener('install', (e) => {

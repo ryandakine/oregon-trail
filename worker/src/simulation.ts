@@ -4,6 +4,8 @@ import type {
   DaySummary,
   TriggerType,
   TrailSegment,
+  Supplies,
+  PendingEffect,
   Pace,
   Rations,
   Month,
@@ -16,6 +18,7 @@ import {
   getWeather,
   getTotalTrailDistance,
 } from "./context-loader";
+import { clampConsequences } from "./state";
 
 const PACE_MILES: Record<Pace, number> = {
   steady: 12,
@@ -192,6 +195,71 @@ export function applyDailyAttrition(
   return actualConsumed;
 }
 
+// Drains the delayed-consequence queue for ONE simulated day. Decrements every
+// queued effect; those reaching <= 0 fire now. Fired deltas run through the SAME
+// clampConsequences / CONSEQUENCE_BOUNDS the immediate event path uses (spec §4
+// — single clamp source of truth), then apply to supplies and party members: to
+// `member_name` if set, otherwise all living members (matching event semantics).
+// A delta dropping a member to 0 health records a death exactly as
+// applyEventAndSign does, dated with the current (pre-advance) day so the
+// caller's death short-circuit catches it the same day. `journal_entry`, when
+// present, is appended to the day's events.
+//
+// miles/days deltas are deliberately NOT applied here: advanceDays owns movement
+// and the calendar, and mutating them mid-loop would desync date bookkeeping.
+// No V1 path enqueues spatial/temporal effects; the consequences pillar adds
+// loop-safe handling if it ever needs them. Mutates `next` in place.
+function drainPendingEffects(next: GameState, dayEvents: string[]): void {
+  const queue = next.simulation.pending_effects;
+  if (queue.length === 0) return;
+
+  const surviving: PendingEffect[] = [];
+  for (const effect of queue) {
+    effect.days_remaining -= 1;
+    if (effect.days_remaining > 0) {
+      surviving.push(effect);
+      continue;
+    }
+
+    const c = effect.consequences;
+    clampConsequences(c);
+
+    const supplyKeys: (keyof Supplies)[] = [
+      "food", "ammo", "clothing", "spare_parts", "medicine", "money", "oxen",
+    ];
+    for (const key of supplyKeys) {
+      const delta = c[key];
+      if (delta !== undefined) {
+        next.supplies[key] = Math.max(0, next.supplies[key] + delta);
+      }
+    }
+
+    for (const member of next.party.members) {
+      if (!member.alive) continue;
+      if (effect.member_name !== undefined && member.name !== effect.member_name) continue;
+      if (c.health !== undefined) {
+        member.health = Math.max(0, Math.min(100, member.health + c.health));
+        if (member.health === 0) {
+          member.alive = false;
+          next.deaths.push({
+            name: member.name,
+            date: next.position.date,
+            cause: effect.source || "unknown",
+            epitaph: null,
+          });
+        }
+      }
+      if (c.morale !== undefined) {
+        member.morale = Math.max(0, Math.min(100, member.morale + c.morale));
+      }
+    }
+
+    if (effect.journal_entry) dayEvents.push(effect.journal_entry);
+  }
+
+  next.simulation.pending_effects = surviving;
+}
+
 export function advanceDays(
   state: GameState,
   ctx: HistoricalContext,
@@ -244,6 +312,9 @@ export function advanceDays(
     // economy in that one function.
     const deathsBefore = next.deaths.length;
     const actualConsumed = applyDailyAttrition(next, ctx, segment, month, dayEvents);
+    // Fire delayed effects scheduled for today BEFORE the death/event-trigger
+    // checks so a lethal delayed effect ends the run this same day (spec §3.2).
+    drainPendingEffects(next, dayEvents);
     const deathTriggered = next.deaths.length > deathsBefore;
 
     // 8. Segment advancement

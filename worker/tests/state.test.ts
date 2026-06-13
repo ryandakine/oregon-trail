@@ -6,9 +6,11 @@ import {
   applyStoreAndSign,
   getChallengeById,
   getCurrentChallenge,
+  enqueuePendingEffect,
+  MAX_PENDING_EFFECTS,
   WEEKLY_CHALLENGES,
 } from "../src/state";
-import type { EventResponse, SignedGameState } from "../src/types";
+import type { EventResponse, PendingEffect, SignedGameState, SimulationState } from "../src/types";
 
 const SECRET = "test-state-secret-do-not-use-in-prod";
 const MEMBERS: [string, string, string, string] = ["Beth", "Carl", "Dana", "Earl"];
@@ -70,6 +72,42 @@ describe("createInitialState", () => {
   });
 });
 
+describe("GameState v2 schema + pending_effects queue", () => {
+  it("createInitialState sets state_version: 2 and pending_effects: []", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET);
+    expect(state.state_version).toBe(2);
+    expect(state.simulation.pending_effects).toEqual([]);
+  });
+
+  function makePendingEffect(i: number): PendingEffect {
+    return {
+      id: `e${i}`,
+      days_remaining: 3,
+      consequences: { food: -5 },
+      source: `src-${i}`,
+    };
+  }
+
+  it("enqueuePendingEffect appends below the cap", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET);
+    const sim: SimulationState = state.simulation;
+    for (let i = 0; i < 3; i++) enqueuePendingEffect(sim, makePendingEffect(i));
+    expect(sim.pending_effects.map((e) => e.id)).toEqual(["e0", "e1", "e2"]);
+  });
+
+  it("MAX_PENDING_EFFECTS overflow drops the OLDEST and never grows past the cap", async () => {
+    const { state } = await createInitialState("Alice", MEMBERS, "farmer", "medium", SECRET);
+    const sim: SimulationState = state.simulation;
+    const overflow = MAX_PENDING_EFFECTS + 6;
+    for (let i = 0; i < overflow; i++) enqueuePendingEffect(sim, makePendingEffect(i));
+
+    expect(sim.pending_effects).toHaveLength(MAX_PENDING_EFFECTS);
+    // The first 6 (e0..e5) were dropped; the newest survive in order.
+    expect(sim.pending_effects[0].id).toBe("e6");
+    expect(sim.pending_effects[MAX_PENDING_EFFECTS - 1].id).toBe(`e${overflow - 1}`);
+  });
+});
+
 describe("bitter_path_taken field + HMAC back-compat", () => {
   it("is initialized to 'none' on createInitialState", async () => {
     const { state } = await createInitialState("Alice", MEMBERS, "farmer", "high", SECRET);
@@ -82,7 +120,10 @@ describe("bitter_path_taken field + HMAC back-compat", () => {
     const { signState } = await import("../src/hmac");
     const { state: freshState } = await createInitialState("Alice", MEMBERS, "farmer", "high", SECRET);
     const legacyState: Record<string, unknown> = JSON.parse(JSON.stringify(freshState));
-    // Strip the new field to simulate pre-v3 shape
+    // Strip the version marker AND the field to simulate a genuine pre-versioning
+    // (v1) state. migrateState only repairs states it reads as v1 — a state that
+    // still claims state_version:2 is trusted as already-v2 and left untouched.
+    delete legacyState.state_version;
     delete (legacyState.simulation as Record<string, unknown>).bitter_path_taken;
     const legacySig = await signState(legacyState, SECRET);
 
