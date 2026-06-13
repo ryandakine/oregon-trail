@@ -30,6 +30,7 @@ import { createWagon, createOxTeam, createPioneer, createContactShadow } from '.
 import { createGrass } from './grass.mjs';
 import { createVfx } from './vfx.mjs';
 import { createRiver, createBankDressing, ftToWorld } from './water.mjs';
+import { createCampfire, createCampDressing } from './camp.mjs';
 
 // Scenes that own the 3D world. Menu/UI scenes hide the canvas so they look
 // unchanged (Kaplay transparent → body background shows through).
@@ -156,6 +157,41 @@ export function initThree(engine) {
     moving = true;
   }
 
+  // ── Night camp (M4): campfire + dressing + the party gathered around it.
+  let camp = null; // { fire, dressing, savedWalkers: [{x,z,rotY}] }
+  function enterCamp() {
+    if (camp) exitCamp();
+    moving = false; // the wagon is parked for the night
+    const fire = createCampfire({ glowTexture: textures.radialGlowTexture() });
+    // Fire sits in front-left of the parked wagon, on the ground.
+    fire.group.position.set(-3.2, 0, 1.8);
+    caravan.add(fire.group);
+    const dressing = createCampDressing({ textures });
+    dressing.group.position.copy(fire.group.position);
+    caravan.add(dressing.group);
+    // Gather the party around the fire (saving travel positions to restore).
+    const saved = walkers.map((w) => ({ x: w.group.position.x, z: w.group.position.z, rotY: w.group.rotation.y }));
+    walkers[0].group.position.set(-1.7, 0, 1.4);
+    walkers[0].group.rotation.y = -Math.PI * 0.62; // face the fire
+    walkers[1].group.position.set(-4.0, 0, 0.6);
+    walkers[1].group.rotation.y = Math.PI * 0.42;
+    camp = { fire, dressing, saved };
+  }
+  function exitCamp() {
+    if (!camp) return;
+    caravan.remove(camp.fire.group);
+    caravan.remove(camp.dressing.group);
+    camp.fire.dispose();
+    camp.dressing.dispose();
+    walkers.forEach((w, i) => {
+      w.group.position.x = camp.saved[i].x;
+      w.group.position.z = camp.saved[i].z;
+      w.group.rotation.y = camp.saved[i].rotY;
+    });
+    camp = null;
+    moving = true;
+  }
+
   const sky = createSky({ cloudTexture: textures.cloudTexture() });
   scene.add(sky.group);
 
@@ -235,13 +271,18 @@ export function initThree(engine) {
     // deep teal strip), halted wagon frame-left, noon sun for glints (§5a).
     river: { t: 0.52, fov: 40, cam: [10, 5.6, 4.0], look: [-4.5, -0.2, -10], fog: [40, 220], lantern: 3.2 },
     fort: { t: 0.62, fov: 38, cam: [5, 1.9, 12], look: [0, 2.4, 0], fog: [45, 230], lantern: 3.2 },
-    night: { t: 0.005, fov: 36, cam: [4, 3.0, 8], look: [0, 1.4, 0], fog: [20, 120], lantern: 6 },
+    // Tight, intimate, slightly high angle looking down at the fire circle
+    // beside the wagon (§5a): fire frame-left as the only key, wagon behind.
+    night: { t: 0.005, fov: 40, cam: [-7.5, 3.4, 5.5], look: [-2.6, 0.7, 1.2], fog: [16, 90], lantern: 6 },
   };
   function preset(name) {
     const p = PRESETS[name] || PRESETS.travel;
     // The river preset owns a mounted crossing; every other preset clears it.
     if (name === 'river' && !river) enterRiver({});
     else if (name !== 'river' && river) exitRiver();
+    // The night preset owns a mounted camp; every other preset clears it.
+    if (name === 'night' && !camp) enterCamp();
+    else if (name !== 'night' && camp) exitCamp();
     todT = p.t;
     camera.fov = p.fov;
     camera.position.set(...p.cam);
@@ -277,10 +318,11 @@ export function initThree(engine) {
     sun.position.copy(sky.sunDirAt(todT)).multiplyScalar(34);
     sun.target.position.set(0, 0, 0);
     if (river) {
-      river.water.update(0, riverTime);
+      river.water.update(0, fxTime);
       river.water.setSun(sky.sunDirAt(todT), sun.color);
       river.water.setSky(scene.fog.color);
     }
+    if (camp) camp.fire.setPhase(fxTime);
   }
 
   // renderer.info auto-resets on every internal render() call, and the composer
@@ -294,12 +336,12 @@ export function initThree(engine) {
 
   const clock = new THREE.Clock();
   let lastDustAt = 0; // scrollZ of the last dust kick — distance-gated, not time-gated
-  let riverTime = 0; // water flows even while the wagon is halted at the bank
+  let fxTime = 0; // water flows even while the wagon is halted at the bank
   function frame() {
     requestAnimationFrame(frame);
     const dt = clock.getDelta();
     if (!visible || frozen) return;
-    riverTime += dt;
+    fxTime += dt;
     if (moving) scrollZ += WAGON_SPEED * dt;
     pose(scrollZ);
     // Wagon dust: a puff at each rear wheel every ~0.55u of travel (the vfx
@@ -309,6 +351,13 @@ export function initThree(engine) {
       const cy = caravan.position.y + 0.1;
       vfx.wagonDust(caravan.position.x - 1.02, cy, 1.25);
       vfx.wagonDust(caravan.position.x + 1.02, cy, 1.25);
+    }
+    // Campfire embers rise from the flame tip. localToWorld walks the full
+    // parent chain (fire → caravan → scene) and updates world matrices, so it
+    // already yields world coords — no extra caravan transform.
+    if (camp) {
+      const tip = camp.fire.group.localToWorld(camp.fire.firePos.clone());
+      vfx.embers(tip.x, tip.y, tip.z);
     }
     vfx.update(dt);
     renderOnce();
@@ -324,10 +373,22 @@ export function initThree(engine) {
     show() { visible = true; canvas.style.display = 'block'; resize(); },
     hide() { visible = false; canvas.style.display = 'none'; frozen = false; },
     setMoving(m) { moving = !!m; },
+    get camp() { return camp; },
+    // Deterministically warm the campfire ember pool: emit from the fire tip +
+    // step the seeded particle sim N times. Used by the night screenshot so the
+    // still shows rising embers (the live emitter is rate-gated per frame).
+    emitCampEmbers(steps, dt = 1 / 60) {
+      if (!camp) return;
+      for (let i = 0; i < steps; i++) {
+        const tip = camp.fire.group.localToWorld(camp.fire.firePos.clone());
+        vfx.embers(tip.x, tip.y, tip.z);
+        vfx.simulate(1, dt);
+      }
+    },
     // Pin the world to scroll-distance d and render one frame synchronously.
     // Pure function of (d, current preset) → identical pixels across runs
-    // (riverTime is pinned to d too, so water phase is deterministic).
-    freezeAt(d) { frozen = true; scrollZ = d; riverTime = d; pose(d); return renderOnce(); },
+    // (fxTime is pinned to d too, so water phase is deterministic).
+    freezeAt(d) { frozen = true; scrollZ = d; fxTime = d; pose(d); return renderOnce(); },
     unfreeze() { frozen = false; },
     ready: true,
   };

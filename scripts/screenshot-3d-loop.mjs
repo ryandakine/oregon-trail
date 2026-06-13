@@ -92,10 +92,16 @@ for (const shot of SHOTS) {
       window.__three.hemi.intensity *= 0.75;
       return window.__three.renderOnce();
     }
-    window.__three.vfx.reset(7);
-    window.__three.vfx.setWeather('none', 0);
-    window.__three.preset(s);
-    return window.__three.freezeAt(0);
+    const t = window.__three;
+    t.vfx.reset(7);
+    t.vfx.setWeather('none', 0);
+    t.preset(s);
+    if (s === 'night') {
+      // Warm the ember pool to a reproducible rising state (the live emitter is
+      // rate-gated, so a single freeze frame would show no embers).
+      t.emitCampEmbers(140, 1 / 60);
+    }
+    return t.freezeAt(0);
   }, shot);
   await page.waitForTimeout(120); // composer output flush
   const out = path.join(OUT, `${NAMES[shot]}.png`);
