@@ -1,9 +1,10 @@
-const CACHE_NAME = 'oregon-trail-kaplay-v4-three';
+const CACHE_NAME = 'oregon-trail-kaplay-v5-three';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/engine.js',
   '/main.js',
+  '/render-mode.mjs',
   '/vendor/kaplay.mjs',
   '/html2canvas.min.js',
   '/manifest.json',
