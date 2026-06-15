@@ -1,8 +1,8 @@
-import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES, STORE_PRICES, REST_HEAL_PER_DAY, REST_FOOD_PER_MEMBER_PER_DAY, CAMP_SANITY_RESTORE_PER_DAY } from "./state";
+import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES, STORE_PRICES, REST_HEAL_PER_DAY, REST_FOOD_PER_MEMBER_PER_DAY, CAMP_SANITY_RESTORE_PER_DAY, enqueuePendingEffect } from "./state";
 import { assembleEventPrompt } from "./prompt-assembly";
 import { callAnthropic, parseEventResponse, FALLBACK_EVENTS, generateLongNight, buildLongNightFallback, bitterPathConsequences } from "./anthropic";
 import { guardPaidCall, type RateLimitBinding } from "./paid-guard";
-import { advanceDays, applyDailyAttrition, parseMonth } from "./simulation";
+import { advanceDays, applyDailyAttrition, drainPendingEffects, parseMonth } from "./simulation";
 import { signState, deepCanonicalize, bufferToHex } from "./hmac";
 import { computeRunScore } from "./scoring";
 import { createShareStub, verifyShareStub } from "./share-stub";
@@ -17,6 +17,8 @@ import type {
   CampSummary,
   EventResponse,
   GameState,
+  PendingEffect,
+  PendingEffectSpec,
   SignedGameState,
   ShareInfo,
   HistoricalContext,
@@ -698,6 +700,42 @@ async function handleAdvance(
   return jsonResponse(response, 200, origin);
 }
 
+// Resolve a fuse's target to a concrete member_name. "actor" → first LIVING
+// member named in personality_effects, else the leader, else any living member
+// (a fuse always lands on a real living member, never a dead/nonexistent one).
+// "all"/unset → undefined (drain applies to all living). personality_effects is
+// empty on every fallback and many LLM events, so actor commonly collapses to
+// the leader — acceptable for V1 (consequences-pillar.md §5).
+function resolveFuseTarget(state: GameState, event: EventResponse, fuse: PendingEffectSpec): string | undefined {
+  if (fuse.target !== "actor") return undefined;
+  const living = state.party.members.filter((m) => m.alive);
+  for (const name of Object.keys(event.personality_effects)) {
+    if (living.some((m) => m.name === name)) return name;
+  }
+  const leader = living.find((m) => m.name === state.party.leader_name);
+  return leader ? leader.name : living[0]?.name;
+}
+
+// Enqueue the CHOSEN choice's delayed effects onto the state, server-side. The
+// fuses were minted+sanitized in parseEventResponse and are hash-bound, so no
+// re-validation here. Non-chosen choices' fuses are discarded. Mutates state.
+export function enqueueChoiceDelayedEffects(state: GameState, event: EventResponse, choiceIndex: number): void {
+  const fuses = event.choices[choiceIndex]?.delayed_effects;
+  if (!fuses || fuses.length === 0) return;
+  for (const fuse of fuses) {
+    const memberName = resolveFuseTarget(state, event, fuse);
+    const effect: PendingEffect = {
+      id: crypto.randomUUID(),
+      days_remaining: fuse.days_remaining,
+      consequences: fuse.consequences,
+      source: event.title || "event",
+      ...(memberName !== undefined ? { member_name: memberName } : {}),
+      ...(fuse.journal_entry !== undefined ? { journal_entry: fuse.journal_entry } : {}),
+    };
+    enqueuePendingEffect(state.simulation, effect);
+  }
+}
+
 export async function handleChoice(
   request: Request,
   env: Env,
@@ -744,6 +782,12 @@ export async function handleChoice(
     recentTitles.push(body.event.title);
   }
   stateForApply.simulation.recent_event_titles = recentTitles.slice(-5);
+
+  // Enqueue any delayed effects the chosen choice scheduled (server-side; fuses
+  // are hash-bound + sanitized at mint). applyEventAndSign clones stateForApply,
+  // so enqueuing here rides into the signed state. Drained later by advanceDays /
+  // handleCamp. See docs/design/consequences-pillar.md §2.2.
+  enqueueChoiceDelayedEffects(stateForApply, body.event, body.choice_index);
 
   const signed_state = await applyEventAndSign(
     stateForApply,
@@ -1343,6 +1387,11 @@ export async function handleCamp(
   const month = parseMonth(next.position.date);
   const campDate = next.position.date;
   const foodConsumed = applyDailyAttrition(next, historical, segment, month, notes);
+
+  // A camped day is a real day — drain delayed effects too (after attrition,
+  // before healing, mirroring advanceDays order) so a player can't camp to stall
+  // a festering fuse. The heal loop below already skips members killed here.
+  drainPendingEffects(next, notes);
 
   // Rest healing AFTER attrition — members who died during the tick do not
   // heal. High tier: sanity restore halved (no cheap recovery on horror).

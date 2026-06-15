@@ -338,6 +338,19 @@ export interface SignedGameState {
 
 // ── LLM Response Types ──────────────────────────
 
+// A delayed consequence the LLM (or a fallback event) may schedule on a choice —
+// a "fuse" that lands days later (festering wound, water that poisons, a debt
+// come due). Minted/sanitized server-side in parseEventResponse; the chosen
+// choice's fuses are enqueued in handleChoice and fired by drainPendingEffects.
+// EventChoice is unsigned (client-echoed, hash-bound), so this adds NO signed
+// field. See docs/design/consequences-pillar.md.
+export interface PendingEffectSpec {
+  days_remaining: number;                    // clamped to [1,14] at mint
+  consequences: EventChoice["consequences"]; // same delta shape; miles/days stripped at mint
+  journal_entry?: string;                    // surfaced when it fires
+  target?: "actor" | "all";                  // server-resolved to member_name; default "all"
+}
+
 export interface EventChoice {
   label: string;
   consequences: {
@@ -353,6 +366,9 @@ export interface EventChoice {
     miles?: number;
     days?: number;
   };
+  // Optional delayed consequences scheduled by this choice (V1: LLM/fallback
+  // authored, server-sanitized). Sibling of consequences — NOT a consequence key.
+  delayed_effects?: PendingEffectSpec[];
 }
 
 export interface EventResponse {
