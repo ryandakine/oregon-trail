@@ -209,7 +209,11 @@ export function applyDailyAttrition(
 // and the calendar, and mutating them mid-loop would desync date bookkeeping.
 // No V1 path enqueues spatial/temporal effects; the consequences pillar adds
 // loop-safe handling if it ever needs them. Mutates `next` in place.
-function drainPendingEffects(next: GameState, dayEvents: string[]): void {
+//
+// Exported because handleCamp drains too: a camped day runs full attrition, so
+// it must tick delayed effects (else a player could camp to stall a festering
+// fuse — spec §3.2 camp-scoping note / consequences-pillar.md §2.3).
+export function drainPendingEffects(next: GameState, dayEvents: string[]): void {
   const queue = next.simulation.pending_effects;
   if (queue.length === 0) return;
 

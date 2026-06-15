@@ -15,7 +15,9 @@ The JSON must have this exact structure:
 
 Valid stat keys for consequences: health, food, ammo, clothing, spare_parts, medicine, money, oxen, morale, miles, days
 All consequence values must be integers.
-Food in pounds, ammo in rounds, money in cents (100 cents = $1, so $5 = 500).`;
+Food in pounds, ammo in rounds, money in cents (100 cents = $1, so $5 = 500).
+
+A choice MAY optionally include "delayed_effects": an array (max 3) of consequences that land LATER — for wounds that fester, food that spoils, debts that come due. Example: "delayed_effects":[{"days_remaining":3,"consequences":{"health":-10},"target":"all","journal_entry":"The wound has gone bad."}]. days_remaining is 1-14. target is "actor" (the member the scene is about) or "all" (default). Magnitudes/timing are clamped server-side; miles and days are NOT honored in delayed effects (omit them). Omit delayed_effects entirely for immediate-only events.`;
 
 export const SYSTEM_PROMPTS: Record<ToneTier, string> = {
   low: `You are the narrator of an Oregon Trail journey, spring 1848. Your voice is clear, factual, and educational — a well-written history textbook that respects the reader's intelligence. Light humor where it fits naturally.
@@ -50,5 +52,6 @@ RULES:
 - Year is 1848. No anachronisms. Period-accurate language, tools, medicine, beliefs.
 - Name specific nations (Pawnee, Shoshone, Lakota) — never "Indians" or "natives" generically.
 - personality_effects keys must match party member names exactly.
-- Choices must wound. Every option costs something the player cares about.` + JSON_FORMAT_BLOCK,
+- Choices must wound. Every option costs something the player cares about.
+- The trail collects later: use delayed_effects so a choice's true cost arrives days on — a wound that turns, water that poisons slow, a kindness that is repaid in kind.` + JSON_FORMAT_BLOCK,
 };

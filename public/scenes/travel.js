@@ -157,7 +157,11 @@ export default function register(k, engine) {
       updateHud(k, engine, hudState);
       for (const s of summaries) {
         for (const evt of (s.events ?? [])) {
-          if (evt.text || evt.description) showFloatingText(evt.text || evt.description);
+          // Day events are plain strings (attrition + fired delayed effects);
+          // older code only handled {text|description} objects, so strings
+          // rendered nothing. Coerce both shapes.
+          const msg = typeof evt === "string" ? evt : (evt && (evt.text || evt.description));
+          if (msg) showFloatingText(msg);
         }
       }
     });

@@ -1,4 +1,4 @@
-import type { EventResponse, ToneTier } from "./types";
+import type { EventResponse, ToneTier, EventChoice, PendingEffectSpec } from "./types";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-haiku-4-5-20251001";
@@ -7,6 +7,11 @@ const ALLOWED_CONSEQUENCE_KEYS = new Set([
   "health", "food", "ammo", "clothing", "spare_parts",
   "medicine", "money", "oxen", "morale", "miles", "days",
 ]);
+
+// Delayed-effect (fuse) mint-time bounds. See docs/design/consequences-pillar.md §2.4.
+export const MAX_DELAYED_PER_CHOICE = 3; // count cap per choice (excess truncated)
+export const DELAY_MIN_DAYS = 1;         // floor — never fire same-day / double-apply
+export const DELAY_MAX_DAYS = 14;        // ceiling — off-screen beyond a ~15-event run
 
 // Retry config: fast-fail ladder. The interactive /advance path must serve an
 // instant fallback rather than stall the player, so we cap total latency hard:
@@ -86,6 +91,60 @@ export async function callAnthropic(
   throw lastError || new Error("callAnthropic: unexpected retry exhaustion");
 }
 
+// Validate + clamp a consequence delta IN PLACE: keys must be allowed, values
+// finite, magnitudes capped at ±10000. Shared by immediate choice consequences
+// and delayed-effect fuses so both honor one rule set. Throws on malformed input
+// (rejecting the event → a fallback fires).
+function validateConsequenceDelta(c: Record<string, unknown>): void {
+  for (const [key, val] of Object.entries(c)) {
+    if (!ALLOWED_CONSEQUENCE_KEYS.has(key)) {
+      throw new Error(`invalid consequence key: ${key}`);
+    }
+    if (typeof val !== "number" || !Number.isFinite(val)) {
+      throw new Error(`consequence ${key} must be a finite number, got ${typeof val}`);
+    }
+    if (Math.abs(val) > 10000) {
+      (c as Record<string, number>)[key] = Math.sign(val) * 10000;
+    }
+  }
+}
+
+// Mint-time guard for LLM/fallback delayed effects: bound count + timing, run the
+// shared consequence validation, strip miles/days (drainPendingEffects ignores
+// them — stripping stops a "paid-for" fuse from silently no-opping), and normalize
+// target. Returns a clean PendingEffectSpec[] or undefined if none survive. Throws
+// only via validateConsequenceDelta on a malformed delta, matching the immediate
+// path. See docs/design/consequences-pillar.md §2.4.
+export function sanitizeDelayedEffects(raw: unknown): PendingEffectSpec[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: PendingEffectSpec[] = [];
+  for (const item of raw) {
+    if (out.length >= MAX_DELAYED_PER_CHOICE) break; // cap on VALID output, not raw slots
+    if (typeof item !== "object" || item === null) continue;
+    const spec = item as Record<string, unknown>;
+    if (typeof spec.consequences !== "object" || spec.consequences === null) continue;
+    const consequences = spec.consequences as Record<string, unknown>;
+    validateConsequenceDelta(consequences);
+    delete consequences.miles; // drain ignores miles/days — strip, don't reject
+    delete consequences.days;
+    if (Object.keys(consequences).length === 0) continue; // miles/days-only → empty no-op, drop
+    const rawDays = spec.days_remaining;
+    let days = typeof rawDays === "number" && Number.isFinite(rawDays) ? Math.round(rawDays) : 3;
+    days = Math.max(DELAY_MIN_DAYS, Math.min(DELAY_MAX_DAYS, days));
+    const target: "actor" | "all" = spec.target === "actor" ? "actor" : "all";
+    const clean: PendingEffectSpec = {
+      days_remaining: days,
+      consequences: consequences as EventChoice["consequences"],
+      target,
+    };
+    if (typeof spec.journal_entry === "string" && spec.journal_entry.length > 0) {
+      clean.journal_entry = spec.journal_entry;
+    }
+    out.push(clean);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 export function parseEventResponse(raw: string): EventResponse {
   // Strip markdown fences if present
   let stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
@@ -116,17 +175,14 @@ export function parseEventResponse(raw: string): EventResponse {
     if (typeof choice.consequences !== "object" || choice.consequences === null) {
       throw new Error("choice missing consequences object");
     }
-    for (const [key, val] of Object.entries(choice.consequences)) {
-      if (!ALLOWED_CONSEQUENCE_KEYS.has(key)) {
-        throw new Error(`invalid consequence key: ${key}`);
-      }
-      if (typeof val !== "number" || !Number.isFinite(val)) {
-        throw new Error(`consequence ${key} must be a finite number, got ${typeof val}`);
-      }
-      // Clamp to reasonable bounds
-      if (Math.abs(val as number) > 10000) {
-        (choice.consequences as Record<string, number>)[key] = Math.sign(val as number) * 10000;
-      }
+    validateConsequenceDelta(choice.consequences as Record<string, unknown>);
+    // Mint delayed effects (fuses) here — the single point where server-issued
+    // event content is created. The event-hash binding carries the sanitized
+    // result through to handleChoice, so no re-validation is needed there.
+    if (choice.delayed_effects !== undefined) {
+      const fuses = sanitizeDelayedEffects(choice.delayed_effects);
+      if (fuses) choice.delayed_effects = fuses;
+      else delete choice.delayed_effects;
     }
   }
 
@@ -184,7 +240,7 @@ export const FALLBACK_EVENTS: Record<ToneTier, EventResponse[]> = {
       description: "A steady rain falls all day, turning the trail to mud. Progress slows and everyone is soaked through.",
       choices: [
         { label: "Make camp and wait it out", consequences: { days: 1, morale: -5 } },
-        { label: "Push through the mud", consequences: { health: -5, miles: -4 } },
+        { label: "Push through the mud", consequences: { health: -5, miles: -4 }, delayed_effects: [{ days_remaining: 2, consequences: { health: -5, morale: -3 }, target: "all", journal_entry: "The soaking left the party with chills that lingered for days." }] },
       ],
       personality_effects: {},
       journal_entry: "Rain turned the trail to deep mud. Miserable going.",
@@ -276,7 +332,7 @@ export const FALLBACK_EVENTS: Record<ToneTier, EventResponse[]> = {
       title: "Tainted Water",
       description: "The only water source for miles has a faint alkali sheen. The oxen are desperate to drink. The party must choose between thirst and poison.",
       choices: [
-        { label: "Let the animals drink", consequences: { oxen: -1, health: -5 } },
+        { label: "Let the animals drink", consequences: { oxen: -1, health: -5 }, delayed_effects: [{ days_remaining: 3, consequences: { health: -10, morale: -5 }, target: "all", journal_entry: "The alkali water has caught up with the party — cramps and fever in the night." }] },
         { label: "Ration the canteens and press on", consequences: { health: -10, morale: -10, miles: 8 } },
         { label: "Dig for cleaner water nearby", consequences: { days: 1, morale: -5 } },
       ],
@@ -404,7 +460,7 @@ export const FALLBACK_EVENTS: Record<ToneTier, EventResponse[]> = {
       description: "Someone wakes shivering despite the heat. By midday they cannot stand. The rest of the party watches with the quiet arithmetic of survival — how much medicine, how many days, how much food for someone who cannot walk.",
       choices: [
         { label: "Use precious medicine", consequences: { medicine: -2, days: 1 } },
-        { label: "Rest and hope", consequences: { health: -15, days: 2 } },
+        { label: "Rest and hope", consequences: { health: -15, days: 2 }, delayed_effects: [{ days_remaining: 4, consequences: { health: -20 }, target: "actor", journal_entry: "The fever did not break. It was only waiting." }] },
         { label: "Keep moving — they ride in the wagon", consequences: { health: -10, morale: -15 } },
       ],
       personality_effects: {},
