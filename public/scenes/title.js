@@ -1,4 +1,5 @@
 import * as draw from "../lib/draw.mjs";
+import { effectiveMode, setRenderMode, isDesktopPointer, isTouchOnly } from "../render-mode.mjs";
 
 export default function register(k, engine) {
   k.scene("title", (data) => {
@@ -191,6 +192,26 @@ export default function register(k, engine) {
         k.anchor("center"),
         k.color(150, 200, 150),
       ]);
+    }
+
+    // ── Render mode toggle (2D / 3D) — desktop only, key-only like [ D ]/[ R ] ──
+    // Hidden on touch-only devices: 3D chokes phones and the desktop gate in
+    // main.js never fires there. y dodges the conditional [ R ] line (y=250):
+    // 310 when a saved run is shown, 280 otherwise. Current state in title-gold.
+    if (!isTouchOnly()) {
+      const eff = effectiveMode(isDesktopPointer());
+      k.add([
+        k.text(`[ V ] 3D World: ${eff === "3d" ? "On" : "Off"}`, { size: 13 }),
+        k.pos(320, savedRun ? 310 : 280),
+        k.anchor("center"),
+        k.color(212, 160, 23),
+      ]);
+      // Flip to the opposite explicit mode, then reload to re-run the 3D gate.
+      // Only reload if the write succeeded (private mode → no dead reload).
+      k.onKeyPress("v", () => {
+        const next = effectiveMode(isDesktopPointer()) === "3d" ? "2d" : "3d";
+        if (setRenderMode(next)) location.reload();
+      });
     }
 
     // ── Press ENTER prompt (blinking) ──

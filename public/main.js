@@ -1,4 +1,6 @@
 // Error capture — must run before kaplay loads so early errors are caught.
+import { shouldInit3D, getRenderMode, isDesktopPointer } from "./render-mode.mjs";
+
 window.__ERRORS = [];
 window.addEventListener("error", (e) => window.__ERRORS.push({ msg: e.message, src: e.filename, line: e.lineno }));
 window.addEventListener("unhandledrejection", (e) => window.__ERRORS.push({ msg: "rejection: " + String(e.reason) }));
@@ -166,12 +168,17 @@ setTimeout(() => engine.init(), 100);
 // deploy-smoke harnesses run headless (no real pointer) and need the layer, and
 // it doubles as a manual escape hatch (?gfx=high / ?gfx=low). ──
 {
+  // The load decision is the pure shouldInit3D() (see render-mode.mjs): the
+  // ?test guard wins first, then an explicit 2d/3d preference, then the
+  // "auto" device+gfx default. An unset preference reproduces the old gate
+  // exactly (?gfx || desktop), so existing behavior is unchanged.
   const params = new URLSearchParams(location.search);
-  const gfxOverride = params.has("gfx");
-  const isDesktop = !!window.matchMedia
-    && window.matchMedia("(pointer: fine)").matches
-    && !window.matchMedia("(pointer: coarse)").matches;
-  if (!params.has("test") && (gfxOverride || isDesktop)) {
+  if (shouldInit3D({
+    hasTest: params.has("test"),
+    hasGfx: params.has("gfx"),
+    isDesktop: isDesktopPointer(),
+    mode: getRenderMode(),
+  })) {
     import("./three/bootstrap.mjs")
       .then((m) => m.initThree(engine))
       .catch((err) => {

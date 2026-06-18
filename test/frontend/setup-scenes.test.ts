@@ -5,6 +5,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { startHarness, type Harness } from "./harness";
 
+declare global {
+  interface Window {
+    k: { get(tag?: string): Array<{ text?: string }> };
+  }
+}
+
 describe("setup-phase scenes", () => {
   let h: Harness;
 
@@ -78,6 +84,22 @@ describe("setup-phase scenes", () => {
     const s = await h.readStats();
     expect(s.pageErrors).toEqual([]);
     expect(s.kaplayErrors).toEqual([]);
+  });
+
+  it("T-title-4: render-mode toggle renders and reflects ot_render_mode", async () => {
+    // Desktop (headless chromium is not touch-only) → the [ V ] toggle shows.
+    // Seed "2d" so the line reads "3D World: Off".
+    await h.page.evaluate(() => localStorage.setItem("ot_render_mode", "2d"));
+    await h.goScene("title");
+    const s = await h.readStats();
+    expect(s.pageErrors).toEqual([]);
+    expect(s.kaplayErrors).toEqual([]);
+    const toggleText = await h.page.evaluate(() => {
+      const line = window.k.get().find((o) => typeof o.text === "string" && o.text.includes("3D World"));
+      return line?.text ?? null;
+    });
+    expect(toggleText).toContain("3D World");
+    expect(toggleText).toContain("Off");
   });
 
   it("T-profession-1: profession picker renders", async () => {
