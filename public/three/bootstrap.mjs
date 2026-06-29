@@ -36,6 +36,7 @@ import { createDeer, createBison } from './fauna.mjs';
 import { createTombstone } from './markers.mjs';
 import { createTrailAudio } from './audio.mjs';
 import { setRenderMode } from '../render-mode.mjs';
+import { makeFpsGate } from './fps-gate.mjs';
 
 // Scenes that own the 3D world. Menu/UI scenes hide the canvas so they look
 // unchanged (Kaplay transparent → body background shows through).
@@ -547,11 +548,15 @@ export function initThree(engine) {
   // ── FPS auto-downgrade (DEC-B kill-gate safety net). The >=30fps gate was
   // never measured on real GPUs, and desktop gets 3D by default — a weak GPU
   // faceplants with no way out. Measure real rendered fps over a window; if the
-  // sustained average is below DOWNGRADE_FPS, kill the 3D loop, reveal the 2D
-  // game underneath, and persist render mode to '2d' so the next load skips 3D.
+  // average stays below DOWNGRADE_FPS for DOWNGRADE_BAD_WINDOWS *consecutive*
+  // windows (hysteresis — one transient stall must not permanently demote a
+  // capable GPU), kill the 3D loop, reveal the 2D game underneath, and persist
+  // render mode to '2d' so the next load skips 3D.
   const DOWNGRADE_FPS = 24;
+  const DOWNGRADE_BAD_WINDOWS = 3; // consecutive sub-target windows before downgrading
   const WARMUP_FRAMES = 30; // ignore shader-compile spikes on the first ~0.5s
   const SAMPLE_SECS = 3; // window of sampled render time before deciding
+  const fpsGate = makeFpsGate({ targetFps: DOWNGRADE_FPS, badWindowsToDowngrade: DOWNGRADE_BAD_WINDOWS });
   let warmupLeft = WARMUP_FRAMES;
   let sampleTime = 0; // accumulated dt over real rendered frames
   let sampleCount = 0; // rendered frames in the window
@@ -588,8 +593,11 @@ export function initThree(engine) {
         sampleTime += dt;
         sampleCount++;
         if (sampleTime >= SAMPLE_SECS) {
-          if (sampleCount / sampleTime < DOWNGRADE_FPS) downgrade();
-          else { sampleTime = 0; sampleCount = 0; } // re-arm a fresh window
+          const avgFps = sampleCount / sampleTime;
+          sampleTime = 0; sampleCount = 0; // always re-arm the next window
+          // Downgrade only after DOWNGRADE_BAD_WINDOWS consecutive bad windows;
+          // a single transient stall is absorbed and the streak resets.
+          if (fpsGate.recordWindow(avgFps)) downgrade();
         }
       }
     }
