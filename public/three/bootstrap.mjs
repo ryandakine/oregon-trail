@@ -35,12 +35,27 @@ import { createLandmark } from './landmarks.mjs';
 import { createDeer, createBison } from './fauna.mjs';
 import { createTombstone } from './markers.mjs';
 import { createTrailAudio } from './audio.mjs';
+import { setRenderMode } from '../render-mode.mjs';
+import { makeFpsGate } from './fps-gate.mjs';
 
 // Scenes that own the 3D world. Menu/UI scenes hide the canvas so they look
 // unchanged (Kaplay transparent → body background shows through).
 const WORLD_STATES = new Set(['TRAVEL', 'RIVER', 'LANDMARK', 'HUNTING', 'DEATH', 'ARRIVAL']);
 
 const WAGON_SPEED = 1.9; // world-units/sec — plodding ox pace, drives scroll + gaits
+
+// Pure, DETERMINISTIC weather from distance. The game derives weather bands from
+// miles (travel.js: >1200 snow-or-clear, >600 dust-or-clear, else rain-or-clear),
+// but uses Math.random per transition — which would flicker the 3D storm on every
+// stateChange. Instead hash a stable 150-mile band to a fixed 0..99 roll, so the
+// same stretch of trail always yields the same weather. No PRNG anywhere.
+function weatherForMiles(miles) {
+  const band = Math.floor((miles || 0) / 150);
+  const roll = ((band * 2654435761) >>> 0) % 100; // stable per-band, no randomness
+  if (miles > 1200) return roll < 55 ? { kind: 'snow', intensity: 0.6 } : { kind: 'none', intensity: 0 };
+  if (miles > 600) return roll < 45 ? { kind: 'dust', intensity: 0.5 } : { kind: 'none', intensity: 0 };
+  return roll < 30 ? { kind: 'rain', intensity: 0.5 } : { kind: 'none', intensity: 0 };
+}
 
 function tierFromQuery() {
   const p = new URLSearchParams(location.search).get('gfx');
@@ -529,10 +544,64 @@ export function initThree(engine) {
   const clock = new THREE.Clock();
   let lastDustAt = 0; // scrollZ of the last dust kick — distance-gated, not time-gated
   let fxTime = 0; // water flows even while the wagon is halted at the bank
+
+  // ── FPS auto-downgrade (DEC-B kill-gate safety net). The >=30fps gate was
+  // never measured on real GPUs, and desktop gets 3D by default — a weak GPU
+  // faceplants with no way out. Measure real rendered fps over a window; if the
+  // average stays below DOWNGRADE_FPS for DOWNGRADE_BAD_WINDOWS *consecutive*
+  // windows (hysteresis — one transient stall must not permanently demote a
+  // capable GPU), kill the 3D loop, reveal the 2D game underneath, and persist
+  // render mode to '2d' so the next load skips 3D.
+  const DOWNGRADE_FPS = 24;
+  const DOWNGRADE_BAD_WINDOWS = 3; // consecutive sub-target windows before downgrading
+  const WARMUP_FRAMES = 30; // ignore shader-compile spikes on the first ~0.5s
+  const SAMPLE_SECS = 3; // window of sampled render time before deciding
+  const fpsGate = makeFpsGate({ targetFps: DOWNGRADE_FPS, badWindowsToDowngrade: DOWNGRADE_BAD_WINDOWS });
+  let warmupLeft = WARMUP_FRAMES;
+  let sampleTime = 0; // accumulated dt over real rendered frames
+  let sampleCount = 0; // rendered frames in the window
+  let killed = false; // stops the RAF loop once downgraded
+  let rafId = 0; // last requestAnimationFrame handle (for cancelAnimationFrame)
+  let downgraded = false; // one-shot guard on downgrade()
+
+  function downgrade() {
+    if (downgraded) return;
+    downgraded = true;
+    killed = true; // frame() early-returns AND stops re-scheduling
+    if (rafId) cancelAnimationFrame(rafId);
+    api.hide(); // free the GPU canvas; the 2D Kaplay layer keeps running under it
+    setRenderMode('2d'); // next load won't re-init 3D (render-mode.mjs try/catches)
+    console.warn(
+      `3D auto-downgraded to 2D: sustained <${DOWNGRADE_FPS} fps on this GPU. ` +
+      'Switch back via the in-game 3D toggle once on better hardware.',
+    );
+  }
+
   function frame() {
-    requestAnimationFrame(frame);
+    if (killed) return;
+    rafId = requestAnimationFrame(frame);
     const dt = clock.getDelta();
     if (!visible || frozen) return;
+    // Sample only real rendered frames (past the visible/frozen gate). Skip the
+    // warm-up (shader compiles), drop dt>0.1s artifacts (tab-switch / RAF
+    // throttle) and any frame while the tab is hidden, then decide once the
+    // window fills.
+    if (!downgraded) {
+      if (warmupLeft > 0) {
+        warmupLeft--;
+      } else if (!document.hidden && dt <= 0.1) {
+        sampleTime += dt;
+        sampleCount++;
+        if (sampleTime >= SAMPLE_SECS) {
+          const avgFps = sampleCount / sampleTime;
+          sampleTime = 0; sampleCount = 0; // always re-arm the next window
+          // Downgrade only after DOWNGRADE_BAD_WINDOWS consecutive bad windows;
+          // a single transient stall is absorbed and the streak resets.
+          if (fpsGate.recordWindow(avgFps)) downgrade();
+        }
+      }
+    }
+    if (killed) return; // downgrade() may have just fired — skip this frame's render
     fxTime += dt;
     if (moving) scrollZ += WAGON_SPEED * dt;
     pose(scrollZ);
@@ -566,6 +635,9 @@ export function initThree(engine) {
     hide() { visible = false; canvas.style.display = 'none'; frozen = false; },
     setMoving(m) { moving = !!m; audio.setMoving(moving); },
     setWeather,
+    // Read-only view of the active weather so tests (Builder D) can observe what
+    // the state→3D bridge set. Mirrors the closure vars setWeather writes.
+    get weather() { return { kind: weatherKind, intensity: weatherIntensity }; },
     audio,
     get camp() { return camp; },
     // Deterministically warm the campfire ember pool: emit from the fire tip +
@@ -633,6 +705,17 @@ export function initThree(engine) {
         case 'ARRIVAL':
           preset('arrival');
           break;
+      }
+      // Weather is 2D-only in scenes/travel.js, so the 3D rain/snow/dust never
+      // fired in real play — bridge it here from the same miles the game uses.
+      // The four travel-world states (incl. a river_crossing LANDMARK routed to
+      // the travel preset above) get deterministic weatherForMiles; DEATH and
+      // ARRIVAL are clear so the somber/welcoming moods read uncluttered.
+      if (to === 'DEATH' || to === 'ARRIVAL') {
+        setWeather('none', 0);
+      } else {
+        const w = weatherForMiles(engine.milesTraveled);
+        setWeather(w.kind, w.intensity);
       }
       api.show();
     };

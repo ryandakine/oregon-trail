@@ -613,6 +613,205 @@ export function barkMaps() {
   return _barkCache;
 }
 
+// Stone — irregular fieldstone/ashlar blocks with mortar lines, weathered grey.
+// Keyed to PALETTE.stone [150,142,132]. Normal strength 2.4.
+let _stoneCache = null;
+export function stoneMaps() {
+  if (_stoneCache) return _stoneCache;
+  seedReset(12);
+  const S = 256;
+
+  const albedo = makeRawCanvas(S, (ctx, s) => {
+    // Base: weathered mid-grey, slightly warm
+    ctx.fillStyle = '#817a72';
+    ctx.fillRect(0, 0, s, s);
+    // Fieldstone blocks: irregular polygons in varying grey tones
+    for (let i = 0; i < 60; i++) {
+      const x = rnd() * s, y = rnd() * s;
+      const w = 18 + rnd() * 32, h = 12 + rnd() * 22;
+      const v = Math.round(118 + rnd() * 52);
+      drawWrapped(ctx, s, (ox, oy) => {
+        ctx.fillStyle = `rgba(${v},${Math.round(v * 0.96)},${Math.round(v * 0.90)},0.72)`;
+        ctx.beginPath();
+        const n = 5 + Math.floor(rnd() * 3);
+        for (let k = 0; k <= n; k++) {
+          const a = (k / n) * Math.PI * 2;
+          const rx = w * 0.5 * (0.72 + rnd() * 0.34);
+          const ry = h * 0.5 * (0.72 + rnd() * 0.34);
+          const px = x + ox + Math.cos(a) * rx;
+          const py = y + oy + Math.sin(a) * ry;
+          if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.fill();
+        // Stone edge highlight
+        ctx.strokeStyle = `rgba(${Math.min(v + 22, 255)},${Math.min(Math.round(v * 0.96) + 18, 255)},${Math.min(Math.round(v * 0.90) + 14, 255)},0.30)`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
+    }
+    // Mortar lines — narrow grey-brown grooves between stones
+    for (let i = 0; i < 30; i++) {
+      const x = rnd() * s, y = rnd() * s;
+      ctx.strokeStyle = 'rgba(62,56,50,0.68)';
+      ctx.lineWidth = 1.5 + rnd() * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + (rnd() - 0.5) * 40, y + (rnd() - 0.5) * 40);
+      ctx.stroke();
+    }
+    // Weathering: lichen/dust flecks
+    for (let i = 0; i < 180; i++) {
+      const v = Math.round(160 + rnd() * 60);
+      ctx.fillStyle = `rgba(${v},${Math.round(v * 0.93)},${Math.round(v * 0.80)},${0.08 + rnd() * 0.10})`;
+      ctx.fillRect(rnd() * s, rnd() * s, 2.5, 2.5);
+    }
+  });
+
+  const mapTex = new THREE.CanvasTexture(albedo);
+  mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping;
+  mapTex.colorSpace = THREE.SRGBColorSpace;
+
+  const height = makeRawCanvas(S, (ctx, s) => {
+    ctx.fillStyle = '#505050';
+    ctx.fillRect(0, 0, s, s);
+    // Each stone block raised above mortar
+    for (let i = 0; i < 60; i++) {
+      const x = rnd() * s, y = rnd() * s;
+      const w = 18 + rnd() * 32, h = 12 + rnd() * 22;
+      const v = 130 + rnd() * 80;
+      drawWrapped(ctx, s, (ox, oy) => {
+        ctx.fillStyle = `rgba(${Math.round(v)},${Math.round(v)},${Math.round(v)},0.85)`;
+        ctx.beginPath();
+        const n = 5 + Math.floor(rnd() * 3);
+        for (let k = 0; k <= n; k++) {
+          const a = (k / n) * Math.PI * 2;
+          const rx = w * 0.5 * (0.72 + rnd() * 0.34);
+          const ry = h * 0.5 * (0.72 + rnd() * 0.34);
+          const px = x + ox + Math.cos(a) * rx;
+          const py = y + oy + Math.sin(a) * ry;
+          if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.fill();
+      });
+    }
+    // Mortar depressions (dark = sunken)
+    for (let i = 0; i < 30; i++) {
+      const x = rnd() * s, y = rnd() * s;
+      ctx.strokeStyle = 'rgba(18,18,18,0.75)';
+      ctx.lineWidth = 1.5 + rnd() * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + (rnd() - 0.5) * 40, y + (rnd() - 0.5) * 40);
+      ctx.stroke();
+    }
+  });
+
+  _stoneCache = { map: mapTex, normalMap: heightToNormal(height, 2.4) };
+  return _stoneCache;
+}
+
+// Plaster — smooth off-white/tan lime plaster, subtle trowel noise + hairline cracks.
+// Keyed to PALETTE.canvas [245,230,200] shifted cooler. Normal strength 1.2.
+let _plasterCache = null;
+export function plasterMaps() {
+  if (_plasterCache) return _plasterCache;
+  seedReset(13);
+  const S = 256;
+
+  const albedo = makeRawCanvas(S, (ctx, s) => {
+    // Base: warm off-white lime plaster
+    ctx.fillStyle = '#d8cfba';
+    ctx.fillRect(0, 0, s, s);
+    // Trowel noise: large soft blobs of slightly lighter/darker tone
+    for (let i = 0; i < 280; i++) {
+      const x = rnd() * s, y = rnd() * s, r = 6 + rnd() * 22;
+      const v = Math.round(195 + rnd() * 48);
+      drawWrapped(ctx, s, (ox, oy) => {
+        const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        g.addColorStop(0, `rgba(${v},${Math.round(v * 0.94)},${Math.round(v * 0.82)},0.22)`);
+        g.addColorStop(1, `rgba(${v},${Math.round(v * 0.94)},${Math.round(v * 0.82)},0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+    // Fine aggregate stipple
+    for (let i = 0; i < 600; i++) {
+      const v = Math.round(185 + rnd() * 55);
+      ctx.fillStyle = `rgba(${v},${Math.round(v * 0.93)},${Math.round(v * 0.80)},0.18)`;
+      ctx.fillRect(rnd() * s, rnd() * s, 1.5, 1.5);
+    }
+    // Hairline cracks — fine dark sinuous lines
+    for (let i = 0; i < 18; i++) {
+      let x = rnd() * s, y = rnd() * s;
+      ctx.strokeStyle = 'rgba(80,68,50,0.38)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let k = 0; k < 5; k++) {
+        x += (rnd() - 0.5) * 22;
+        y += (rnd() - 0.5) * 22;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    // Age staining: scattered warm-tan wash patches
+    for (let i = 0; i < 20; i++) {
+      const x = rnd() * s, y = rnd() * s, r = 8 + rnd() * 24;
+      drawWrapped(ctx, s, (ox, oy) => {
+        const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        g.addColorStop(0, 'rgba(148,118,74,0.12)');
+        g.addColorStop(1, 'rgba(148,118,74,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  });
+
+  const mapTex = new THREE.CanvasTexture(albedo);
+  mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping;
+  mapTex.colorSpace = THREE.SRGBColorSpace;
+
+  const height = makeRawCanvas(S, (ctx, s) => {
+    ctx.fillStyle = '#888888';
+    ctx.fillRect(0, 0, s, s);
+    // Trowel undulation (soft blobs)
+    for (let i = 0; i < 200; i++) {
+      const x = rnd() * s, y = rnd() * s, r = 8 + rnd() * 24;
+      const v = 100 + rnd() * 100;
+      drawWrapped(ctx, s, (ox, oy) => {
+        const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        g.addColorStop(0, `rgba(${Math.round(v)},${Math.round(v)},${Math.round(v)},0.40)`);
+        g.addColorStop(1, `rgba(${Math.round(v)},${Math.round(v)},${Math.round(v)},0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+    // Hairline crack depressions
+    for (let i = 0; i < 18; i++) {
+      let x = rnd() * s, y = rnd() * s;
+      ctx.strokeStyle = 'rgba(22,22,22,0.55)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let k = 0; k < 5; k++) {
+        x += (rnd() - 0.5) * 22;
+        y += (rnd() - 0.5) * 22;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  });
+
+  _plasterCache = { map: mapTex, normalMap: heightToNormal(height, 1.2) };
+  return _plasterCache;
+}
+
 // ---------------------------------------------------------------------------
 // Sprite / decal textures
 // ---------------------------------------------------------------------------

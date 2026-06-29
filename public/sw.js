@@ -33,20 +33,10 @@ const OPTIONAL_ASSETS = [
   '/lib/draw.mjs',
   '/lib/hud.mjs',
   '/lib/tone.mjs',
-  // 3D render layer (THREEJS_REBUILD_PLAN). Optional: a 404 between commit
-  // landings must not brick the install, and the 2D game works without them.
-  '/three/bootstrap.mjs',
-  '/vendor/three/three.module.js',
-  '/vendor/three/jsm/postprocessing/EffectComposer.js',
-  '/vendor/three/jsm/postprocessing/RenderPass.js',
-  '/vendor/three/jsm/postprocessing/ShaderPass.js',
-  '/vendor/three/jsm/postprocessing/MaskPass.js',
-  '/vendor/three/jsm/postprocessing/Pass.js',
-  '/vendor/three/jsm/postprocessing/OutputPass.js',
-  '/vendor/three/jsm/postprocessing/UnrealBloomPass.js',
-  '/vendor/three/jsm/shaders/CopyShader.js',
-  '/vendor/three/jsm/shaders/LuminosityHighPassShader.js',
-  '/vendor/three/jsm/shaders/OutputShader.js',
+  // Three.js bundle (/three/bootstrap.mjs + /vendor/three/*) is intentionally
+  // NOT pre-cached here. The fetch handler below lazy-caches any same-origin
+  // 200 at runtime, so desktop sessions cache Three on first 3D init and phones
+  // that never trigger 3D never pay the ~1.3 MB download cost.
 ];
 
 self.addEventListener('install', (e) => {

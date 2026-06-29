@@ -62,7 +62,7 @@ fi
 # carries a deploy-time suffix and re-runs stay idempotent (the regex always
 # matches the placeholder, never a previously-stamped value).
 SW_FILE="public/sw.js"
-SW_PLACEHOLDER="oregon-trail-kaplay-v3-primitive"
+SW_PLACEHOLDER="oregon-trail-kaplay-v5-three"
 GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || true)"
 
 restore_sw() {
