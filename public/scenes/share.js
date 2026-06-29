@@ -19,6 +19,15 @@ export default function register(k, engine) {
     const content = document.getElementById('overlay-content');
     overlay.classList.add('active');
 
+    // Escape free-text fields before they enter innerHTML. Defense-in-depth:
+    // leader_name/profession are server-sanitized at /api/start, but esc() keeps
+    // this sink consistent with the other scenes if that allowlist ever loosens.
+    const esc = (str) => {
+      const d = document.createElement('div');
+      d.textContent = str == null ? '' : String(str);
+      return d.innerHTML;
+    };
+
     // Gather stats
     const leader = engine.party?.leader_name || engine.leaderName || 'Unknown';
     const profession = engine.profession || 'unknown';
@@ -93,8 +102,8 @@ export default function register(k, engine) {
           <span style="font-size:1.3rem;font-weight:bold;">${outcome}</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1.5rem;font-size:0.95rem;">
-          <div>Wagon Leader:</div><div style="text-align:right;"><strong>${leader}</strong></div>
-          <div>Profession:</div><div style="text-align:right;"><strong>${profession.charAt(0).toUpperCase() + profession.slice(1)}</strong></div>
+          <div>Wagon Leader:</div><div style="text-align:right;"><strong>${esc(leader)}</strong></div>
+          <div>Profession:</div><div style="text-align:right;"><strong>${esc(profession.charAt(0).toUpperCase() + profession.slice(1))}</strong></div>
           <div>Miles Traveled:</div><div style="text-align:right;"><strong>${miles.toLocaleString()}</strong></div>
           <div>Survivors:</div><div style="text-align:right;"><strong>${alive} of ${totalMembers}</strong></div>
           <div>Date:</div><div style="text-align:right;"><strong>${formattedDate}</strong></div>
