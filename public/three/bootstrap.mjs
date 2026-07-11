@@ -23,6 +23,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { toHex } from '../lib/palette.mjs';
 import * as textures from './textures.mjs';
 import { createTerrain, BIOMES } from './terrain.mjs';
 import { createSky } from './sky.mjs';
@@ -92,7 +93,7 @@ export function initThree(engine) {
 
   // ── Lighting: warm directional key + cool hemisphere fill. Colors and
   // intensities are driven per-frame by sky.applyTo(t); these are bind points.
-  const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x46603a, 0.5);
+  const hemi = new THREE.HemisphereLight(0xcfe8ff, toHex('hemiGround'), 0.5);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffedd0, 2.8);
   sun.position.set(9, 14, 5);
@@ -122,7 +123,7 @@ export function initThree(engine) {
   backstopTex.needsUpdate = true;
   const backstop = new THREE.Mesh(
     new THREE.CircleGeometry(1500, 48),
-    new THREE.MeshLambertMaterial({ color: 0xb9c4a0, map: backstopTex, fog: true }),
+    new THREE.MeshLambertMaterial({ color: toHex('backstopPrairie'), map: backstopTex, fog: true }),
   );
   backstop.rotation.x = -Math.PI / 2;
   backstop.position.y = -4;
@@ -648,6 +649,16 @@ export function initThree(engine) {
       for (let i = 0; i < steps; i++) {
         const tip = camp.fire.group.localToWorld(camp.fire.firePos.clone());
         vfx.embers(tip.x, tip.y, tip.z);
+        vfx.simulate(1, dt);
+      }
+    },
+    // Warm wagon trail dust for stills (live dust is gated on moving frames;
+    // freezeAt alone never emits). Mirrors emitCampEmbers for dry travel shots.
+    emitWagonDust(steps, dt = 1 / 60) {
+      for (let i = 0; i < steps; i++) {
+        const cy = caravan.position.y + 0.1;
+        vfx.wagonDust(caravan.position.x - 1.02, cy, 1.25);
+        vfx.wagonDust(caravan.position.x + 1.02, cy, 1.25);
         vfx.simulate(1, dt);
       }
     },

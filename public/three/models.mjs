@@ -10,14 +10,15 @@
 // freezeAt-style determinism holds: pose(phase) is a pure function.
 
 import * as THREE from 'three';
+import { toHex } from '../lib/palette.mjs';
 
-// PALETTE anchors from public/lib/draw.mjs, as hex.
+// PALETTE anchors from public/lib/palette.mjs (shared with 2D).
 const C = {
-  wood: 0x5a3a1f, woodLight: 0x8b5a2d, woodDark: 0x372312,
-  canvas: 0xf5e6c8, iron: 0x2b2620, rut: 0x583821,
-  oxBrown: 0x78552d, oxCream: 0xdcc39b, oxDark: 0x503719,
-  skin: 0xebc8a0, shirt: 0xf0e6d2, vest: 0x46321e, trousers: 0x644628,
-  hatFelt: 0x412d1e, bonnet: 0xf0e6c8, dressBlue: 0x506eaa,
+  wood: toHex('wood'), woodLight: toHex('woodLight'), woodDark: toHex('woodDark'),
+  canvas: toHex('canvas'), iron: 0x2b2620, rut: toHex('rut'),
+  oxBrown: toHex('oxBrown'), oxCream: toHex('oxCream'), oxDark: toHex('oxDark'),
+  skin: toHex('skin'), shirt: toHex('shirt'), vest: toHex('vest'), trousers: toHex('trousers'),
+  hatFelt: toHex('hatFelt'), bonnet: toHex('bonnet'), dressBlue: toHex('dressBlue'),
   lanternGlow: 0xffaa22,
 };
 
@@ -261,7 +262,7 @@ export function createOxTeam() {
   };
 }
 
-// ── Ox: capsule body, boxy head with horns, 4 legs with diagonal-pair gait ──
+// ── Ox: draft silhouette (hump, dewlap, long muzzle, thick horns, short legs) ──
 export function createOx({ tint = 0 } = {}) {
   const group = new THREE.Group();
   const bodyColor = new THREE.Color(C.oxBrown).offsetHSL(0, 0, tint * 0.04);
@@ -269,77 +270,109 @@ export function createOx({ tint = 0 } = {}) {
   const darkMat = std(C.oxDark, { roughness: 0.92 });
   const creamMat = addRim(std(C.oxCream, { roughness: 0.92 }), [0.5, 0.6, 0.8], 0.12);
 
-  const body = shadowed(new THREE.Mesh(new THREE.CapsuleGeometry(0.44, 0.92, 6, 12), bodyMat));
+  // Longer barrel, lower to ground — draft proportions not dairy sausage.
+  const body = shadowed(new THREE.Mesh(new THREE.CapsuleGeometry(0.48, 1.08, 6, 12), bodyMat));
   body.rotation.z = Math.PI / 2;
-  body.position.y = 0.95;
+  body.position.y = 0.88;
   group.add(body);
   // Shoulder hump — the silhouette cue that says draft ox, not generic cow.
-  const hump = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), bodyMat));
-  hump.scale.set(1.0, 0.85, 0.92);
-  hump.position.set(0.38, 1.22, 0);
+  const hump = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.40, 10, 8), bodyMat));
+  hump.scale.set(1.05, 0.95, 0.95);
+  hump.position.set(0.42, 1.22, 0);
   group.add(hump);
   // Cream belly patch
-  const belly = shadowed(new THREE.Mesh(new THREE.CapsuleGeometry(0.33, 0.78, 5, 10), creamMat));
+  const belly = shadowed(new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.88, 5, 10), creamMat));
   belly.rotation.z = Math.PI / 2;
-  belly.position.y = 0.76;
+  belly.position.y = 0.68;
   group.add(belly);
+  // Dewlap under neck — mass that reads at distance
+  const dewlap = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), bodyMat));
+  dewlap.scale.set(1.4, 0.7, 0.55);
+  dewlap.position.set(0.72, 0.72, 0);
+  group.add(dewlap);
 
   // Neck bridging shoulder to head — heads floating off bodies read broken.
-  const neck = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.26), bodyMat));
-  neck.position.set(0.68, 1.05, 0);
-  neck.rotation.z = -0.35;
+  const neck = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.34, 0.28), bodyMat));
+  neck.position.set(0.78, 0.98, 0);
+  neck.rotation.z = -0.38;
   group.add(neck);
 
-  // Head: box + muzzle + horns, lowered and tilted down — pulling posture.
+  // Head: longer muzzle, ear nubs, eye pits, cream blaze, thick curved horns.
   const head = new THREE.Group();
-  const skull = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.32, 0.28), bodyMat));
+  const skull = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.34, 0.30), bodyMat));
   head.add(skull);
-  const muzzle = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 0.22), creamMat));
-  muzzle.position.set(0.24, -0.07, 0);
+  const muzzle = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.24), creamMat));
+  muzzle.position.set(0.30, -0.08, 0);
   head.add(muzzle);
-  const hornMat = std(0xd8cfb8, { roughness: 0.6 });
+  // Face blaze (tint variants keep cream)
+  if (tint === 0) {
+    const blaze = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.08), creamMat));
+    blaze.position.set(0.06, 0.06, 0);
+    head.add(blaze);
+  }
+  // Eye pits
   for (const s of [-1, 1]) {
-    const horn = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.3, 8), hornMat));
-    horn.position.set(-0.04, 0.2, s * 0.19);
-    horn.rotation.z = s * -1.15;
-    horn.rotation.x = s * -0.35;
+    const eye = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), std(0x1a120c)));
+    eye.position.set(0.12, 0.06, s * 0.14);
+    head.add(eye);
+  }
+  // Ear nubs
+  for (const s of [-1, 1]) {
+    const ear = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), bodyMat));
+    ear.scale.set(0.6, 1.1, 0.5);
+    ear.position.set(-0.02, 0.14, s * 0.18);
+    ear.rotation.z = s * 0.4;
+    head.add(ear);
+  }
+  const hornMat = std(0xd8cfb8, { roughness: 0.55 });
+  for (const s of [-1, 1]) {
+    // Thick base → taper, outward-up curve (readable horns, not pin cones)
+    const horn = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.42, 8), hornMat));
+    horn.position.set(-0.02, 0.28, s * 0.16);
+    horn.rotation.z = s * -0.55;
+    horn.rotation.x = s * -0.55;
     head.add(horn);
   }
-  head.position.set(0.92, 0.98, 0);
-  head.rotation.z = -0.3;
+  head.position.set(1.05, 0.92, 0);
+  head.rotation.z = -0.32;
   group.add(head);
 
-  // Tail
-  const tail = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.6, 6), darkMat));
-  tail.position.set(-0.85, 0.85, 0);
-  tail.rotation.z = 0.35;
+  // Tail with tuft
+  const tail = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.65, 6), darkMat));
+  tail.position.set(-0.95, 0.78, 0);
+  tail.rotation.z = 0.4;
   group.add(tail);
+  const tuft = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), darkMat));
+  tuft.position.set(-1.18, 0.52, 0);
+  group.add(tuft);
 
-  // Legs: upper+lower segments with a hoof; diagonal pairs (FL+RR vs FR+RL).
+  // Legs: shorter, thicker draft legs; diagonal pairs (FL+RR vs FR+RL).
   const legs = [];
   for (const [x, z, pairPhase] of [
-    [0.45, 0.22, 0], [-0.5, -0.22, 0],          // FL + RR — in phase
-    [0.45, -0.22, Math.PI], [-0.5, 0.22, Math.PI], // FR + RL — opposite
+    [0.48, 0.24, 0], [-0.52, -0.24, 0],
+    [0.48, -0.24, Math.PI], [-0.52, 0.24, Math.PI],
   ]) {
     const leg = new THREE.Group();
-    const upper = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.42, 8), bodyMat));
-    upper.position.y = -0.21;
+    const upper = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.08, 0.36, 8), bodyMat));
+    upper.position.y = -0.18;
     leg.add(upper);
     const lower = new THREE.Group();
-    const shin = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.38, 8), darkMat));
-    shin.position.y = -0.19;
+    const shin = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.32, 8), darkMat));
+    shin.position.y = -0.16;
     lower.add(shin);
-    const hoof = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.09, 0.14), std(0x241a10)));
-    hoof.position.y = -0.4;
+    const hoof = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.15), std(0x241a10)));
+    hoof.position.y = -0.34;
     lower.add(hoof);
-    lower.position.y = -0.4;
+    lower.position.y = -0.34;
     leg.add(lower);
-    leg.position.set(x, 0.85, z);
+    leg.position.set(x, 0.78, z);
     group.add(leg);
     legs.push({ leg, lower, pairPhase });
   }
 
-  const STRIDE = 1.35;        // world-units per full gait cycle — plodding ox
+  group.add(createContactShadow(1.6, 0.7, 0.38));
+
+  const STRIDE = 1.35;
   const MAX_SWING = 0.38;
   let gaitDist = 0;
   function pose(dist) {
@@ -347,11 +380,10 @@ export function createOx({ tint = 0 } = {}) {
     for (const { leg, lower, pairPhase } of legs) {
       const swing = Math.sin(cycle + pairPhase) * MAX_SWING;
       leg.rotation.z = swing;
-      // Knee bends only on the back-swing (ground clearance), like a real gait.
       lower.rotation.z = Math.max(0, -swing) * 0.9;
     }
-    head.position.y = 0.98 + Math.sin(cycle * 2) * 0.025; // head bob, 2x leg rate
-    body.position.y = 0.95 + Math.abs(Math.sin(cycle)) * 0.02;
+    head.position.y = 0.92 + Math.sin(cycle * 2) * 0.025;
+    body.position.y = 0.88 + Math.abs(Math.sin(cycle)) * 0.02;
   }
 
   return {
@@ -362,7 +394,7 @@ export function createOx({ tint = 0 } = {}) {
   };
 }
 
-// ── Pioneer: simple biped walker with hat variants from draw.mjs ──
+// ── Pioneer: shoulders, neck, hat/skirt mass — not stick figure ──
 export function createPioneer({ hat = 'felt', dress = false } = {}) {
   const group = new THREE.Group();
   const shirtMat = addRim(std(C.shirt), [0.5, 0.6, 0.8], 0.12);
@@ -370,59 +402,98 @@ export function createPioneer({ hat = 'felt', dress = false } = {}) {
   const legMat = std(dress ? C.dressBlue : C.trousers);
   const skinMat = std(C.skin, { roughness: 0.7 });
 
-  const torso = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.2), vestMat));
-  torso.position.y = 1.15;
+  // Wider shoulders than hips
+  const torso = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 0.22), vestMat));
+  torso.position.y = 1.18;
   group.add(torso);
-  const chest = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.16, 0.22), shirtMat));
-  chest.position.y = 1.34;
+  const chest = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.16, 0.24), shirtMat));
+  chest.position.y = 1.38;
   group.add(chest);
+  // Neck stump
+  const neck = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.1, 8), skinMat));
+  neck.position.y = 1.50;
+  group.add(neck);
+
+  if (dress) {
+    // Skirt volume (not two sticks under torso)
+    const skirtMat = addRim(std(C.dressBlue, { side: THREE.DoubleSide }), [0.5, 0.6, 0.8], 0.12);
+    const skirt = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.55, 10, 1, true), skirtMat));
+    skirt.position.y = 0.78;
+    group.add(skirt);
+  }
 
   const headG = new THREE.Group();
-  const head = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), skinMat));
+  const head = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.135, 12, 10), skinMat));
   headG.add(head);
+  // Small nose for silhouette
+  const nose = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), skinMat));
+  nose.position.set(0.12, -0.02, 0);
+  headG.add(nose);
   if (hat === 'felt') {
-    const brim = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.025, 14), std(C.hatFelt)));
-    brim.position.y = 0.08;
+    const brim = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.028, 14), std(C.hatFelt)));
+    brim.position.y = 0.09;
     headG.add(brim);
-    const crown = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.14, 12), std(C.hatFelt)));
-    crown.position.y = 0.16;
+    const crown = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.18, 12), std(C.hatFelt)));
+    crown.position.y = 0.20;
     headG.add(crown);
   } else if (hat === 'straw') {
-    const brim = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.02, 14), std(0xdebe7a)));
-    brim.position.y = 0.07;
+    const brim = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.02, 14), std(0xdebe7a)));
+    brim.position.y = 0.08;
     headG.add(brim);
-    const crown = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), std(0xdebe7a)));
-    crown.position.y = 0.07;
+    const crown = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), std(0xdebe7a)));
+    crown.position.y = 0.08;
     headG.add(crown);
-  } else { // bonnet
-    const hood = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.6), std(C.bonnet)));
-    hood.position.y = 0.04;
-    hood.rotation.x = -0.4;
+  } else { // bonnet — side flares for thumbnail read
+    const hood = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.65), std(C.bonnet)));
+    hood.position.y = 0.05;
+    hood.rotation.x = -0.35;
     headG.add(hood);
+    for (const s of [-1, 1]) {
+      const wing = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), std(C.bonnet)));
+      wing.scale.set(0.5, 1.1, 0.7);
+      wing.position.set(0.02, 0.0, s * 0.14);
+      headG.add(wing);
+    }
   }
-  headG.position.y = 1.56;
+  headG.position.y = 1.62;
   group.add(headG);
 
   const limbs = [];
-  for (const [x, isArm] of [[-0.11, false], [0.11, false], [-0.22, true], [0.22, true]]) {
+  // arms
+  for (const x of [-0.26, 0.26]) {
     const limb = shadowed(new THREE.Mesh(
-      new THREE.CylinderGeometry(isArm ? 0.045 : 0.06, isArm ? 0.04 : 0.05, isArm ? 0.42 : 0.55, 8),
-      isArm ? shirtMat : legMat,
+      new THREE.CylinderGeometry(0.05, 0.045, 0.44, 8),
+      shirtMat,
     ));
-    limb.geometry.translate(0, isArm ? -0.21 : -0.275, 0); // pivot at shoulder/hip
-    limb.position.set(x, isArm ? 1.38 : 0.9, 0);
+    limb.geometry.translate(0, -0.22, 0);
+    limb.position.set(x, 1.40, 0);
     group.add(limb);
-    // legs swing opposite arms on the same side
-    limbs.push({ limb, phase: (x < 0 ? 0 : Math.PI) + (isArm ? Math.PI : 0) });
+    limbs.push({ limb, phase: (x < 0 ? 0 : Math.PI) + Math.PI, amp: 0.45 });
   }
+  // legs (or under-skirt stubs if dress)
+  if (!dress) {
+    for (const x of [-0.12, 0.12]) {
+      const limb = shadowed(new THREE.Mesh(
+        new THREE.CylinderGeometry(0.065, 0.055, 0.55, 8),
+        legMat,
+      ));
+      limb.geometry.translate(0, -0.275, 0);
+      limb.position.set(x, 0.92, 0);
+      group.add(limb);
+      limbs.push({ limb, phase: x < 0 ? 0 : Math.PI, amp: 0.55 });
+    }
+  }
+
+  group.add(createContactShadow(0.55, 0.35, 0.32));
 
   const STRIDE = 1.5;
   let gaitDist = 0;
   function pose(dist) {
     const cycle = (dist / STRIDE) * Math.PI * 2;
-    for (const { limb, phase } of limbs) limb.rotation.x = Math.sin(cycle + phase) * 0.5;
-    group.position.y = Math.abs(Math.sin(cycle)) * 0.03;
-    torso.rotation.y = Math.sin(cycle) * 0.05;
+    for (const { limb, phase, amp } of limbs) limb.rotation.x = Math.sin(cycle + phase) * amp;
+    group.position.y = Math.abs(Math.sin(cycle)) * 0.045;
+    torso.rotation.y = Math.sin(cycle) * 0.08;
+    headG.rotation.y = Math.sin(cycle) * 0.04;
   }
 
   return {

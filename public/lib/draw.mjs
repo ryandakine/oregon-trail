@@ -1,102 +1,9 @@
 // Oregon Trail — primitive draw helpers (v3)
 // Port of mockups/primitive-mockup.html. See IMPLEMENTATION_PLAN_v3.md § 2.
+// Colors live in palette.mjs (shared with three/*).
 
-export const PALETTE = {
-  // Sky
-  sky:         [109, 128, 250],
-  skyPale:     [168, 201, 255],
-  skyDawn:     [255, 190, 130],
-  skyDusk:     [200, 120, 100],
-  skyTwilight: [58, 64, 112],
-  skyNight:    [30, 30, 60],
-
-  // Hills / mountains
-  mountainFar: [120, 130, 160],
-  mountainMid: [130, 140, 170],
-  mountainDk:  [105, 120, 150],
-  hillMid:     [90, 138, 63],
-  hillNear:    [129, 178, 20],
-
-  // Grass
-  grassLight:  [168, 208, 86],
-  grassMid:    [129, 178, 20],
-  grassBorder: [58, 75, 32],
-
-  // Dirt
-  dirtLight:   [196, 154, 108],
-  dirtMid:     [139, 96, 51],
-  dirtDark:    [109, 69, 32],
-
-  // Wagon
-  wood:        [90, 58, 31],
-  woodLight:   [139, 90, 45],
-  woodDark:    [55, 35, 18],
-  canvas:      [245, 230, 200],
-  canvasMid:   [232, 201, 154],
-  canvasShadow:[200, 175, 130],
-
-  // Oxen
-  oxBrown:     [120, 85, 45],
-  oxCream:     [220, 195, 155],
-  oxDark:      [80, 55, 25],
-
-  // Pioneers
-  skin:        [235, 200, 160],
-  shirt:       [240, 230, 210],
-  vest:        [70, 50, 30],
-  trousers:    [100, 70, 40],
-  bonnet:      [240, 230, 200],
-  dressBlue:   [80, 110, 170],
-  hatFelt:     [65, 45, 30],
-
-  // Shared
-  outline:     [58, 42, 26],
-  outlineLight:[95, 72, 48],
-  cloud:       [250, 248, 240],
-  cloudShadow: [215, 215, 225],
-  black:       [30, 20, 10],
-
-  // Sky detail (gfx pass)
-  sunCore:     [255, 238, 175],
-  sunGlow:     [255, 215, 130],
-  moon:        [226, 228, 216],
-  moonShade:   [60, 64, 96],
-  skyNightHorizon:    [42, 42, 74],
-  skyTwilightHorizon: [58, 50, 80],
-  sicklyHorizon:      [197, 208, 122],
-
-  // Terrain detail (gfx pass)
-  mountainHaze: [152, 160, 188],
-  mountainShade:[84, 96, 128],
-  snow:         [238, 242, 248],
-  grassDeep:    [108, 156, 44],
-  flowerGold:   [236, 204, 92],
-  flowerCream:  [246, 240, 222],
-  scrubDead:    [126, 106, 70],
-  rut:          [88, 56, 28],
-  stone:        [150, 142, 132],
-  stoneLight:   [186, 178, 168],
-  dust:         [205, 180, 140],
-  birdDark:     [72, 62, 50],
-  straw:        [222, 190, 122],
-  silhouetteFar:  [32, 38, 62],
-  silhouetteNear: [22, 28, 48],
-
-  // UI
-  parchment:   [245, 230, 200],
-  parchmentDark: [42, 31, 14],
-  parchmentShadow: [200, 175, 130],
-  gold:        [212, 160, 23],
-  goldBright:  [255, 205, 60],
-  dropShadow:  [30, 25, 15],
-
-  // Health
-  hpGreen:     [90, 138, 63],
-  hpYellow:    [215, 165, 30],
-  hpOrange:    [230, 140, 60],
-  hpRed:       [178, 34, 34],
-  hpDead:      [60, 60, 60],
-};
+export { PALETTE, toHex, cssHex, toLinear01, rgbToHex } from "./palette.mjs";
+import { PALETTE } from "./palette.mjs";
 
 export const ellipseRect = (k, w, h) => k.rect(w, h, { radius: Math.min(w, h) / 2 });
 
@@ -466,42 +373,49 @@ export function drawWagon(k, cx, cy, opts = {}) {
 }
 
 export function drawOx(k, cx, cy, opts = {}) {
-  // Bigger, better-proportioned ox built under one parent (1 root GameObj).
-  // opts.animate: 2-frame diagonal leg walk + subtle head bob; toggle at
-  // runtime via parent.walking (defaults true when animated).
+  // Draft ox silhouette: hump, dewlap, long muzzle, thick horns, short legs.
+  // opts.animate: 2-frame diagonal leg walk + subtle head bob.
   const p = k.add([k.pos(cx, cy)]);
 
-  // Legs (kept as refs for the walk cycle), with darker hooves.
-  const LEG_Y = 8;
-  const legs = [-19, -10, 8, 16].map((lx) => {
+  // Legs — thicker, shorter draft proportions (kept as refs for walk cycle).
+  const LEG_Y = 10;
+  const legs = [-20, -11, 9, 18].map((lx) => {
     const leg = p.add([k.pos(lx, LEG_Y)]);
-    leg.add([k.rect(5, 13), k.pos(0, 0), k.color(...PALETTE.oxBrown), k.outline(1, k.rgb(...PALETTE.outline))]);
-    leg.add([k.rect(5, 3),  k.pos(0, 11), k.color(...PALETTE.outline)]);
+    leg.add([k.rect(6, 11), k.pos(0, 0), k.color(...PALETTE.oxBrown), k.outline(1, k.rgb(...PALETTE.outline))]);
+    leg.add([k.rect(6, 3),  k.pos(0, 9), k.color(...PALETTE.outline)]);
     return leg;
   });
 
-  // Tail (behind body).
-  p.add([k.rect(2, 13), k.pos(25, -8), k.color(...PALETTE.oxDark), k.rotate(8)]);
-  p.add([k.circle(2.5), k.pos(27, 5), k.color(...PALETTE.outline), k.anchor("center")]);
+  // Tail + tuft
+  p.add([k.rect(2, 12), k.pos(26, -6), k.color(...PALETTE.oxDark), k.rotate(10)]);
+  p.add([k.circle(3), k.pos(29, 6), k.color(...PALETTE.outline), k.anchor("center")]);
 
-  // Body — outline, fill, shoulder hump, cream patch, belly shade.
-  p.add([k.rect(52, 28, { radius: 5 }), k.pos(-26, -17), k.color(...PALETTE.outline)]);
-  p.add([k.circle(11), k.pos(-15, -14), k.color(...PALETTE.outline), k.anchor("center")]);
-  p.add([k.rect(48, 24, { radius: 4 }), k.pos(-24, -15), k.color(...PALETTE.oxBrown)]);
-  p.add([k.circle(9),  k.pos(-15, -14), k.color(...PALETTE.oxBrown), k.anchor("center")]);
-  p.add([ellipseRect(k, 22, 13), k.pos(8, -3), k.color(...PALETTE.oxCream), k.anchor("center"), k.opacity(0.85)]);
-  p.add([k.rect(44, 5), k.pos(-22, 3), k.color(...PALETTE.oxDark), k.opacity(0.3)]);
+  // Body — longer barrel, shoulder hump, cream belly, dewlap.
+  p.add([k.rect(56, 26, { radius: 5 }), k.pos(-28, -14), k.color(...PALETTE.outline)]);
+  p.add([k.rect(52, 22, { radius: 4 }), k.pos(-26, -12), k.color(...PALETTE.oxBrown)]);
+  // Hump
+  p.add([k.circle(12), k.pos(-12, -18), k.color(...PALETTE.outline), k.anchor("center")]);
+  p.add([k.circle(10), k.pos(-12, -18), k.color(...PALETTE.oxBrown), k.anchor("center")]);
+  // Cream belly
+  p.add([ellipseRect(k, 24, 12), k.pos(6, -2), k.color(...PALETTE.oxCream), k.anchor("center"), k.opacity(0.9)]);
+  // Dewlap
+  p.add([ellipseRect(k, 10, 7), k.pos(-28, 2), k.color(...PALETTE.oxBrown), k.anchor("center")]);
+  p.add([k.rect(48, 4), k.pos(-24, 4), k.color(...PALETTE.oxDark), k.opacity(0.28)]);
 
-  // Head — lowered as if pulling; ref kept for the bob. Horns poke up so
-  // they stay visible above the yoke beam.
-  const HEAD_Y = -6;
-  const hd = p.add([k.pos(-30, HEAD_Y)]);
-  hd.add([k.polygon([k.vec2(-1, 1), k.vec2(-8, -8), k.vec2(-4, -9), k.vec2(3, 0)]), k.pos(-4, -8), k.color(...PALETTE.canvasMid)]);
-  hd.add([k.polygon([k.vec2(-3, 0), k.vec2(4, -9),  k.vec2(8, -8),  k.vec2(1, 1)]), k.pos(4, -8),  k.color(...PALETTE.canvasMid)]);
-  hd.add([k.circle(11),  k.pos(0, 0), k.color(...PALETTE.outline), k.anchor("center")]);
-  hd.add([k.circle(9.5), k.pos(0, 0), k.color(...PALETTE.oxBrown), k.anchor("center")]);
-  hd.add([ellipseRect(k, 11, 8), k.pos(-3, 5), k.color(...PALETTE.oxCream), k.anchor("center"), k.opacity(0.9)]);
-  hd.add([k.circle(1.4), k.pos(-2, -3), k.color(...PALETTE.black), k.anchor("center")]);
+  // Head — lowered pulling posture; thick horns, cream muzzle, eye.
+  const HEAD_Y = -4;
+  const hd = p.add([k.pos(-34, HEAD_Y)]);
+  // Horns (thick, outward-up)
+  hd.add([k.polygon([k.vec2(0, 0), k.vec2(-10, -12), k.vec2(-5, -13), k.vec2(3, -1)]), k.pos(-5, -9), k.color(...PALETTE.canvasMid)]);
+  hd.add([k.polygon([k.vec2(0, 0), k.vec2(5, -13), k.vec2(10, -12), k.vec2(3, -1)]), k.pos(5, -9), k.color(...PALETTE.canvasMid)]);
+  hd.add([k.circle(12), k.pos(0, 0), k.color(...PALETTE.outline), k.anchor("center")]);
+  hd.add([k.circle(10.5), k.pos(0, 0), k.color(...PALETTE.oxBrown), k.anchor("center")]);
+  // Long cream muzzle
+  hd.add([ellipseRect(k, 14, 9), k.pos(-5, 6), k.color(...PALETTE.oxCream), k.anchor("center")]);
+  // Eye pit
+  hd.add([k.circle(1.6), k.pos(-1, -3), k.color(...PALETTE.black), k.anchor("center")]);
+  // Ear nubs
+  hd.add([k.circle(2.5), k.pos(6, -6), k.color(...PALETTE.oxDark), k.anchor("center")]);
 
   if (opts.animate) {
     p.walking = true;
@@ -520,43 +434,58 @@ export function drawPioneer(k, cx, cy, opts = {}) {
   const hat     = opts.hat  ?? "felt";
   const bodyCol = opts.body ?? PALETTE.vest;
   const legCol  = opts.legs ?? PALETTE.trousers;
-  const phase   = opts.phase ?? Math.random() * Math.PI * 2;
+  const phase   = opts.phase ?? 0;
+  const dress   = opts.dress || (legCol === PALETTE.dressBlue && bodyCol === PALETTE.dressBlue);
 
   const p = k.add([k.pos(cx, cy)]);
-  p.add([k.rect(14, 26), k.pos(-7, -22), k.color(...PALETTE.outline)]);
-  p.add([k.rect(12, 14), k.pos(-6, -20), k.color(...bodyCol)]);
-  p.add([k.rect(12, 3),  k.pos(-6, -18), k.color(...PALETTE.shirt)]);
-  p.add([k.circle(5.5),  k.pos(0, -26),  k.color(...PALETTE.outline), k.anchor("center")]);
-  p.add([k.circle(4.5),  k.pos(0, -26),  k.color(...PALETTE.skin),    k.anchor("center")]);
+  // Wider torso (shoulders > hips)
+  p.add([k.rect(16, 24), k.pos(-8, -22), k.color(...PALETTE.outline)]);
+  p.add([k.rect(14, 14), k.pos(-7, -20), k.color(...bodyCol)]);
+  p.add([k.rect(14, 3),  k.pos(-7, -18), k.color(...PALETTE.shirt)]);
+  // Neck
+  p.add([k.rect(4, 3), k.pos(-2, -25), k.color(...PALETTE.skin)]);
+  p.add([k.circle(5.8),  k.pos(0, -28),  k.color(...PALETTE.outline), k.anchor("center")]);
+  p.add([k.circle(4.8),  k.pos(0, -28),  k.color(...PALETTE.skin),    k.anchor("center")]);
   if (hat === "felt") {
-    p.add([k.rect(16, 2), k.pos(-8, -32), k.color(...PALETTE.outline)]);
-    p.add([k.rect(14, 2), k.pos(-7, -31), k.color(...PALETTE.hatFelt)]);
-    p.add([k.rect(9, 5),  k.pos(-4.5, -35), k.color(...PALETTE.hatFelt), k.outline(1, k.rgb(...PALETTE.outline))]);
+    p.add([k.rect(18, 2), k.pos(-9, -34), k.color(...PALETTE.outline)]);
+    p.add([k.rect(16, 2), k.pos(-8, -33), k.color(...PALETTE.hatFelt)]);
+    p.add([k.rect(10, 7), k.pos(-5, -39), k.color(...PALETTE.hatFelt), k.outline(1, k.rgb(...PALETTE.outline))]);
   } else if (hat === "straw") {
-    p.add([ellipseRect(k, 18, 4), k.pos(0, -31), k.color(...PALETTE.outline), k.anchor("center")]);
-    p.add([ellipseRect(k, 16, 3), k.pos(0, -31), k.color(...PALETTE.straw),   k.anchor("center")]);
-    p.add([k.rect(8, 4), k.pos(-4, -36), k.color(...PALETTE.straw), k.outline(1, k.rgb(...PALETTE.outline))]);
+    p.add([ellipseRect(k, 18, 4), k.pos(0, -33), k.color(...PALETTE.outline), k.anchor("center")]);
+    p.add([ellipseRect(k, 16, 3), k.pos(0, -33), k.color(...PALETTE.straw),   k.anchor("center")]);
+    p.add([k.rect(8, 4), k.pos(-4, -38), k.color(...PALETTE.straw), k.outline(1, k.rgb(...PALETTE.outline))]);
   } else {
-    p.add([ellipseRect(k, 9, 6),   k.pos(0, -31), k.color(...PALETTE.outline), k.anchor("center")]);
-    p.add([ellipseRect(k, 7.5, 5), k.pos(0, -31), k.color(...PALETTE.bonnet),  k.anchor("center")]);
-    p.add([k.rect(5, 3), k.pos(-2.5, -29), k.color(...PALETTE.bonnet)]);
+    // Bonnet with side flares
+    p.add([ellipseRect(k, 12, 7), k.pos(0, -32), k.color(...PALETTE.outline), k.anchor("center")]);
+    p.add([ellipseRect(k, 10, 6), k.pos(0, -32), k.color(...PALETTE.bonnet),  k.anchor("center")]);
+    p.add([ellipseRect(k, 5, 6), k.pos(-7, -30), k.color(...PALETTE.bonnet), k.anchor("center")]);
+    p.add([ellipseRect(k, 5, 6), k.pos(7, -30), k.color(...PALETTE.bonnet), k.anchor("center")]);
   }
-  const legL = p.add([k.rect(5, 8), k.pos(-6, -6), k.color(...legCol)]);
-  const legR = p.add([k.rect(5, 8), k.pos( 1, -6), k.color(...legCol)]);
+
+  let legL, legR;
+  if (dress) {
+    // Skirt triangle mass
+    p.add([k.polygon([k.vec2(-10, -8), k.vec2(10, -8), k.vec2(12, 6), k.vec2(-12, 6)]), k.pos(0, 0), k.color(...bodyCol)]);
+    legL = p.add([k.rect(1, 1), k.pos(0, 0)]); // dummy for animate
+    legR = p.add([k.rect(1, 1), k.pos(0, 0)]);
+  } else {
+    legL = p.add([k.rect(5, 9), k.pos(-7, -6), k.color(...legCol)]);
+    legR = p.add([k.rect(5, 9), k.pos(2, -6), k.color(...legCol)]);
+  }
 
   p.baseY = cy;
   p.phase = phase;
 
-  // opts.animate: internal walking bob + alternating leg lift. Static call
-  // sites are unchanged (default false); toggle at runtime via p.walking.
   if (opts.animate) {
     p.walking = true;
     p.onUpdate(() => {
       if (!p.walking) return;
       const t = k.time() * 5 + p.phase;
-      p.pos.y = p.baseY + Math.sin(t) * 1.5;
-      legL.pos.y = -6 + (Math.sin(t) > 0 ? -1.5 : 0);
-      legR.pos.y = -6 + (Math.sin(t) <= 0 ? -1.5 : 0);
+      p.pos.y = p.baseY + Math.sin(t) * 2.0;
+      if (!dress) {
+        legL.pos.y = -6 + (Math.sin(t) > 0 ? -1.8 : 0);
+        legR.pos.y = -6 + (Math.sin(t) <= 0 ? -1.8 : 0);
+      }
     });
   }
   return p;

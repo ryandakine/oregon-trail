@@ -3,9 +3,7 @@
 // Zero external assets. Every surface is painted on an HTMLCanvasElement and
 // converted to a THREE.CanvasTexture. The approach is ported from the
 // world-of-claudecraft reference (makeCanvas / drawWrapped / heightToNormal)
-// but hues are shifted toward the draw.mjs PALETTE:
-//   grassMid [129,178,20]  dirtMid [139,96,51]  canvas [245,230,200]
-//   sky [109,128,250]  wood [90,58,31]  stone [150,142,132]
+// Hues from public/lib/palette.mjs (dry prairie grass, not golf neon).
 //
 // ALL randomness is deterministic (LCG seeded from a module-level constant).
 // The seed is RESET before every builder so calls are order-independent and
@@ -17,6 +15,7 @@
 // time.
 
 import * as THREE from 'three';
+import { cssHex } from '../lib/palette.mjs';
 
 // ---------------------------------------------------------------------------
 // Seeded LCG — identical to the world-of-claudecraft reference.
@@ -138,35 +137,36 @@ let _plankCache = null;
 let _canvasClothCache = null;
 let _barkCache = null;
 
-// Grass — prairie greens keyed to PALETTE.grassMid [129,178,20] / grassLight
-// [168,208,86].  Mid-gray albedo carries vertex tint; blades + blob patches
-// add micro-relief.  Normal strength 1.6 (gentle undulation).
+// Grass — dry wheat albedo (palette.grassMid / dryTip). Vertex tint is mild;
+// this map carries the prairie look (WS1 albedo-first lock).
 export function grassMaps() {
   if (_grassCache) return _grassCache;
   seedReset(1);
   const S = 256;
 
   const albedo = makeRawCanvas(S, (ctx, s) => {
-    // Base: warm mid-green desaturated toward diffuse-friendly gray-green
-    ctx.fillStyle = '#6e8c2e';
+    // Base: dry prairie mid (#7a8f3a family)
+    ctx.fillStyle = cssHex('grassMid');
     ctx.fillRect(0, 0, s, s);
-    // Blob patches: lighter/darker grass clumps
+    // Blob patches: ochre / deeper tufts
     for (let i = 0; i < 900; i++) {
       const x = rnd() * s, y = rnd() * s, r = 4 + rnd() * 9;
-      // greenish mid-tone blobs, warm-prairie shifted (more yellow-green than olive)
-      const gr = Math.round(100 + rnd() * 110);
+      const warm = rnd() > 0.45;
+      const gr = Math.round(warm ? 120 + rnd() * 60 : 90 + rnd() * 50);
+      const rr = Math.round(gr * (warm ? 0.92 : 0.72));
+      const bb = Math.round(gr * (warm ? 0.35 : 0.22));
       drawWrapped(ctx, s, (ox, oy) => {
-        ctx.fillStyle = `rgba(${Math.round(gr * 0.68)},${gr},${Math.round(gr * 0.12)},0.28)`;
+        ctx.fillStyle = `rgba(${rr},${gr},${bb},0.28)`;
         ctx.beginPath();
         ctx.ellipse(x + ox, y + oy, r, r * 0.7, rnd() * Math.PI, 0, Math.PI * 2);
         ctx.fill();
       });
     }
-    // Grass blades — fine strokes, prairie gold-green
+    // Grass blades — fine strokes, wheat gold-green
     for (let i = 0; i < 3200; i++) {
       const x = rnd() * s, y = rnd() * s;
-      const gr = Math.round(80 + rnd() * 120);
-      ctx.strokeStyle = `rgba(${Math.round(gr * 0.70)},${gr},${Math.round(gr * 0.10)},0.50)`;
+      const gr = Math.round(90 + rnd() * 90);
+      ctx.strokeStyle = `rgba(${Math.round(gr * 0.85)},${gr},${Math.round(gr * 0.28)},0.48)`;
       ctx.lineWidth = 1 + rnd() * 0.8;
       ctx.beginPath();
       ctx.moveTo(x, y);
@@ -842,10 +842,11 @@ export function grassTuftTexture(blades = 18) {
     // wide: canvas2D stores premultiplied alpha, so thin/translucent strokes
     // leave mostly low-alpha edge texels whose RGB samples near-black in WebGL
     // — the tufts rendered as black spikes until this was fixed.
-    const gr = Math.round(125 + rnd() * 60);
+    // Dry prairie: more yellow/ochre tips, darker olive roots (not neon)
+    const gr = Math.round(110 + rnd() * 55);
     const grad = ctx.createLinearGradient(x, 64, x + sway, 64 - h);
-    grad.addColorStop(0, `rgb(${Math.round(gr * 0.55)},${Math.round(gr * 0.72)},${Math.round(gr * 0.14)})`);
-    grad.addColorStop(1, `rgb(${Math.round(gr * 0.78)},${gr},${Math.round(gr * 0.22)})`);
+    grad.addColorStop(0, `rgb(${Math.round(gr * 0.62)},${Math.round(gr * 0.68)},${Math.round(gr * 0.22)})`);
+    grad.addColorStop(1, `rgb(${Math.round(gr * 0.92)},${gr},${Math.round(gr * 0.38)})`);
     ctx.strokeStyle = grad;
     ctx.lineWidth = 2.6 + rnd() * 1.4;
     ctx.beginPath();

@@ -15,6 +15,7 @@
 //   motion model (§3.1 of THREEJS_REBUILD_PLAN.md).
 
 import * as THREE from 'three';
+import { toHex } from '../lib/palette.mjs';
 
 // ---------------------------------------------------------------------------
 // Seeded PRNG (LCG, identical to the mulberry32 variant used in draw.mjs)
@@ -129,30 +130,18 @@ function roadDistance(x, absZ) {
 }
 
 // ---------------------------------------------------------------------------
-// Palette — harmonised with draw.mjs PALETTE block.
-// Using sRGB hex floats that map to the named colours.
+// Palette — from public/lib/palette.mjs (single source with 2D).
+// Albedo drives prairie color; grassTint is mild variation only (WS1 lock).
 // ---------------------------------------------------------------------------
 
-// Reference palette values from draw.mjs (normalised 0-1):
-//   grassMid    [129,178,20]   → 0x81B214
-//   dirtMid     [139,96,51]    → 0x8B6033
-//   dirtLight   [196,154,108]  → 0xC49A6C
-//   dirtDark    [109,69,32]    → 0x6D4520
-//   grassBorder [58,75,32]     → 0x3A4B20
-//   hillMid     [90,138,63]    → 0x5A8A3F
-//   stone       [150,142,132]  → 0x968E84
-//   stoneLight  [186,178,168]  → 0xBAB2A8
-//   canvas      [245,230,200]  → 0xF5E6C8
-//   sky         [109,128,250]  → 0x6D80FA
-
-const C_GRASS      = new THREE.Color(0x81b214);
-const C_GRASS_DARK = new THREE.Color(0x5a8a3f);
-const C_GRASS_YLW  = new THREE.Color(0x7a9630); // grassBorder-toned yellow-green
-const C_DIRT       = new THREE.Color(0x8b6033);
-const C_DIRT_DARK  = new THREE.Color(0x6d4520);
-const C_ROCK       = new THREE.Color(0x968e84);
-const C_ROCK_LIGHT = new THREE.Color(0xbab2a8);
-const C_SAND_BED   = new THREE.Color(0xc49a6c); // dirtLight — riverbed/shore
+const C_GRASS      = new THREE.Color(toHex('grassMid'));
+const C_GRASS_DARK = new THREE.Color(toHex('grassDeep'));
+const C_GRASS_YLW  = new THREE.Color(toHex('dryTip'));
+const C_DIRT       = new THREE.Color(toHex('dirtMid'));
+const C_DIRT_DARK  = new THREE.Color(toHex('dirtDark'));
+const C_ROCK       = new THREE.Color(toHex('stone'));
+const C_ROCK_LIGHT = new THREE.Color(toHex('stoneLight'));
+const C_SAND_BED   = new THREE.Color(toHex('dirtLight'));
 
 // Biome grass tint colour objects (created once, lerped into per-vertex)
 const C_TMP  = new THREE.Color();
@@ -164,13 +153,14 @@ const C_TMP  = new THREE.Color();
 export const BIOMES = {
   prairie: {
     key: 'prairie',
-    grassTint: new THREE.Color(0x81b214),  // grassMid
+    // Mild tint — albedo map carries dry wheat green (not neon multiply)
+    grassTint: new THREE.Color(toHex('grassTintMild')),
     hillAmp: 1.0,
     rockiness: 0.0,
   },
   mountains: {
     key: 'mountains',
-    grassTint: new THREE.Color(0x5a8a3f),  // hillMid — cooler, darker
+    grassTint: new THREE.Color(toHex('hillMid')),
     hillAmp: 2.4,
     rockiness: 0.85,
   },
@@ -457,7 +447,7 @@ function buildSplatMaterial(textures) {
   const hasNormals = !!(grassMaps?.normalMap && dirtMaps?.normalMap && rockMaps?.normalMap);
   const grassAlbExpr = grassMaps
     ? 'mix(texture2D(uGrass, tuv).rgb, texture2D(uGrass, tuv * 0.31).rgb, 0.42)'
-    : 'vec3(0.506, 0.698, 0.078)'; // grassMid normalised
+    : 'vec3(0.478, 0.561, 0.227)'; // grassMid dry prairie (#7a8f3a)
   const dirtAlbExpr = dirtMaps
     ? 'texture2D(uDirt, tuv * 0.8).rgb'
     : 'vec3(0.545, 0.376, 0.200)'; // dirtMid normalised

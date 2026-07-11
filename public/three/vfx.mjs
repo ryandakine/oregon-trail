@@ -17,6 +17,7 @@
 // embers accept world-space coords provided by the integrator.
 
 import * as THREE from 'three';
+import { toSRGB01 } from '../lib/palette.mjs';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -462,7 +463,8 @@ export function createVfx() {
       const vy =  1.2 + rng() * 1.6;
       const vz = (rng() - 0.5) * 1.0;
       const br = 0.65 + rng() * 0.25;
-      _c.setRGB(br * 0.80, br * 0.70, br * 0.52);
+      const [dr, dg, db] = toSRGB01('dust');
+      _c.setRGB(br * dr, br * dg, br * db);
       _spawn(x + (rng() - 0.5) * 0.4, y + 0.05, z + (rng() - 0.5) * 0.4,
         vx, vy, vz, _c, 0.22 + rng() * 0.18, 1.2 + rng() * 0.8, 0.35, SPR.smoke,
         rng() * Math.PI * 2);

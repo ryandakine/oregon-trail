@@ -24,6 +24,7 @@
 //   sicklyHorizon       [197,208,122] 0xc5d07a  (not used but noted)
 
 import * as THREE from 'three';
+import { PALETTE } from '../lib/palette.mjs';
 
 // ─── Seeded LCG ─────────────────────────────────────────────────────────────
 // Lehmer / Park-Miller LCG.  All procedural randomness routes through here so
@@ -41,11 +42,17 @@ function lcgCreate(seed) {
 // ─── Palette helpers ─────────────────────────────────────────────────────────
 
 function rgb(r, g, b) {
-  // Palette values are sRGB bytes (from draw.mjs); three.js lights/shaders work
+  // Palette values are sRGB bytes (from palette.mjs); three.js lights/shaders work
   // in LINEAR space. Passing sRGB bytes through raw systematically over-brightens
   // and desaturates the whole sky/fog/light pipeline (ACES then renders it as a
   // pastel wash — verified by probing uZenith at runtime).
   return new THREE.Color(r / 255, g / 255, b / 255).convertSRGBToLinear();
+}
+
+/** Named key from palette.mjs → linear THREE.Color */
+function prgb(key) {
+  const c = PALETTE[key];
+  return rgb(c[0], c[1], c[2]);
 }
 
 function lerpColor(out, a, b, t) {
@@ -75,8 +82,8 @@ const KEYS = [
   // t=0.00  midnight
   {
     t: 0.00,
-    zenith:        rgb(30, 30, 60),      // skyNight
-    horizon:       rgb(42, 42, 74),      // skyNightHorizon
+    zenith:        prgb('skyNight'),
+    horizon:       prgb('skyNightHorizon'),
     sunColor:      rgb(100, 110, 180),   // cool blue moonlight
     sunIntensity:  0.12,
     hemiSky:       rgb(40, 50, 90),
@@ -88,8 +95,8 @@ const KEYS = [
   // t=0.20  pre-dawn twilight
   {
     t: 0.20,
-    zenith:        rgb(58, 64, 112),     // skyTwilight
-    horizon:       rgb(58, 50, 80),      // skyTwilightHorizon
+    zenith:        prgb('skyTwilight'),
+    horizon:       prgb('skyTwilightHorizon'),
     sunColor:      rgb(180, 140, 100),
     sunIntensity:  0.30,
     hemiSky:       rgb(80, 85, 130),
@@ -101,12 +108,12 @@ const KEYS = [
   // t=0.25  dawn
   {
     t: 0.25,
-    zenith:        rgb(109, 128, 250),   // sky (pale blue starting to come in)
-    horizon:       rgb(255, 190, 130),   // skyDawn (warm peach)
-    sunColor:      rgb(255, 215, 130),   // sunGlow
+    zenith:        prgb('sky'),
+    horizon:       prgb('skyDawn'),
+    sunColor:      prgb('sunGlow'),
     sunIntensity:  1.40,
-    hemiSky:       rgb(168, 195, 255),   // skyPale
-    hemiGround:    rgb(80, 95, 55),
+    hemiSky:       prgb('skyPale'),
+    hemiGround:    prgb('hemiGround'),
     hemiIntensity: 0.30,
     fogColor:      rgb(220, 185, 150),
     ambientBoost:  0.10,
@@ -114,12 +121,12 @@ const KEYS = [
   // t=0.38  morning (between dawn and noon)
   {
     t: 0.38,
-    zenith:        rgb(109, 128, 250),   // sky
+    zenith:        prgb('sky'),
     horizon:       rgb(138, 172, 242),   // skyPale deepened — pure skyPale washes white under ACES
-    sunColor:      rgb(255, 238, 175),   // sunCore warm white
+    sunColor:      prgb('sunCore'),
     sunIntensity:  2.60,
-    hemiSky:       rgb(207, 232, 255),   // bootstrap value 0xcfe8ff
-    hemiGround:    rgb(70, 96, 58),      // bootstrap value 0x46603a
+    hemiSky:       rgb(207, 232, 255),
+    hemiGround:    prgb('hemiGround'),
     hemiIntensity: 0.50,
     fogColor:      rgb(184, 212, 232),
     ambientBoost:  0.15,
@@ -128,11 +135,11 @@ const KEYS = [
   {
     t: 0.50,
     zenith:        rgb(85, 110, 240),    // slightly deeper blue at zenith
-    horizon:       rgb(168, 201, 255),   // skyPale
-    sunColor:      rgb(255, 238, 175),   // sunCore
+    horizon:       prgb('skyPale'),
+    sunColor:      prgb('sunCore'),
     sunIntensity:  3.00,
     hemiSky:       rgb(207, 232, 255),
-    hemiGround:    rgb(70, 96, 58),
+    hemiGround:    prgb('hemiGround'),
     hemiIntensity: 0.55,
     fogColor:      rgb(190, 215, 235),
     ambientBoost:  0.18,
@@ -153,8 +160,8 @@ const KEYS = [
   // t=0.75  dusk
   {
     t: 0.75,
-    zenith:        rgb(58, 64, 112),     // skyTwilight
-    horizon:       rgb(200, 120, 100),   // skyDusk
+    zenith:        prgb('skyTwilight'),
+    horizon:       prgb('skyDusk'),
     sunColor:      rgb(220, 100, 60),    // fiery dusk
     sunIntensity:  1.20,
     hemiSky:       rgb(140, 110, 160),

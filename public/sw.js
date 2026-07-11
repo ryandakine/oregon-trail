@@ -1,4 +1,4 @@
-const CACHE_NAME = 'oregon-trail-kaplay-v5-three';
+const CACHE_NAME = 'oregon-trail-kaplay-v6-palette';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -30,9 +30,11 @@ const STATIC_ASSETS = [
   '/scenes/share.js',
 ];
 const OPTIONAL_ASSETS = [
+  '/lib/palette.mjs', // draw.mjs re-exports; must load before draw offline
   '/lib/draw.mjs',
   '/lib/hud.mjs',
   '/lib/tone.mjs',
+  '/assets/title-hero.png', // WS4 title still; allSettled if missing
   // Three.js bundle (/three/bootstrap.mjs + /vendor/three/*) is intentionally
   // NOT pre-cached here. The fetch handler below lazy-caches any same-origin
   // 200 at runtime, so desktop sessions cache Three on first 3D init and phones

@@ -101,6 +101,10 @@ for (const shot of SHOTS) {
       // rate-gated, so a single freeze frame would show no embers).
       t.emitCampEmbers(140, 1 / 60);
     }
+    if (s === 'travel') {
+      // freezeAt alone never emits wheel dust (only the moving RAF loop does).
+      t.emitWagonDust(80, 1 / 60);
+    }
     return t.freezeAt(0);
   }, { s: shot, weatherMap: WEATHER });
   await page.waitForTimeout(120); // composer output flush

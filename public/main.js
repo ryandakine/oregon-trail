@@ -49,6 +49,15 @@ try {
   console.warn("plex font failed to load; falling back to built-in font:", err?.message);
 }
 
+// Title hero still (WS4) — optional; title scene falls back to night poster if 404.
+// Non-blocking: never hold boot / scene registration on this asset.
+window.__titleHeroReady = false;
+k.loadSprite("titleHero", "/assets/title-hero.png")
+  .then(() => { window.__titleHeroReady = true; })
+  .catch((err) => {
+    console.warn("title-hero.png missing; using night fallback:", err?.message);
+  });
+
 window.k = k;
 
 // A11y: describe the canvas for assistive tech since its content is dynamic.

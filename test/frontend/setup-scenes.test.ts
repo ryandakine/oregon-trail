@@ -37,9 +37,9 @@ describe("setup-phase scenes", () => {
     const s = await h.readStats();
     expect(s.pageErrors).toEqual([]);
     expect(s.kaplayErrors).toEqual([]);
-    // Title is the densest pre-run scene — stars, hills, wagon, weekly
-    // challenge banner. Threshold cribbed from visual-qa.mjs observations.
-    expect(s.total).toBeGreaterThanOrEqual(50);
+    // Hero still path is sparse (sprite + UI); night fallback is denser.
+    // Either way brand + CTAs must mount.
+    expect(s.total).toBeGreaterThanOrEqual(15);
   });
 
   it("T-title-2: title with saved run shows resume option without errors", async () => {
@@ -100,6 +100,29 @@ describe("setup-phase scenes", () => {
     });
     expect(toggleText).toContain("3D World");
     expect(toggleText).toContain("Off");
+  });
+
+  it("T-title-5: title night fallback paints without neon Daily (WS4)", async () => {
+    // Force fallback path without full reload (reload drops scene modules).
+    await h.page.evaluate(() => { window.__titleHeroReady = false; });
+    await h.goScene("title");
+    const s = await h.readStats();
+    expect(s.pageErrors).toEqual([]);
+    expect(s.kaplayErrors).toEqual([]);
+    // Night fallback is denser (stars + hills + wagon).
+    expect(s.total).toBeGreaterThanOrEqual(40);
+    const brand = await h.page.evaluate(() => {
+      const line = window.k.get().find((o) => typeof o.text === "string" && o.text.includes("OREGON TRAIL"));
+      return line?.text ?? null;
+    });
+    expect(brand).toContain("OREGON TRAIL");
+    // No neon Daily green text (old terminal chrome)
+    const neonDaily = await h.page.evaluate(() => {
+      return window.k.get().some((o) =>
+        typeof o.text === "string" && o.text.includes("Daily Trail") && o.color
+        && o.color.g > 200 && o.color.r < 120);
+    });
+    expect(neonDaily).toBe(false);
   });
 
   it("T-profession-1: profession picker renders", async () => {
