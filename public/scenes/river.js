@@ -1,7 +1,11 @@
+import { PALETTE } from "../lib/draw.mjs";
+import { createJuice } from "../lib/juice.mjs";
+
 export default function register(k, engine) {
   k.scene("river", (data) => {
     const W = 640;
     const H = 480;
+    const juice = createJuice(k);
     const river = data || {};
     const name = river.name || "Unknown River";
     const width = river.width_ft || river.width || "medium";
@@ -28,6 +32,34 @@ export default function register(k, engine) {
     const waterY = 200;
     const waterH = 180;
     k.add([k.rect(W, waterH), k.pos(0, waterY), k.color(30, 80, 160)]);
+
+    // No wagon sprite is drawn in this scene — the crossing is implied.
+    // Use the water's center as the splash origin.
+    const wagonX = W / 2;
+    const wagonY = waterY + waterH / 2;
+    function spawnSplash(x, y) {
+      const burst = k.add([
+        k.pos(x, y),
+        k.particles({
+          max: 16,
+          speed: [70, 150],
+          lifeTime: [0.35, 0.65],
+          angle: [0, 0],
+          angularVelocity: [0, 0],
+          acceleration: [k.vec2(0, 260), k.vec2(0, 380)],
+          damping: [0.05, 0.2],
+          colors: [k.rgb(...PALETTE.sky), k.rgb(...PALETTE.skyPale)],
+          opacities: [0.9, 0],
+          scales: [0.7, 0.2],
+        }, {
+          direction: -90,
+          spread: 70,
+          rate: 0,
+        }),
+      ]);
+      burst.emit(k.randi(10, 14));
+      k.wait(0.8, () => burst.destroy());
+    }
 
     // Scrolling water lines
     const lines = [];
@@ -127,6 +159,12 @@ export default function register(k, engine) {
         if (selected) return;
         if (btn.choice === "ferry" && money < ferryCost) return;
         selected = true;
+        // juice fires here, not on the result: resolveRiver() transitions
+        // straight to TRAVEL the instant it resolves (engine.js), tearing
+        // this scene down before a "failed crossing" effect could ever
+        // paint a frame. The splash reads as "you're crossing now."
+        juice.minor();
+        spawnSplash(wagonX, wagonY);
         engine.resolveRiver(btn.choice);
       };
 

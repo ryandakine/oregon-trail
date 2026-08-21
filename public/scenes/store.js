@@ -1,3 +1,5 @@
+const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
 export default function register(k, engine) {
   k.scene("store", (data) => {
     // Dim store interior background
@@ -14,6 +16,7 @@ export default function register(k, engine) {
     overlay.classList.add('active');
 
     const budget = engine.supplies?.money ?? STARTING_MONEY[engine.profession] ?? 80000;
+    let didPopIn = false;
     const quantities = {};
     const itemKeys = Object.keys(STORE_PRICES);
     itemKeys.forEach((key) => { quantities[key] = 0; });
@@ -85,7 +88,7 @@ export default function register(k, engine) {
             const disabled = !!disabledItems[key];
             const nameLabel = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
             return `
-              <div style="${rowStyle}${disabled ? 'opacity:0.4;' : ''}" title="${item.tooltip}">
+              <div class="store-row" style="${rowStyle}${disabled ? 'opacity:0.4;' : ''}" title="${item.tooltip}">
                 <div style="flex:1;min-width:120px;">
                   <strong>${nameLabel}</strong>
                   <br><span style="font-size:0.8em;opacity:0.7;">${item.unit_label} @ ${formatMoney(item.price_cents)}</span>
@@ -196,6 +199,20 @@ export default function register(k, engine) {
         }
         engine.purchaseSupplies(purchases);
       });
+
+      // Row pop-in on scene build only — not on every re-render caused by
+      // quantity changes, which would be distracting mid-decision.
+      if (!didPopIn) {
+        didPopIn = true;
+        if (MOTION_OK) {
+          content.querySelectorAll('.store-row').forEach((row, i) => {
+            row.style.transform = 'scale(0.92)';
+            k.wait(i * 0.03, () => {
+              k.tween(0.92, 1, 0.15, (v) => { row.style.transform = `scale(${v})`; }, k.easings.easeOutBack);
+            });
+          });
+        }
+      }
     }
 
     render();

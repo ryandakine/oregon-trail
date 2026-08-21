@@ -1,6 +1,7 @@
 import * as draw from "../lib/draw.mjs";
 import { addTopHud, addBottomHud, updateHud, attachResizeRebuild } from "../lib/hud.mjs";
 import { applyToneOverlay } from "../lib/tone.mjs";
+import { createJuice } from "../lib/juice.mjs";
 
 const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -10,6 +11,7 @@ export default function register(k, engine) {
     const listeners = [];
     const loops = [];
     let detachResize = null;
+    const juice = createJuice(k);
     function engineOn(event, fn) { engine.on(event, fn); listeners.push({ event, fn }); }
 
     k.onSceneLeave(() => {
@@ -60,7 +62,7 @@ export default function register(k, engine) {
 
     // ── Hero convoy ──
     const WAGON_X = 300, WAGON_Y = 360;
-    draw.drawWagon(k, WAGON_X, WAGON_Y);
+    const wagon = draw.drawWagon(k, WAGON_X, WAGON_Y, { rolling: MOTION_OK });
 
     // Drop shadow
     k.add([
@@ -112,6 +114,27 @@ export default function register(k, engine) {
       }
     });
 
+    // Ambient wind sway on the 4 sky clouds, independent of pause state so
+    // the sky never reads frozen even mid-pause. Additive delta on top of
+    // the forward-parallax scroll above so it doesn't fight that loop's
+    // wrap-around reset. Amplitude/period/phase seeded from each cloud's
+    // spawn position (no Math.random) — drift phase itself runs off
+    // k.time(), which is fine here since this scene isn't screenshot-pinned.
+    if (MOTION_OK) {
+      const cloudSway = sky.clouds.map((c) => {
+        const rng = draw.seededRng(draw.seedFrom(c.pos.x, c.pos.y));
+        return { amp: 15 + rng() * 10, period: 40 + rng() * 20, phase: rng() * Math.PI * 2, prev: 0 };
+      });
+      k.onUpdate(() => {
+        sky.clouds.forEach((c, i) => {
+          const s = cloudSway[i];
+          const offset = Math.sin((k.time() / s.period + s.phase) * Math.PI * 2) * s.amp;
+          c.pos.x += offset - s.prev;
+          s.prev = offset;
+        });
+      });
+    }
+
     // Dust puffs kicked up behind the wheels while traveling.
     if (MOTION_OK) {
       loops.push(k.loop(0.4, () => {
@@ -129,20 +152,41 @@ export default function register(k, engine) {
     if (weather === "rain" && MOTION_OK) {
       loops.push(k.loop(0.05, () => {
         if (paused) return;
-        const drop = k.add([k.rect(1, 8), k.pos(Math.random() * 640, -10), k.color(96, 120, 180), k.opacity(0.6), k.z(40)]);
-        drop.onUpdate(() => { drop.pos.y += 6; drop.pos.x -= 0.5; if (drop.pos.y > 480) drop.destroy(); });
+        const startY = -10;
+        const speed = 5 + k.rand(0, 3);
+        const drop = k.add([k.rect(1, 8), k.pos(Math.random() * 640, startY), k.color(96, 120, 180), k.opacity(0.6), k.z(40)]);
+        drop.onUpdate(() => {
+          drop.pos.y += speed; drop.pos.x -= 0.5;
+          const t = k.clamp((drop.pos.y - startY) / (480 - startY), 0, 1);
+          drop.opacity = 0.6 * (1 - k.easings.easeInQuad(t));
+          if (drop.pos.y > 480) drop.destroy();
+        });
       }));
     } else if (weather === "snow" && MOTION_OK) {
       loops.push(k.loop(0.1, () => {
         if (paused) return;
-        const flake = k.add([k.circle(2), k.pos(Math.random() * 640, -10), k.color(248, 248, 255), k.opacity(0.7), k.z(40)]);
-        flake.onUpdate(() => { flake.pos.y += 1.5; flake.pos.x += Math.sin(k.time() * 3 + flake.pos.y * 0.1) * 0.5; if (flake.pos.y > 480) flake.destroy(); });
+        const startY = -10;
+        const speed = 1 + k.rand(0, 1);
+        const flake = k.add([k.circle(2), k.pos(Math.random() * 640, startY), k.color(248, 248, 255), k.opacity(0.7), k.z(40)]);
+        flake.onUpdate(() => {
+          flake.pos.y += speed; flake.pos.x += Math.sin(k.time() * 3 + flake.pos.y * 0.1) * 0.5;
+          const t = k.clamp((flake.pos.y - startY) / (480 - startY), 0, 1);
+          flake.opacity = 0.7 * (1 - k.easings.easeInQuad(t));
+          if (flake.pos.y > 480) flake.destroy();
+        });
       }));
     } else if (weather === "dust" && MOTION_OK) {
       loops.push(k.loop(0.08, () => {
         if (paused) return;
-        const p = k.add([k.circle(2), k.pos(660, 250 + Math.random() * 200), k.color(...draw.PALETTE.dirtLight), k.opacity(0.4), k.z(40)]);
-        p.onUpdate(() => { p.pos.x -= 3; p.pos.y += Math.sin(k.time() * 2) * 0.3; p.opacity -= 0.003; if (p.pos.x < -20 || p.opacity <= 0) p.destroy(); });
+        const startX = 660;
+        const speed = 2 + k.rand(0, 2);
+        const p = k.add([k.circle(2), k.pos(startX, 250 + Math.random() * 200), k.color(...draw.PALETTE.dirtLight), k.opacity(0.4), k.z(40)]);
+        p.onUpdate(() => {
+          p.pos.x -= speed; p.pos.y += Math.sin(k.time() * 2) * 0.3;
+          const t = k.clamp((startX - p.pos.x) / (startX + 20), 0, 1);
+          p.opacity = 0.4 * (1 - k.easings.easeInQuad(t));
+          if (p.pos.x < -20 || p.opacity <= 0) p.destroy();
+        });
       }));
     }
 
@@ -161,7 +205,20 @@ export default function register(k, engine) {
           // older code only handled {text|description} objects, so strings
           // rendered nothing. Coerce both shapes.
           const msg = typeof evt === "string" ? evt : (evt && (evt.text || evt.description));
-          if (msg) showFloatingText(msg);
+          if (!msg) continue;
+          showFloatingText(msg);
+          // Juice only on the deterministic worker-authored strings
+          // (simulation.ts applyDailyAttrition) — LLM delayed-effect
+          // journal_entry text (e.g. oxen loss) is free-form and not
+          // reliably pattern-matchable, so it's left un-juiced rather than
+          // guessed at.
+          const isDeath = / has died$/.test(msg);
+          const isBadOutcome = isDeath || /fell ill with|starvation taking its toll/i.test(msg);
+          if (isBadOutcome) {
+            if (tone === "high") juice.horror();
+            else if (isDeath) juice.major();
+            else juice.minor();
+          }
         }
       }
     });
@@ -205,6 +262,7 @@ export default function register(k, engine) {
       paused = !paused;
       for (const p of pioneers) p.walking = !paused;
       for (const o of oxen) o.walking = !paused;
+      wagon.wheels.setSpeed(!paused && MOTION_OK ? 1 : 0);
       if (paused) {
         engine.pauseAdvance();
         pauseOverlay = k.add([k.rect(640, 480), k.pos(0, 0), k.color(0, 0, 0), k.opacity(0.7), k.z(100)]);
