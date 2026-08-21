@@ -72,13 +72,40 @@
       align-items: center;
       justify-content: center;
     }
+    /* Scoped by event.js/bitter_path.js only (via classList, alongside
+       .active) — those two scenes paint a living tableau on the canvas
+       behind the panel, so the full-screen scrim can go much lighter and
+       let it read through. Every other #html-overlay consumer keeps the
+       original near-opaque scrim above untouched. */
+    #html-overlay.tableau {
+      background: rgba(10, 8, 6, 0.3);
+    }
     #html-overlay .overlay-content {
       max-width: 560px;
       margin: 60px auto;
       padding: 32px;
-      border: 2px solid #8b6914;
+      border: 2px solid #d4a017;
       border-radius: 4px;
-      background: rgba(30, 22, 12, 0.95);
+      background: linear-gradient(180deg, rgba(42, 31, 14, 0.97), rgba(26, 19, 10, 0.97));
+      box-shadow: 0 0 0 1px rgba(212, 160, 23, 0.15) inset, 0 18px 44px rgba(0, 0, 0, 0.55);
+      animation: panel-in 150ms ease-out;
+    }
+    #html-overlay .bp-cw-modal,
+    #html-overlay .bp-scene {
+      background: linear-gradient(180deg, rgba(36, 20, 14, 0.97), rgba(22, 12, 10, 0.97));
+      box-shadow: 0 0 0 1px rgba(90, 26, 26, 0.35) inset, 0 18px 44px rgba(0, 0, 0, 0.6);
+      animation: panel-in 150ms ease-out;
+    }
+    @keyframes panel-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #html-overlay .overlay-content,
+      #html-overlay .bp-cw-modal,
+      #html-overlay .bp-scene {
+        animation: none;
+      }
     }
     #html-overlay h2 {
       color: #d4a017;

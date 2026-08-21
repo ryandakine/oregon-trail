@@ -24,6 +24,58 @@ export const seededRng = (seed) => mulberry32(seed | 0);
 // Linear blend of two palette colors. Keeps PALETTE the single color source.
 export const mixColor = (a, b, t) => [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * t));
 
+// B1: shared ink-outline + shadow-hatch helpers. Warm-dark #3a2a1a
+// (PALETTE.outline) register only — never pure black. Replaces ad-hoc
+// double-draw outline offsets scattered across the composite drawers.
+function inkOutline(k, parent, shape) {
+  const { kind, x, y, extra = 2, color = PALETTE.outline } = shape;
+  const target = parent ?? k;
+  if (kind === "circle") {
+    target.add([k.circle(shape.r + extra), k.pos(x, y), k.color(...color), k.anchor("center")]);
+  } else if (kind === "oval") {
+    target.add([ellipseRect(k, shape.w + extra * 2, shape.h + extra * 2), k.pos(x, y), k.color(...color), k.anchor("center")]);
+  } else {
+    const ropts = shape.radius != null ? { radius: shape.radius } : {};
+    target.add([k.rect(shape.w + extra * 2, shape.h + extra * 2, ropts), k.pos(x - extra, y - extra), k.color(...color)]);
+  }
+}
+
+// Shadow-side hatching (Darkest Dungeon trick): 2-4 short seeded diagonal
+// strokes, low opacity, hand-placed scatter via the shared seededRng —
+// linework density fakes detail on otherwise-flat shade fills.
+function hatchShade(k, parent, cx, cy, w, h, opts = {}) {
+  const rng = mulberry32(opts.seed ?? seedFrom(cx, cy));
+  const n = opts.count ?? 2 + Math.floor(rng() * 3);
+  const angle = opts.angle ?? -35;
+  const len = opts.len ?? Math.max(6, Math.min(w, h) * 0.45);
+  const op = opts.opacity ?? 0.22;
+  const color = opts.color ?? PALETTE.outline;
+  const target = parent ?? k;
+  for (let i = 0; i < n; i++) {
+    const x = cx + (rng() - 0.5) * w * 0.6;
+    const y = cy + (rng() - 0.5) * h * 0.6;
+    target.add([
+      k.rect(len * (0.7 + rng() * 0.5), 1.4),
+      k.pos(x, y), k.color(...color), k.opacity(op),
+      k.rotate(angle + (rng() - 0.5) * 10), k.anchor("center"),
+    ]);
+  }
+}
+
+// B2: eased multi-ring glow — quadratic opacity falloff so 5-6 stacked flat
+// circles read as a soft radial gradient instead of visible concentric rings.
+export function drawGlow(k, parent, cx, cy, maxR, color, opts = {}) {
+  const rings = opts.rings ?? 6;
+  const baseOp = opts.opacity ?? 0.45;
+  const target = parent ?? k;
+  const grp = target.add([k.pos(cx, cy)]);
+  for (let i = rings; i >= 1; i--) {
+    const t = i / rings;
+    grp.add([k.circle(maxR * t), k.color(...color), k.opacity(baseOp * (1 - t * t)), k.anchor("center")]);
+  }
+  return grp;
+}
+
 export function addHighlights(k, cx, cy, w, h, count, color, seed) {
   const rng = mulberry32(seed);
   for (let i = 0; i < count; i++) {
@@ -45,11 +97,13 @@ export function drawSky(k, tone, dayPhase, opts = {}) {
     ? { top: PALETTE.skyTwilight, horizon: PALETTE.skyTwilightHorizon, cloudOp: 0.5, celestial: null }
     : (phaseMap[dayPhase] ?? phaseMap.day);
 
-  // Stepped gradient: 4 horizontal bands top→horizon, then a soft blend strip.
-  const BANDS = 4;
+  // Stepped gradient: 16 horizontal bands top→horizon, then a soft blend
+  // strip. (Was 4×45px bands with visible seams — mixColor lerp is near-free.)
+  const BANDS = 16;
+  const bandH = 180 / BANDS;
   for (let i = 0; i < BANDS; i++) {
     const col = mixColor(phase.top, phase.horizon, i / (BANDS - 1));
-    k.add([k.rect(640, 45), k.pos(0, i * 45), k.color(...col)]);
+    k.add([k.rect(640, bandH + 0.5), k.pos(0, i * bandH), k.color(...col)]);
   }
   k.add([k.rect(640, 40), k.pos(0, 180), k.color(...phase.horizon), k.opacity(0.7)]);
   if (tone === "high") {
@@ -61,12 +115,11 @@ export function drawSky(k, tone, dayPhase, opts = {}) {
   let celestial = null;
   if (phase.celestial === "sun") {
     celestial = k.add([k.pos(phase.cx, phase.cy)]);
-    celestial.add([k.circle(phase.r * 2.3), k.color(...mixColor(PALETTE.sunGlow, phase.horizon, 0.5)), k.opacity(0.25), k.anchor("center")]);
-    celestial.add([k.circle(phase.r * 1.55), k.color(...PALETTE.sunGlow), k.opacity(0.35), k.anchor("center")]);
+    drawGlow(k, celestial, 0, 0, phase.r * 2.6, PALETTE.sunGlow, { rings: 6, opacity: 0.42 });
     celestial.add([k.circle(phase.r), k.color(...PALETTE.sunCore), k.anchor("center")]);
   } else if (phase.celestial === "moon") {
     celestial = k.add([k.pos(phase.cx, phase.cy)]);
-    celestial.add([k.circle(phase.r * 1.6), k.color(...PALETTE.moon), k.opacity(0.12), k.anchor("center")]);
+    drawGlow(k, celestial, 0, 0, phase.r * 1.9, PALETTE.moon, { rings: 5, opacity: 0.22 });
     celestial.add([k.circle(phase.r), k.color(...PALETTE.moon), k.anchor("center")]);
     celestial.add([k.circle(phase.r * 0.85), k.pos(phase.r * 0.4, -phase.r * 0.2), k.color(...PALETTE.moonShade), k.opacity(0.85), k.anchor("center")]);
   }
@@ -323,10 +376,11 @@ export function drawWagon(k, cx, cy, opts = {}) {
     k.add([k.rect(2, 28), k.pos(cx + i, cy - 1), k.color(...C(PALETTE.outline)), k.opacity(0.5)]);
   }
   k.add([k.rect(122, 4), k.pos(cx - 61, cy - 1), k.color(...C(PALETTE.woodLight)), k.opacity(0.7)]);
+  hatchShade(k, k, cx - 38, cy + 12, 40, 18, { seed: seedFrom(cx, cy) + 5, angle: -35, opacity: 0.2, count: 3, color: C(PALETTE.outline) });
 
   // Canvas top
   const canvasY = cy - 28;
-  k.add([ellipseRect(k, 132, 52), k.pos(cx, canvasY),         k.color(...C(PALETTE.outline)),   k.anchor("center")]);
+  inkOutline(k, k, { kind: "oval", x: cx, y: canvasY, w: 126, h: 46, extra: 2, color: C(PALETTE.outline) });
   k.add([ellipseRect(k, 126, 46), k.pos(cx, canvasY),         k.color(...C(PALETTE.canvas)),    k.anchor("center")]);
   k.add([ellipseRect(k, 122, 42), k.pos(cx + 2, canvasY + 2), k.color(...C(PALETTE.canvasMid)), k.anchor("center"), k.opacity(0.5)]);
   // Hoop shading: shadow band along the canvas underside + top highlight.
@@ -339,7 +393,7 @@ export function drawWagon(k, cx, cy, opts = {}) {
   }
 
   // Side-mounted water barrel (between the wheels, on the body).
-  k.add([k.rect(16, 21, { radius: 4 }), k.pos(cx - 1, cy + 1), k.color(...C(PALETTE.outline))]);
+  inkOutline(k, k, { kind: "rect", x: cx + 0.5, y: cy + 2.5, w: 13, h: 18, extra: 2, radius: 4, color: C(PALETTE.outline) });
   k.add([k.rect(13, 18, { radius: 3 }), k.pos(cx + 0.5, cy + 2.5), k.color(...C(PALETTE.woodLight))]);
   k.add([k.rect(13, 2), k.pos(cx + 0.5, cy + 6),  k.color(...C(PALETTE.woodDark))]);
   k.add([k.rect(13, 2), k.pos(cx + 0.5, cy + 14), k.color(...C(PALETTE.woodDark))]);
@@ -347,29 +401,44 @@ export function drawWagon(k, cx, cy, opts = {}) {
   // Hanging lantern at the rear — stays lit even when dimmed (dusk charm).
   k.add([k.rect(8, 2),  k.pos(cx + 62, cy - 6), k.color(...C(PALETTE.outline))]);
   k.add([k.rect(1, 5),  k.pos(cx + 68, cy - 4), k.color(...C(PALETTE.outline))]);
-  k.add([k.circle(5),   k.pos(cx + 68.5, cy + 4), k.color(...PALETTE.gold), k.opacity(dim < 1 ? 0.45 : 0.3), k.anchor("center")]);
+  drawGlow(k, k, cx + 68.5, cy + 4, 8, PALETTE.gold, { rings: 5, opacity: dim < 1 ? 0.4 : 0.28 });
   k.add([k.rect(6, 8, { radius: 1 }), k.pos(cx + 65.5, cy + 0), k.color(...PALETTE.goldBright), k.outline(1, k.rgb(...C(PALETTE.outline)))]);
 
-  // Wheels — 6 static spokes, no runtime rotation
-  function wheel(wx, wy) {
+  // Wheels — 6 spokes. opts.rolling (truthy, or a speed number) drives
+  // rotation; angle is a pure function of k.time() each frame (freezeAt-safe,
+  // no accumulated dt state). Default (no opts.rolling anywhere) = speed 0 =
+  // identical static render to before.
+  function wheel(wx, wy, wopts = {}) {
     const r = 22;
     k.add([k.circle(r + 2), k.pos(wx, wy), k.color(...C(PALETTE.outline)),   k.anchor("center")]);
     k.add([k.circle(r),     k.pos(wx, wy), k.color(...C(PALETTE.woodLight)), k.anchor("center")]);
     k.add([k.circle(r - 3), k.pos(wx, wy), k.color(...C(PALETTE.wood)),      k.anchor("center")]);
+    const spokes = k.add([k.pos(wx, wy), k.rotate(0)]);
     for (let a = 0; a < 6; a++) {
       const ang = (a / 6) * 360;
-      k.add([k.rect(3, r * 2 - 6), k.pos(wx, wy), k.color(...C(PALETTE.outline)), k.rotate(ang), k.anchor("center")]);
+      spokes.add([k.rect(3, r * 2 - 6), k.pos(0, 0), k.color(...C(PALETTE.outline)), k.rotate(ang), k.anchor("center")]);
     }
     k.add([k.circle(5), k.pos(wx, wy), k.color(...C(PALETTE.outline)),   k.anchor("center")]);
     k.add([k.circle(3), k.pos(wx, wy), k.color(...C(PALETTE.woodLight)), k.anchor("center")]);
+    // handle.speed is in rotations/second; travel.js can call setSpeed() any
+    // time after drawWagon() returns, whether or not opts.rolling was passed.
+    const handle = { speed: wopts.rolling ? (typeof wopts.rolling === "number" ? wopts.rolling : 1) : 0 };
+    spokes.onUpdate(() => {
+      spokes.angle = (handle.speed * k.time() * 360) % 360;
+    });
+    return handle;
   }
-  wheel(cx - 42, cy + 26);
-  wheel(cx + 42, cy + 26);
+  const wheelL = wheel(cx - 42, cy + 26, { rolling: opts.rolling });
+  const wheelR = wheel(cx + 42, cy + 26, { rolling: opts.rolling });
 
   // Deterministic mud splatter
   addHighlights(k, cx, cy + 18, 120, 8, 6, C(PALETTE.dirtDark), seedFrom(cx, cy));
 
-  return {};
+  return {
+    wheels: {
+      setSpeed(speed) { wheelL.speed = speed; wheelR.speed = speed; },
+    },
+  };
 }
 
 export function drawOx(k, cx, cy, opts = {}) {
@@ -381,7 +450,7 @@ export function drawOx(k, cx, cy, opts = {}) {
   const LEG_Y = 10;
   const legs = [-20, -11, 9, 18].map((lx) => {
     const leg = p.add([k.pos(lx, LEG_Y)]);
-    leg.add([k.rect(6, 11), k.pos(0, 0), k.color(...PALETTE.oxBrown), k.outline(1, k.rgb(...PALETTE.outline))]);
+    leg.add([k.rect(6, 11), k.pos(0, 0), k.color(...PALETTE.oxBrown), k.outline(2, k.rgb(...PALETTE.outline))]);
     leg.add([k.rect(6, 3),  k.pos(0, 9), k.color(...PALETTE.outline)]);
     return leg;
   });
@@ -402,13 +471,16 @@ export function drawOx(k, cx, cy, opts = {}) {
   p.add([ellipseRect(k, 10, 7), k.pos(-28, 2), k.color(...PALETTE.oxBrown), k.anchor("center")]);
   p.add([k.rect(48, 4), k.pos(-24, 4), k.color(...PALETTE.oxDark), k.opacity(0.28)]);
 
+  // Shadow-side flank hatching (rear haunch, opposite the cream belly light).
+  hatchShade(k, p, 14, -9, 26, 14, { seed: seedFrom(cx, cy) + 11, angle: -30, opacity: 0.2, count: 3 });
+
   // Head — lowered pulling posture; thick horns, cream muzzle, eye.
   const HEAD_Y = -4;
   const hd = p.add([k.pos(-34, HEAD_Y)]);
   // Horns (thick, outward-up)
   hd.add([k.polygon([k.vec2(0, 0), k.vec2(-10, -12), k.vec2(-5, -13), k.vec2(3, -1)]), k.pos(-5, -9), k.color(...PALETTE.canvasMid)]);
   hd.add([k.polygon([k.vec2(0, 0), k.vec2(5, -13), k.vec2(10, -12), k.vec2(3, -1)]), k.pos(5, -9), k.color(...PALETTE.canvasMid)]);
-  hd.add([k.circle(12), k.pos(0, 0), k.color(...PALETTE.outline), k.anchor("center")]);
+  inkOutline(k, hd, { kind: "circle", x: 0, y: 0, r: 10.5, extra: 2 });
   hd.add([k.circle(10.5), k.pos(0, 0), k.color(...PALETTE.oxBrown), k.anchor("center")]);
   // Long cream muzzle
   hd.add([ellipseRect(k, 14, 9), k.pos(-5, 6), k.color(...PALETTE.oxCream), k.anchor("center")]);
@@ -442,21 +514,23 @@ export function drawPioneer(k, cx, cy, opts = {}) {
   p.add([k.rect(16, 24), k.pos(-8, -22), k.color(...PALETTE.outline)]);
   p.add([k.rect(14, 14), k.pos(-7, -20), k.color(...bodyCol)]);
   p.add([k.rect(14, 3),  k.pos(-7, -18), k.color(...PALETTE.shirt)]);
+  // Shadow-side torso hatching (Darkest Dungeon trick, mirrors wagon/ox).
+  hatchShade(k, p, -3, -13, 12, 16, { seed: seedFrom(cx, cy) + 13, angle: -35, opacity: 0.2, count: 2 });
   // Neck
   p.add([k.rect(4, 3), k.pos(-2, -25), k.color(...PALETTE.skin)]);
-  p.add([k.circle(5.8),  k.pos(0, -28),  k.color(...PALETTE.outline), k.anchor("center")]);
+  inkOutline(k, p, { kind: "circle", x: 0, y: -28, r: 4.8, extra: 2 });
   p.add([k.circle(4.8),  k.pos(0, -28),  k.color(...PALETTE.skin),    k.anchor("center")]);
   if (hat === "felt") {
     p.add([k.rect(18, 2), k.pos(-9, -34), k.color(...PALETTE.outline)]);
     p.add([k.rect(16, 2), k.pos(-8, -33), k.color(...PALETTE.hatFelt)]);
-    p.add([k.rect(10, 7), k.pos(-5, -39), k.color(...PALETTE.hatFelt), k.outline(1, k.rgb(...PALETTE.outline))]);
+    p.add([k.rect(10, 7), k.pos(-5, -39), k.color(...PALETTE.hatFelt), k.outline(2, k.rgb(...PALETTE.outline))]);
   } else if (hat === "straw") {
     p.add([ellipseRect(k, 18, 4), k.pos(0, -33), k.color(...PALETTE.outline), k.anchor("center")]);
     p.add([ellipseRect(k, 16, 3), k.pos(0, -33), k.color(...PALETTE.straw),   k.anchor("center")]);
-    p.add([k.rect(8, 4), k.pos(-4, -38), k.color(...PALETTE.straw), k.outline(1, k.rgb(...PALETTE.outline))]);
+    p.add([k.rect(8, 4), k.pos(-4, -38), k.color(...PALETTE.straw), k.outline(2, k.rgb(...PALETTE.outline))]);
   } else {
     // Bonnet with side flares
-    p.add([ellipseRect(k, 12, 7), k.pos(0, -32), k.color(...PALETTE.outline), k.anchor("center")]);
+    inkOutline(k, p, { kind: "oval", x: 0, y: -32, w: 10, h: 6, extra: 2 });
     p.add([ellipseRect(k, 10, 6), k.pos(0, -32), k.color(...PALETTE.bonnet),  k.anchor("center")]);
     p.add([ellipseRect(k, 5, 6), k.pos(-7, -30), k.color(...PALETTE.bonnet), k.anchor("center")]);
     p.add([ellipseRect(k, 5, 6), k.pos(7, -30), k.color(...PALETTE.bonnet), k.anchor("center")]);
@@ -465,12 +539,12 @@ export function drawPioneer(k, cx, cy, opts = {}) {
   let legL, legR;
   if (dress) {
     // Skirt triangle mass
-    p.add([k.polygon([k.vec2(-10, -8), k.vec2(10, -8), k.vec2(12, 6), k.vec2(-12, 6)]), k.pos(0, 0), k.color(...bodyCol)]);
+    p.add([k.polygon([k.vec2(-10, -8), k.vec2(10, -8), k.vec2(12, 6), k.vec2(-12, 6)]), k.pos(0, 0), k.color(...bodyCol), k.outline(2, k.rgb(...PALETTE.outline))]);
     legL = p.add([k.rect(1, 1), k.pos(0, 0)]); // dummy for animate
     legR = p.add([k.rect(1, 1), k.pos(0, 0)]);
   } else {
-    legL = p.add([k.rect(5, 9), k.pos(-7, -6), k.color(...legCol)]);
-    legR = p.add([k.rect(5, 9), k.pos(2, -6), k.color(...legCol)]);
+    legL = p.add([k.rect(5, 9), k.pos(-7, -6), k.color(...legCol), k.outline(2, k.rgb(...PALETTE.outline))]);
+    legR = p.add([k.rect(5, 9), k.pos(2, -6), k.color(...legCol), k.outline(2, k.rgb(...PALETTE.outline))]);
   }
 
   p.baseY = cy;
@@ -499,16 +573,18 @@ export function drawTree(k, cx, cy) {
     { x: 22,  y: -28, r: 26 },
     { x: 0,   y: -60, r: 22 },
   ];
-  for (const c of canopy) k.add([k.circle(c.r + 2), k.pos(cx + c.x, cy + c.y), k.color(...PALETTE.outline), k.anchor("center")]);
+  for (const c of canopy) inkOutline(k, k, { kind: "circle", x: cx + c.x, y: cy + c.y, r: c.r, extra: 2 });
   for (const c of canopy) k.add([k.circle(c.r),     k.pos(cx + c.x, cy + c.y), k.color(...PALETTE.hillMid),  k.anchor("center")]);
   for (const c of canopy) k.add([k.circle(c.r * 0.4), k.pos(cx + c.x - c.r*0.3, cy + c.y - c.r*0.3), k.color(...PALETTE.hillNear), k.opacity(0.8), k.anchor("center")]);
+  hatchShade(k, k, cx + canopy[0].x + canopy[0].r * 0.32, cy + canopy[0].y + canopy[0].r * 0.32, canopy[0].r * 0.7, canopy[0].r * 0.6, { seed: seedFrom(cx, cy) + 3, angle: -40, opacity: 0.22, count: 3 });
   addHighlights(k, cx, cy - 40, 80, 60, 8, PALETTE.hillNear, seedFrom(cx, cy));
 }
 
 export function drawRock(k, cx, cy, w = 36, h = 22) {
-  k.add([ellipseRect(k, w + 2, h + 2), k.pos(cx, cy), k.color(...PALETTE.outline),  k.anchor("center")]);
+  inkOutline(k, k, { kind: "oval", x: cx, y: cy, w, h, extra: 2 });
   k.add([ellipseRect(k, w,     h),     k.pos(cx, cy), k.color(140, 135, 130),        k.anchor("center")]);
   k.add([ellipseRect(k, w * 0.5, h * 0.3), k.pos(cx - w*0.15, cy - h*0.25), k.color(180, 175, 170), k.anchor("center")]);
+  hatchShade(k, k, cx + w * 0.18, cy + h * 0.2, w * 0.55, h * 0.5, { seed: seedFrom(cx, cy) + 7, angle: -28, opacity: 0.2, count: 3 });
   addHighlights(k, cx, cy, w, h, 6, PALETTE.hillMid, seedFrom(cx, cy));
 }
 

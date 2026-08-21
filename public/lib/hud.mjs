@@ -26,6 +26,11 @@ const LANDMARKS = [
 ];
 const TRAIL_MILES = 1764;
 
+const BAR_HIGHLIGHT = [255, 235, 150];
+const FLASH_WHITE = [255, 255, 255];
+const HP_RANK = { dead: 0, dying: 1, ill: 2, poor: 3, well: 4 };
+const _prevHealthByIndex = new Map();
+
 export function addTopHud(k, engine) {
   const S = getSizes();
   const tag = "hud-top";
@@ -36,7 +41,8 @@ export function addTopHud(k, engine) {
 
   const dateText  = mkText(k, engine.formatDate(engine.currentDate),        12,  y, S.body, PALETTE.parchmentDark, tag);
   mkText(k, "FOOD",  180, y, S.body, PALETTE.parchmentDark, tag);
-  const foodText  = mkText(k, String(engine.supplies?.food ?? 0),           230, y, S.body, PALETTE.goldBright, tag);
+  const initialFood = engine.supplies?.food ?? 0;
+  const foodText  = mkText(k, String(initialFood),                          230, y, S.body, PALETTE.goldBright, tag);
   mkText(k, "MILES", 290, y, S.body, PALETTE.parchmentDark, tag);
   const milesText = mkText(k, String(engine.milesTraveled ?? 0),            350, y, S.body, PALETTE.goldBright, tag);
   mkText(k, "OXEN",  410, y, S.body, PALETTE.parchmentDark, tag);
@@ -46,6 +52,7 @@ export function addTopHud(k, engine) {
   const curMiles = engine.milesTraveled ?? 0;
   k.add([k.rect(barW, barH), k.pos(barX, barY), k.color(...PALETTE.outline), k.fixed(), k.z(52), tag]);
   const barFill = k.add([k.rect(0, 8), k.pos(barX + 1, barY + 1), k.color(...PALETTE.goldBright), k.fixed(), k.z(53), tag]);
+  const barFillHighlight = k.add([k.rect(0, 2), k.pos(barX + 1, barY + 1), k.color(...BAR_HIGHLIGHT), k.opacity(0.6), k.fixed(), k.z(53), tag]);
 
   for (const lm of LANDMARKS) {
     const tx = barX + (lm.miles / TRAIL_MILES) * barW;
@@ -58,7 +65,7 @@ export function addTopHud(k, engine) {
   const pct = Math.round(curMiles / TRAIL_MILES * 100);
   const progressText = k.add([k.text(`${pct}%`, { size: S.label }), k.pos(barX + barW / 2, barY + barH + 2), k.color(...PALETTE.parchmentDark), k.anchor("center"), k.fixed(), k.z(52), tag]);
 
-  return { dateText, foodText, milesText, oxenText, barFill, barW, progressText, tag };
+  return { dateText, foodText, milesText, oxenText, barFill, barFillHighlight, barW, progressText, tag, _prevFood: initialFood };
 }
 
 export function addBottomHud(k, engine) {
@@ -86,6 +93,7 @@ export function addBottomHud(k, engine) {
     const iconTag = drawHealthIcon(k, cx, cy, state);
     const label = k.add([k.text(shortName(m.name), { size: S.label }), k.pos(cx, cy + 22), k.color(...PALETTE.parchmentDark), k.anchor("center"), k.fixed(), k.z(52), tag]);
     icons.push({ member: m, cx, cy, label, state, tag: iconTag });
+    _prevHealthByIndex.set(i, state);
   });
   return { icons, tag };
 }
@@ -93,17 +101,29 @@ export function addBottomHud(k, engine) {
 export function updateHud(k, engine, hudState) {
   const top = hudState.top, bottom = hudState.bottom;
   top.dateText.text  = engine.formatDate(engine.currentDate);
-  top.foodText.text  = String(engine.supplies?.food ?? 0);
+  const food = engine.supplies?.food ?? 0;
+  top.foodText.text  = String(food);
+  if (typeof top._prevFood === "number" && food < top._prevFood) {
+    spawnPulse(k, 255, top.foodText.pos.y + 7, 54, 18, PALETTE.hpRed, top.tag);
+  }
+  top._prevFood = food;
   top.milesText.text = String(engine.milesTraveled ?? 0);
   top.oxenText.text  = String(engine.supplies?.oxen ?? 0);
   const pct = Math.min(1, (engine.milesTraveled ?? 0) / TRAIL_MILES);
   top.barFill.width = (top.barW - 2) * pct;
+  top.barFillHighlight.width = top.barFill.width;
   top.progressText.text = `${Math.round(pct * 100)}%`;
 
-  bottom.icons.forEach((icon) => {
+  bottom.icons.forEach((icon, i) => {
     k.destroyAll(icon.tag);
     const state = hpState(icon.member);
     icon.tag = drawHealthIcon(k, icon.cx, icon.cy, state);
+    const prev = _prevHealthByIndex.get(i);
+    if (prev !== undefined && prev !== state) {
+      const worsened = (HP_RANK[state] ?? 0) < (HP_RANK[prev] ?? 0);
+      spawnPulse(k, icon.cx, icon.cy, 30, 30, worsened ? PALETTE.hpRed : FLASH_WHITE, bottom.tag);
+    }
+    _prevHealthByIndex.set(i, state);
     icon.state = state;
   });
 }
@@ -129,6 +149,17 @@ export function attachResizeRebuild(k, engine, hudState) {
 
 function mkText(k, str, x, y, size, color, tag) {
   return k.add([k.text(str, { size }), k.pos(x, y), k.color(...color), k.fixed(), k.z(52), tag]);
+}
+function spawnPulse(k, cx, cy, w, h, color, tag) {
+  const start = k.time();
+  const dur = 0.4;
+  const p = k.add([k.rect(w, h), k.pos(cx, cy), k.anchor("center"), k.color(...color), k.opacity(0.5), k.fixed(), k.z(55), tag]);
+  p.onUpdate(() => {
+    const t = (k.time() - start) / dur;
+    if (t >= 1) { p.destroy(); return; }
+    p.opacity = 0.5 * (1 - t);
+  });
+  return p;
 }
 function shortName(name) {
   return (name || "?").slice(0, 4).toUpperCase();

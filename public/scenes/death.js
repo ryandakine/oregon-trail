@@ -1,3 +1,11 @@
+import { seededRng } from "../lib/draw.mjs";
+
+function hashSeed(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return h;
+}
+
 export default function register(k, engine) {
   k.scene("death", (data) => {
     const W = 640;
@@ -16,11 +24,26 @@ export default function register(k, engine) {
     // Dim ground
     k.add([k.rect(W, 120), k.pos(0, 360), k.color(30, 25, 20)]);
 
+    // Top/bottom vignette — stacked bands, decreasing size, no hard edge
+    const vign = [[26, 0.16], [16, 0.10], [8, 0.06]];
+    for (const [vh, op] of vign) {
+      k.add([k.rect(W, vh), k.pos(0, 0), k.color(0, 0, 0), k.opacity(op)]);
+      k.add([k.rect(W, vh), k.pos(0, H - vh), k.color(0, 0, 0), k.opacity(op)]);
+    }
+
     // Tombstone
     const stoneW = 120;
     const stoneH = 160;
     const stoneX = W / 2 - stoneW / 2;
     const stoneY = 140;
+
+    // Drop shadow behind the stone (physicality)
+    k.add([
+      k.rect(stoneW + 20, stoneH + 20, { radius: 8 }),
+      k.pos(stoneX - 10 + 3, stoneY - 4 + 4),
+      k.color(0, 0, 0),
+      k.opacity(0.3),
+    ]);
 
     // Base
     k.add([
@@ -42,6 +65,34 @@ export default function register(k, engine) {
       k.pos(stoneX + 4, stoneY - 4),
       k.color(130, 130, 130),
     ]);
+
+    // Aged stone: seeded ink specks + edge blotches (run-stable, keyed on
+    // name/cause/date so re-entering this scene never flickers).
+    const stoneRng = seededRng(hashSeed(`${name}|${cause}|${date}`));
+    const speckCount = 20 + Math.floor(stoneRng() * 21);
+    for (let i = 0; i < speckCount; i++) {
+      const sx = stoneX + stoneRng() * stoneW;
+      const sy = stoneY - 4 + stoneRng() * (stoneH + 24);
+      k.add([
+        k.circle(0.6 + stoneRng() * 0.5),
+        k.pos(sx, sy),
+        k.color(30, 26, 22),
+        k.opacity(0.1 + stoneRng() * 0.12),
+        k.anchor("center"),
+      ]);
+    }
+    const blotchCount = 2 + Math.floor(stoneRng() * 2);
+    for (let i = 0; i < blotchCount; i++) {
+      const bx = stoneX + stoneRng() * stoneW;
+      const by = stoneY + stoneRng() * stoneH;
+      k.add([
+        k.circle(6 + stoneRng() * 6),
+        k.pos(bx, by),
+        k.color(60, 58, 56),
+        k.opacity(0.08),
+        k.anchor("center"),
+      ]);
+    }
 
     // Cross on tombstone
     const crossCx = W / 2;

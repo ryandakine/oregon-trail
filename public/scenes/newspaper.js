@@ -1,3 +1,44 @@
+import { seededRng } from "../lib/draw.mjs";
+
+function hashSeed(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return h;
+}
+
+// Print authenticity: seeded ink specks, edge blotches, a top/bottom +
+// margin vignette, and a horizontal fold line, layered as background-image
+// gradients on #newspaper-content. Keyed on the article content, so it's
+// stable across re-entry into this scene for the same run.
+function agedPaperLayers(seed) {
+  const rng = seededRng(seed);
+  const layers = [];
+  const speckCount = 20 + Math.floor(rng() * 21);
+  for (let i = 0; i < speckCount; i++) {
+    const x = (rng() * 100).toFixed(1);
+    const y = (rng() * 100).toFixed(1);
+    const op = (0.05 + rng() * 0.08).toFixed(3);
+    layers.push(`radial-gradient(circle at ${x}% ${y}%, rgba(42,26,10,${op}) 0, rgba(42,26,10,${op}) 1px, transparent 1.6px)`);
+  }
+  const blotchCount = 2 + Math.floor(rng() * 2);
+  for (let i = 0; i < blotchCount; i++) {
+    const x = (rng() * 100).toFixed(1);
+    const y = (rng() * 100).toFixed(1);
+    const r = (9 + rng() * 7).toFixed(1);
+    layers.push(`radial-gradient(circle at ${x}% ${y}%, rgba(58,37,16,0.05), transparent ${r}%)`);
+  }
+  const vign = [[10, 0.10], [6, 0.07], [3, 0.05]];
+  for (const [pct, op] of vign) {
+    layers.push(`linear-gradient(to bottom, rgba(20,12,4,${op}), transparent ${pct}%)`);
+    layers.push(`linear-gradient(to top, rgba(20,12,4,${op}), transparent ${pct}%)`);
+    layers.push(`linear-gradient(to right, rgba(20,12,4,${(op * 0.6).toFixed(3)}), transparent ${pct * 0.5}%)`);
+    layers.push(`linear-gradient(to left, rgba(20,12,4,${(op * 0.6).toFixed(3)}), transparent ${pct * 0.5}%)`);
+  }
+  layers.push('linear-gradient(to bottom, transparent calc(50% - 1px), rgba(42,26,10,0.08) calc(50% - 1px), rgba(42,26,10,0.08) 50%, transparent 50%)');
+  layers.push('linear-gradient(to bottom, transparent 50%, rgba(255,244,214,0.35) 50%, rgba(255,244,214,0.35) calc(50% + 1px), transparent calc(50% + 1px))');
+  return layers.join(', ');
+}
+
 // Lazy-load the 198KB html2canvas UMD bundle on first share instead of
 // eagerly on every page load (IMPROVEMENT_ROADMAP §2). It's UMD (sets
 // window.html2canvas), not an ES module, so inject a <script> tag and resolve
@@ -139,6 +180,14 @@ export default function register(k, engine) {
         </div>
       </div>
     `;
+
+    // Aged paper + physicality (research B7) — applied after mount so the
+    // large template literal above stays untouched.
+    const npContent = document.getElementById('newspaper-content');
+    if (npContent) {
+      npContent.style.backgroundImage = agedPaperLayers(hashSeed(`${paperName}|${headline}|${dateStr}`));
+      npContent.style.boxShadow = '4px 4px 0 rgba(20,12,4,0.28)';
+    }
 
     // Branded download filename, e.g. oregon-trail-ezra-1764mi.png
     // (IMPROVEMENT_ROADMAP §1.2). Falls back to a generic name if no leader.

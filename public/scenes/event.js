@@ -1,4 +1,50 @@
+import * as draw from "../lib/draw.mjs";
 import { addTopHud, addBottomHud } from "../lib/hud.mjs";
+
+const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+const SKY_PHASES = {
+  dawn:  { top: draw.PALETTE.skyDawn,  horizon: draw.PALETTE.skyPale },
+  day:   { top: draw.PALETTE.sky,      horizon: draw.PALETTE.skyPale },
+  dusk:  { top: draw.PALETTE.skyDusk,  horizon: draw.PALETTE.skyDawn },
+  night: { top: draw.PALETTE.skyNight, horizon: draw.PALETTE.skyNightHorizon },
+};
+
+// Living dimmed backdrop behind the panel, instead of a flat black rect —
+// sky + ground + a wagon silhouette, one slow-drifting cloud so the frame
+// never reads frozen. Cheap on purpose (graphics-pop-research B5): no
+// weather, no parallax layers.
+function drawEventBackdrop(k, tone, dayPhase) {
+  const sky = tone === "high"
+    ? { top: draw.PALETTE.skyTwilight, horizon: draw.PALETTE.skyTwilightHorizon }
+    : (SKY_PHASES[dayPhase] ?? SKY_PHASES.day);
+
+  k.add([k.rect(640, 260), k.pos(0, 0),   k.color(...sky.top)]);
+  k.add([k.rect(640, 60),  k.pos(0, 200), k.color(...sky.horizon), k.opacity(0.8)]);
+  k.add([k.rect(640, 220), k.pos(0, 260), k.color(...draw.PALETTE.grassMid)]);
+  k.add([k.rect(640, 6),   k.pos(0, 256), k.color(...draw.PALETTE.hillMid), k.opacity(0.5)]);
+
+  const sc = draw.PALETTE.silhouetteNear;
+  const wx = 320, wy = 340;
+  k.add([k.rect(112, 34, { radius: 3 }), k.pos(wx - 56, wy - 8), k.color(...sc)]);
+  k.add([draw.ellipseRect(k, 108, 46), k.pos(wx, wy - 34), k.color(...sc), k.anchor("center")]);
+  k.add([k.circle(19), k.pos(wx - 38, wy + 22), k.color(...sc), k.anchor("center")]);
+  k.add([k.circle(19), k.pos(wx + 38, wy + 22), k.color(...sc), k.anchor("center")]);
+
+  if (MOTION_OK) {
+    const baseX = 470;
+    const cloud = draw.drawCloud(k, baseX, 68, 0.9, tone === "high" ? 0.35 : 0.55);
+    cloud.onUpdate(() => { cloud.pos.x = baseX + Math.sin(k.time() * 0.06) * 36; });
+  }
+
+  k.add([k.rect(640, 480), k.pos(0, 0), k.color(0, 0, 0), k.opacity(0.4)]);
+}
+
+function getDayPhase(dateStr) {
+  if (!dateStr) return "day";
+  const d = new Date(dateStr + "T00:00:00");
+  return ["dawn", "day", "day", "dusk"][d.getDate() % 4];
+}
 
 export default function register(k, engine) {
   k.scene("event", (sceneData) => {
@@ -7,13 +53,7 @@ export default function register(k, engine) {
     const content = overlay.querySelector(".overlay-content");
     let autoTimer = null;
 
-    // Dim canvas backdrop
-    k.add([
-      k.rect(640, 480),
-      k.pos(0, 0),
-      k.color(0, 0, 0),
-      k.opacity(0.6),
-    ]);
+    drawEventBackdrop(k, engine.tone ?? "medium", getDayPhase(engine.currentDate));
 
     // Decorative label — sits between HUD and HTML overlay; a whisper not a shout
     k.add([
@@ -44,7 +84,7 @@ export default function register(k, engine) {
     html += `<p id="event-typewriter"></p>`;
     html += `<div id="event-choices" style="margin-top: 20px;"></div>`;
     content.innerHTML = html;
-    overlay.classList.add("active");
+    overlay.classList.add("active", "tableau");
 
     // Typewriter effect
     const typewriterEl = document.getElementById("event-typewriter");
@@ -140,14 +180,14 @@ export default function register(k, engine) {
         clearInterval(autoTimer);
         autoTimer = null;
       }
-      overlay.classList.remove("active");
+      overlay.classList.remove("active", "tableau");
       content.innerHTML = "";
     }
 
     // Error recovery
     const onError = ({ message }) => {
       // Re-show overlay with choices and error message
-      overlay.classList.add('active');
+      overlay.classList.add('active', 'tableau');
       const choicesEl = document.getElementById('event-choices');
       if (choicesEl) {
         const errP = document.createElement('p');
