@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { toHex } from '../lib/palette.mjs';
+import { toonRamp, oxHideMaps, homespunMaps } from './textures.mjs';
 
 // PALETTE anchors from public/lib/palette.mjs (shared with 2D).
 const C = {
@@ -20,10 +21,20 @@ const C = {
   skin: toHex('skin'), shirt: toHex('shirt'), vest: toHex('vest'), trousers: toHex('trousers'),
   hatFelt: toHex('hatFelt'), bonnet: toHex('bonnet'), dressBlue: toHex('dressBlue'),
   lanternGlow: 0xffaa22,
+  ironGlint: 0x40280c, // warm bounce baked into wheel tyres so bloom has a daytime target
+  outline: 0x3a2a1a,   // warm-dark ink; pure black would punch a hole in the palette
 };
 
-function std(color, opts = {}) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
+// Lantern emissive endpoints (§A7). Day is a dull unlit-glass warmth; night is
+// well above the bloom threshold. setLantern(level) blends between them, so the
+// integrator can drive it straight off the sky's dusk keyframes.
+const LANTERN_DAY = 0.35;
+const LANTERN_NIGHT = 3.4;
+
+// Toon (§A3): 3-4 hard bands off the one shared ramp read as deliberate style;
+// smooth PBR falloff on primitive geometry reads as unfinished plastic.
+function toon(color, opts = {}) {
+  return new THREE.MeshToonMaterial({ color, gradientMap: toonRamp(), ...opts });
 }
 
 // Fresnel rim light (§5a #5): view-angle emissive rim so hero silhouettes pop
@@ -83,19 +94,81 @@ function shadowed(mesh) {
   return mesh;
 }
 
-// ── Spoked wheel: rim torus + hub + spokes, ironwork dark, wood spokes ──
-function makeWheel(radius) {
+// Inverted-hull outline (§A10): a BackSide twin of the same geometry pushed out
+// along the vertex normal. Added as a CHILD so it inherits every animated
+// transform for free. Silhouette masses only — thin details (spokes, horns,
+// eyes) are thinner than the hull width and would be swallowed by it.
+// The hull is unlit, so a fixed color would stay the same brightness at
+// midnight as at noon — cold grey rings around firelit wheels. Scaling it by
+// the scene's own light uniforms keeps the ink dark at night and warm at dusk
+// with nothing for the integrator to wire up.
+const OUTLINE_WIDTH = 0.035;
+let _outlineMat = null;
+function outlineMaterial() {
+  if (_outlineMat) return _outlineMat;
+  _outlineMat = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.lights,
+      { uWidth: { value: OUTLINE_WIDTH }, uColor: { value: new THREE.Color(C.outline) } },
+    ]),
+    vertexShader: `
+      uniform float uWidth;
+      void main() {
+        gl_Position = projectionMatrix * modelViewMatrix *
+          vec4(position + normalize(normal) * uWidth, 1.0);
+      }`,
+    fragmentShader: `
+      #include <common>
+      #include <lights_pars_begin>
+      uniform vec3 uColor;
+      void main() {
+        vec3 lit = ambientLightColor;
+        #if NUM_HEMI_LIGHTS > 0
+          lit += hemisphereLights[0].skyColor * 0.6 + hemisphereLights[0].groundColor * 0.4;
+        #endif
+        #if NUM_DIR_LIGHTS > 0
+          lit += directionalLights[0].color * 0.35;
+        #endif
+        #if NUM_POINT_LIGHTS > 0
+          lit += pointLights[0].color * 0.04;
+        #endif
+        gl_FragColor = vec4(uColor * clamp(lit, vec3(0.25), vec3(1.5)), 1.0);
+      }`,
+    side: THREE.BackSide,
+    lights: true,
+  });
+  return _outlineMat;
+}
+
+function outlined(mesh, on = true) {
+  if (on) mesh.add(new THREE.Mesh(mesh.geometry, outlineMaterial()));
+  return mesh;
+}
+
+// ── Spoked wheel: iron tyre + hub + spokes, ironwork dark, wood spokes ──
+// The tyre carries a warm emissive floor and the hub a small brass cap (§A7):
+// the only surfaces on the wagon bright enough to give the bloom pass work
+// before dusk, without reading as neon.
+function makeWheel(radius, outline = true) {
   const g = new THREE.Group();
-  const rim = shadowed(new THREE.Mesh(
-    new THREE.TorusGeometry(radius, radius * 0.09, 8, 24), std(C.rut, { roughness: 0.7 }),
-  ));
+  const rim = outlined(shadowed(new THREE.Mesh(
+    new THREE.TorusGeometry(radius, radius * 0.09, 8, 24),
+    toon(C.iron, { emissive: C.ironGlint, emissiveIntensity: 0.9 }),
+  )), outline);
   g.add(rim);
-  const hub = shadowed(new THREE.Mesh(
-    new THREE.CylinderGeometry(radius * 0.16, radius * 0.16, radius * 0.22, 10), std(C.woodDark),
-  ));
+  const hub = outlined(shadowed(new THREE.Mesh(
+    new THREE.CylinderGeometry(radius * 0.16, radius * 0.16, radius * 0.22, 10), toon(C.woodDark),
+  )), outline);
   hub.rotation.x = Math.PI / 2;
   g.add(hub);
-  const spokeMat = std(C.woodLight);
+  const capMat = toon(0xd9b26a, { emissive: 0xffcf7a, emissiveIntensity: 1.4 });
+  const capGeo = new THREE.SphereGeometry(radius * 0.06, 8, 6);
+  for (const s of [-1, 1]) {
+    const cap = new THREE.Mesh(capGeo, capMat);
+    cap.position.z = s * radius * 0.13; // clear of the hub barrel, or it is buried
+    g.add(cap);
+  }
+  const spokeMat = toon(C.woodLight);
   for (let i = 0; i < 10; i++) {
     const spoke = shadowed(new THREE.Mesh(
       new THREE.BoxGeometry(radius * 0.07, radius * 0.92, radius * 0.05), spokeMat,
@@ -114,24 +187,20 @@ function makeWheel(radius) {
 // ── Covered wagon ──
 // Layout along +X (direction of travel is -Z visually, but the wagon group is
 // yawed by the integrator); here: bed long axis = X, wheels at ±X, tongue at -X.
-export function createWagon({ textures } = {}) {
+export function createWagon({ textures, outline = true } = {}) {
   const group = new THREE.Group();
   const plank = textures ? textures.plankMaps() : null;
   const cloth = textures ? textures.canvasClothMaps() : null;
 
-  const woodMat = plank
-    ? new THREE.MeshStandardMaterial({ map: plank.map, normalMap: plank.normalMap, roughness: 0.85 })
-    : std(C.wood);
-  const clothMat = cloth
-    ? new THREE.MeshStandardMaterial({ map: cloth.map, normalMap: cloth.normalMap, roughness: 0.78 })
-    : std(C.canvas);
+  const woodMat = plank ? toon(0xffffff, { map: plank.map }) : toon(C.wood);
+  const clothMat = cloth ? toon(0xffffff, { map: cloth.map }) : toon(C.canvas);
   addRim(clothMat, [0.55, 0.6, 0.75], 0.10); // soft sky rim sells the bonnet's curve
 
   // Bed box + side boards rising slightly outward
-  const bed = shadowed(new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.9, 1.7), woodMat));
+  const bed = outlined(shadowed(new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.9, 1.7), woodMat)), outline);
   bed.position.y = 1.35;
   group.add(bed);
-  const boardMat = std(C.woodDark);
+  const boardMat = toon(C.woodDark);
   for (const s of [-1, 1]) {
     const rail = shadowed(new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.1, 0.08), boardMat));
     rail.position.set(0, 1.84, s * 0.88);
@@ -158,7 +227,7 @@ export function createWagon({ textures } = {}) {
   }
 
   // Undercarriage: two axles + reach beam
-  const axleMat = std(C.woodDark);
+  const axleMat = toon(C.woodDark);
   for (const x of [-1.25, 1.25]) {
     const axle = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.0, 8), axleMat));
     axle.rotation.x = Math.PI / 2;
@@ -170,11 +239,11 @@ export function createWagon({ textures } = {}) {
   group.add(reach);
 
   // Tongue: angled beam forward (-X) toward the team, with a yoke crossbar.
-  const tongue = shadowed(new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.09, 0.11), std(C.woodLight)));
+  const tongue = shadowed(new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.09, 0.11), toon(C.woodLight)));
   tongue.position.set(-2.6, 0.75, 0);
   tongue.rotation.z = -0.1;
   group.add(tongue);
-  const yoke = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 1.7), std(C.woodDark)));
+  const yoke = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 1.7), toon(C.woodDark)));
   yoke.position.set(-3.55, 0.92, 0);
   group.add(yoke);
 
@@ -182,14 +251,14 @@ export function createWagon({ textures } = {}) {
   const barrel = shadowed(new THREE.Mesh(
     new THREE.CylinderGeometry(0.22, 0.26, 0.55, 12),
     textures
-      ? new THREE.MeshStandardMaterial({ map: textures.plankMaps().map, roughness: 0.9 })
-      : std(C.woodLight),
+      ? toon(0xffffff, { map: textures.plankMaps().map })
+      : toon(C.woodLight),
   ));
   barrel.position.set(0.7, 1.45, 0.98);
   group.add(barrel);
   const lantern = new THREE.Mesh(
     new THREE.SphereGeometry(0.1, 10, 10),
-    new THREE.MeshStandardMaterial({ color: 0xffcc55, emissive: C.lanternGlow, emissiveIntensity: 3.2 }),
+    toon(0xffcc55, { emissive: C.lanternGlow, emissiveIntensity: LANTERN_NIGHT }),
   );
   lantern.position.set(1.78, 1.7, 0.6);
   group.add(lantern);
@@ -197,7 +266,7 @@ export function createWagon({ textures } = {}) {
   // Wheels: rear pair large (r=.72) front pair small (r=.55), period-correct.
   const wheels = [];
   for (const [x, z, r] of [[1.25, 1.02, 0.72], [1.25, -1.02, 0.72], [-1.25, 1.02, 0.55], [-1.25, -1.02, 0.55]]) {
-    const w = makeWheel(r);
+    const w = makeWheel(r, outline);
     w.position.set(x, r, z);
     group.add(w);
     wheels.push({ node: w, r });
@@ -219,6 +288,12 @@ export function createWagon({ textures } = {}) {
     // speed in world-units/sec; phase advances by distance so wheels never slide.
     update(dt, speed) { rollPhase += speed * dt; pose(rollPhase); },
     setPhase(p) { rollPhase = p; pose(p); },
+    // level 0 = daylight (unlit glass), 1 = burning. Defaults to burning so
+    // callers that never touch it keep the night camp's glow.
+    setLantern(level) {
+      const l = Math.min(1, Math.max(0, level));
+      lantern.material.emissiveIntensity = LANTERN_DAY + (LANTERN_NIGHT - LANTERN_DAY) * l;
+    },
     dispose() { group.traverse((o) => { o.geometry?.dispose?.(); }); },
   };
 }
@@ -226,9 +301,9 @@ export function createWagon({ textures } = {}) {
 // ── Yoked ox team: two oxen + yoke beam + pole back to the wagon tongue ──
 // Forward = -Z (the caravan's travel direction); the caller just positions the
 // group ahead of the wagon. Yoked oxen walk nearly in step (slight desync).
-export function createOxTeam() {
+export function createOxTeam({ outline = true } = {}) {
   const group = new THREE.Group();
-  const oxen = [createOx({ tint: 0 }), createOx({ tint: 1 })];
+  const oxen = [createOx({ tint: 0, outline }), createOx({ tint: 1, outline })];
   oxen[0].group.position.x = -0.62;
   oxen[1].group.position.x = 0.62;
   for (const ox of oxen) {
@@ -236,18 +311,18 @@ export function createOxTeam() {
     group.add(ox.group);
   }
   // Yoke beam across both necks, just behind the heads, with two bow loops.
-  const yokeMat = std(C.woodDark);
+  const yokeMat = toon(C.woodDark);
   const yoke = shadowed(new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.13, 0.16), yokeMat));
   yoke.position.set(0, 1.28, -0.42);
   group.add(yoke);
   for (const s of [-1, 1]) {
-    const bow = shadowed(new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 6, 12, Math.PI), std(C.woodLight)));
+    const bow = shadowed(new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 6, 12, Math.PI), toon(C.woodLight)));
     bow.position.set(s * 0.62, 1.26, -0.42);
     bow.rotation.x = Math.PI; // open side up, loop under the neck
     group.add(bow);
   }
   // Pole from the yoke ring back toward the wagon tongue.
-  const pole = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 2.4, 8), std(C.woodLight)));
+  const pole = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 2.4, 8), toon(C.woodLight)));
   pole.rotation.x = Math.PI / 2;
   pole.position.set(0, 1.05, 0.85);
   pole.rotation.z = 0;
@@ -263,20 +338,26 @@ export function createOxTeam() {
 }
 
 // ── Ox: draft silhouette (hump, dewlap, long muzzle, thick horns, short legs) ──
-export function createOx({ tint = 0 } = {}) {
+export function createOx({ tint = 0, outline = true } = {}) {
   const group = new THREE.Group();
-  const bodyColor = new THREE.Color(C.oxBrown).offsetHSL(0, 0, tint * 0.04);
-  const bodyMat = addRim(std(bodyColor, { roughness: 0.92 }), [0.5, 0.6, 0.8], 0.14);
-  const darkMat = std(C.oxDark, { roughness: 0.92 });
-  const creamMat = addRim(std(C.oxCream, { roughness: 0.92 }), [0.5, 0.6, 0.8], 0.12);
+  const hide = oxHideMaps();
+  // Yoked teams were rarely matched. A visibly paler second ox reads as two
+  // animals; the old 0.04 lightness step just made one brown mass twice.
+  const bodyColor = new THREE.Color(C.oxBrown).offsetHSL(0, -0.10 * tint, tint * 0.13);
+  // §A4: the hide map is near-neutral, so these palette colors still set hue —
+  // it only supplies the mottling and hair the flat single-hex material lacked.
+  const hideOpts = { map: hide.map };
+  const bodyMat = toon(bodyColor, hideOpts);
+  const darkMat = toon(C.oxDark, hideOpts);
+  const creamMat = toon(C.oxCream, hideOpts);
 
   // Longer barrel, lower to ground — draft proportions not dairy sausage.
-  const body = shadowed(new THREE.Mesh(new THREE.CapsuleGeometry(0.48, 1.08, 6, 12), bodyMat));
+  const body = outlined(shadowed(new THREE.Mesh(new THREE.CapsuleGeometry(0.48, 1.08, 6, 12), bodyMat)), outline);
   body.rotation.z = Math.PI / 2;
   body.position.y = 0.88;
   group.add(body);
   // Shoulder hump — the silhouette cue that says draft ox, not generic cow.
-  const hump = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.40, 10, 8), bodyMat));
+  const hump = outlined(shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.40, 10, 8), bodyMat)), outline);
   hump.scale.set(1.05, 0.95, 0.95);
   hump.position.set(0.42, 1.22, 0);
   group.add(hump);
@@ -292,16 +373,16 @@ export function createOx({ tint = 0 } = {}) {
   group.add(dewlap);
 
   // Neck bridging shoulder to head — heads floating off bodies read broken.
-  const neck = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.34, 0.28), bodyMat));
+  const neck = outlined(shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.34, 0.28), bodyMat)), outline);
   neck.position.set(0.78, 0.98, 0);
   neck.rotation.z = -0.38;
   group.add(neck);
 
   // Head: longer muzzle, ear nubs, eye pits, cream blaze, thick curved horns.
   const head = new THREE.Group();
-  const skull = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.34, 0.30), bodyMat));
+  const skull = outlined(shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.34, 0.30), bodyMat)), outline);
   head.add(skull);
-  const muzzle = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.24), creamMat));
+  const muzzle = outlined(shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.24), creamMat)), outline);
   muzzle.position.set(0.30, -0.08, 0);
   head.add(muzzle);
   // Face blaze (tint variants keep cream)
@@ -312,7 +393,7 @@ export function createOx({ tint = 0 } = {}) {
   }
   // Eye pits
   for (const s of [-1, 1]) {
-    const eye = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), std(0x1a120c)));
+    const eye = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), toon(0x1a120c)));
     eye.position.set(0.12, 0.06, s * 0.14);
     head.add(eye);
   }
@@ -324,7 +405,7 @@ export function createOx({ tint = 0 } = {}) {
     ear.rotation.z = s * 0.4;
     head.add(ear);
   }
-  const hornMat = std(0xd8cfb8, { roughness: 0.55 });
+  const hornMat = toon(0xd8cfb8);
   for (const s of [-1, 1]) {
     // Thick base → taper, outward-up curve (readable horns, not pin cones)
     const horn = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.42, 8), hornMat));
@@ -353,14 +434,14 @@ export function createOx({ tint = 0 } = {}) {
     [0.48, -0.24, Math.PI], [-0.52, 0.24, Math.PI],
   ]) {
     const leg = new THREE.Group();
-    const upper = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.08, 0.36, 8), bodyMat));
+    const upper = outlined(shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.08, 0.36, 8), bodyMat)), outline);
     upper.position.y = -0.18;
     leg.add(upper);
     const lower = new THREE.Group();
-    const shin = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.32, 8), darkMat));
+    const shin = outlined(shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.32, 8), darkMat)), outline);
     shin.position.y = -0.16;
     lower.add(shin);
-    const hoof = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.15), std(0x241a10)));
+    const hoof = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.15), toon(0x241a10)));
     hoof.position.y = -0.34;
     lower.add(hoof);
     lower.position.y = -0.34;
@@ -395,18 +476,22 @@ export function createOx({ tint = 0 } = {}) {
 }
 
 // ── Pioneer: shoulders, neck, hat/skirt mass — not stick figure ──
-export function createPioneer({ hat = 'felt', dress = false } = {}) {
+export function createPioneer({ hat = 'felt', dress = false, outline = true } = {}) {
   const group = new THREE.Group();
-  const shirtMat = addRim(std(C.shirt), [0.5, 0.6, 0.8], 0.12);
-  const vestMat = addRim(std(dress ? C.dressBlue : C.vest), [0.5, 0.6, 0.8], 0.12);
-  const legMat = std(dress ? C.dressBlue : C.trousers);
-  const skinMat = std(C.skin, { roughness: 0.7 });
+  // §A4: homespun weave under every cloth surface — the second untextured hero
+  // class. Near-neutral map, so the palette colors below still carry the hue.
+  const spun = homespunMaps();
+  const clothOpts = { map: spun.map };
+  const shirtMat = toon(C.shirt, clothOpts);
+  const vestMat = toon(dress ? C.dressBlue : C.vest, clothOpts);
+  const legMat = toon(dress ? C.dressBlue : C.trousers, clothOpts);
+  const skinMat = toon(C.skin);
 
   // Wider shoulders than hips
-  const torso = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 0.22), vestMat));
+  const torso = outlined(shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 0.22), vestMat)), outline);
   torso.position.y = 1.18;
   group.add(torso);
-  const chest = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.16, 0.24), shirtMat));
+  const chest = outlined(shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.16, 0.24), shirtMat)), outline);
   chest.position.y = 1.38;
   group.add(chest);
   // Neck stump
@@ -416,40 +501,40 @@ export function createPioneer({ hat = 'felt', dress = false } = {}) {
 
   if (dress) {
     // Skirt volume (not two sticks under torso)
-    const skirtMat = addRim(std(C.dressBlue, { side: THREE.DoubleSide }), [0.5, 0.6, 0.8], 0.12);
-    const skirt = shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.55, 10, 1, true), skirtMat));
+    const skirtMat = toon(C.dressBlue, { ...clothOpts, side: THREE.DoubleSide });
+    const skirt = outlined(shadowed(new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.55, 10, 1, true), skirtMat)), outline);
     skirt.position.y = 0.78;
     group.add(skirt);
   }
 
   const headG = new THREE.Group();
-  const head = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.135, 12, 10), skinMat));
+  const head = outlined(shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.135, 12, 10), skinMat)), outline);
   headG.add(head);
   // Small nose for silhouette
   const nose = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), skinMat));
   nose.position.set(0.12, -0.02, 0);
   headG.add(nose);
   if (hat === 'felt') {
-    const brim = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.028, 14), std(C.hatFelt)));
+    const brim = outlined(shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.028, 14), toon(C.hatFelt))), outline);
     brim.position.y = 0.09;
     headG.add(brim);
-    const crown = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.18, 12), std(C.hatFelt)));
+    const crown = outlined(shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.18, 12), toon(C.hatFelt))), outline);
     crown.position.y = 0.20;
     headG.add(crown);
   } else if (hat === 'straw') {
-    const brim = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.02, 14), std(0xdebe7a)));
+    const brim = outlined(shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.02, 14), toon(0xdebe7a))), outline);
     brim.position.y = 0.08;
     headG.add(brim);
-    const crown = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), std(0xdebe7a)));
+    const crown = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), toon(0xdebe7a)));
     crown.position.y = 0.08;
     headG.add(crown);
   } else { // bonnet — side flares for thumbnail read
-    const hood = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.65), std(C.bonnet)));
+    const hood = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.65), toon(C.bonnet)));
     hood.position.y = 0.05;
     hood.rotation.x = -0.35;
     headG.add(hood);
     for (const s of [-1, 1]) {
-      const wing = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), std(C.bonnet)));
+      const wing = shadowed(new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), toon(C.bonnet)));
       wing.scale.set(0.5, 1.1, 0.7);
       wing.position.set(0.02, 0.0, s * 0.14);
       headG.add(wing);
@@ -466,6 +551,7 @@ export function createPioneer({ hat = 'felt', dress = false } = {}) {
       shirtMat,
     ));
     limb.geometry.translate(0, -0.22, 0);
+    outlined(limb, outline);
     limb.position.set(x, 1.40, 0);
     group.add(limb);
     limbs.push({ limb, phase: (x < 0 ? 0 : Math.PI) + Math.PI, amp: 0.45 });
@@ -478,6 +564,7 @@ export function createPioneer({ hat = 'felt', dress = false } = {}) {
         legMat,
       ));
       limb.geometry.translate(0, -0.275, 0);
+      outlined(limb, outline);
       limb.position.set(x, 0.92, 0);
       group.add(limb);
       limbs.push({ limb, phase: x < 0 ? 0 : Math.PI, amp: 0.55 });

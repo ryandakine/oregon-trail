@@ -22,6 +22,8 @@
 //   skyNightHorizon     [42,42,74]   0x2a2a4a
 //   skyTwilightHorizon  [58,50,80]   0x3a3250
 //   sicklyHorizon       [197,208,122] 0xc5d07a  (not used but noted)
+//   silhouetteFar       [32,38,62]   0x20263e
+//   silhouetteNear      [22,28,48]   0x161c30
 
 import * as THREE from 'three';
 import { PALETTE } from '../lib/palette.mjs';
@@ -100,7 +102,7 @@ const KEYS = [
     sunColor:      rgb(180, 140, 100),
     sunIntensity:  0.30,
     hemiSky:       rgb(80, 85, 130),
-    hemiGround:    rgb(45, 50, 50),
+    hemiGround:    rgb(48, 44, 64),   // tinted toward the twilight horizon's purple-blue — a flat (45,50,50) reads as neutral gray here
     hemiIntensity: 0.18,
     fogColor:      rgb(60, 58, 88),
     ambientBoost:  0.05,
@@ -381,24 +383,40 @@ function buildStars() {
 }
 
 // ─── Clouds ───────────────────────────────────────────────────────────────────
-// 8-14 deterministic billboarded sprites.  Positions/phases seeded; drift
+// Two deterministic billboarded-sprite decks: a high slow deck and a lower,
+// smaller, ~2x-faster deck (parallax-by-speed, not by depth — both decks live
+// in the camera-following sky group). Positions/phases seeded; drift
 // integrates time t (pure function, no internal wall-clock).
 
+const CLOUD_WRAP_X   = 500;         // half-width of the x wrap range, both decks
+
 const CLOUD_SEED     = 0xC10ADF5;
-const CLOUD_COUNT    = 11;          // within [8, 14]
-const CLOUD_WRAP_X   = 500;         // half-width of the x wrap range
+const CLOUD_COUNT    = 26;
 const CLOUD_Y_MIN    = 120;
 const CLOUD_Y_MAX    = 200;
 const CLOUD_Z_MIN    = -80;
 const CLOUD_Z_MAX    = 120;
 
-function buildClouds(cloudTexture) {
-  const rng = lcgCreate(CLOUD_SEED);
-  const sprites = [];
-  const phases  = [];   // x-drift phase per cloud [0, CLOUD_WRAP_X*2)
-  const drifts  = [];   // drift speed per cloud (world-units / s of t)
+const CLOUD_LOW_SEED  = 0x8B2E44D1;
+const CLOUD_LOW_COUNT = 14;
+const CLOUD_LOW_Y_MIN = 55;
+const CLOUD_LOW_Y_MAX = 95;
+const CLOUD_LOW_Z_MIN = -70;
+const CLOUD_LOW_Z_MAX = 100;
 
-  for (let i = 0; i < CLOUD_COUNT; i++) {
+/**
+ * Build one deck of billboarded cloud sprites from a seeded LCG.
+ * Returns records (not parallel arrays) so update() can iterate one deck
+ * or both without per-frame index juggling.
+ */
+function buildCloudDeck(cloudTexture, {
+  seed, count, wrapX, yMin, yMax, zMin, zMax,
+  scaleMin, scaleMax, driftMin, driftMax, tint, renderOrder,
+}) {
+  const rng = lcgCreate(seed);
+  const clouds = [];
+
+  for (let i = 0; i < count; i++) {
     const mat = new THREE.SpriteMaterial({
       map: cloudTexture,
       transparent: true,
@@ -408,26 +426,115 @@ function buildClouds(cloudTexture) {
     });
     const sprite = new THREE.Sprite(mat);
 
-    const scaleW = 100 + rng() * 160;
+    const scaleW = scaleMin + rng() * (scaleMax - scaleMin);
     const scaleH = scaleW * (0.35 + rng() * 0.20);
     sprite.scale.set(scaleW, scaleH, 1);
 
-    const startX = (rng() * 2 - 1) * CLOUD_WRAP_X;
-    const y      = CLOUD_Y_MIN + rng() * (CLOUD_Y_MAX - CLOUD_Y_MIN);
-    const z      = CLOUD_Z_MIN + rng() * (CLOUD_Z_MAX - CLOUD_Z_MIN);
+    const startX = (rng() * 2 - 1) * wrapX;
+    const y      = yMin + rng() * (yMax - yMin);
+    const z      = zMin + rng() * (zMax - zMin);
     sprite.position.set(startX, y, z);
 
-    // Store initial X as phase anchor so drift is relative-to-start.
-    phases.push(startX);
-    // Drift 0.3–1.2 world-units per normalised t unit (i.e. per full day).
-    drifts.push(0.3 + rng() * 0.9);
-
-    sprite.renderOrder = -8;
-    sprites.push(sprite);
+    sprite.renderOrder = renderOrder;
+    clouds.push({
+      sprite,
+      wrapX,
+      phase: startX,                          // x-drift phase, [-wrapX, wrapX)
+      drift: driftMin + rng() * (driftMax - driftMin), // world-units / t-unit
+      tint,                                    // color multiplier (deck darkening)
+    });
   }
 
-  return { sprites, phases, drifts };
+  return clouds;
 }
+
+// ─── Distant silhouette bands ─────────────────────────────────────────────────
+// Two parallax backdrop rings (far mountain ridgeline, nearer hill line) that
+// fill the horizon behind the terrain band. Each is a closed ring of quads
+// around the full azimuth (radius fixed, height jagged) so it reads correctly
+// no matter which way a scene's camera preset looks — the terrain's own
+// ±90u half-width can't do that, only a feature centred on the viewer can.
+// Flat unlit MeshBasicMaterial with fog:true — no lighting, but the scene fog
+// hazes them out at distance for the same atmospheric-perspective effect the
+// dome's own haze blend uses. Height noise comes from the seeded LCG, then a
+// couple of wrap-around triangular smoothing passes so it reads as a
+// continuous skyline instead of per-vertex jitter.
+
+function smoothRingHeights(values, passes) {
+  const n = values.length;
+  let src = values;
+  for (let p = 0; p < passes; p++) {
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const prev = src[(i - 1 + n) % n];
+      const cur  = src[i];
+      const next = src[(i + 1) % n];
+      out[i] = (prev + cur * 2 + next) / 4;
+    }
+    src = out;
+  }
+  return src;
+}
+
+function buildSilhouetteRing({ seed, segments, radius, baseHeight, variance, bottomY, baseColor, renderOrder }) {
+  const rng = lcgCreate(seed);
+  const raw = new Float32Array(segments);
+  for (let i = 0; i < segments; i++) raw[i] = rng();
+  const heights = smoothRingHeights(raw, 2);
+
+  const positions = new Float32Array(segments * 2 * 3); // top + bottom vert per segment
+  for (let i = 0; i < segments; i++) {
+    const ang = (i / segments) * Math.PI * 2;
+    const sx  = Math.sin(ang) * radius;
+    const sz  = Math.cos(ang) * radius;
+    const topY = baseHeight + heights[i] * variance;
+    const vi = i * 6;
+    positions[vi]     = sx; positions[vi + 1] = topY;  positions[vi + 2] = sz;
+    positions[vi + 3] = sx; positions[vi + 4] = bottomY; positions[vi + 5] = sz;
+  }
+
+  const indices = new Uint16Array(segments * 6);
+  for (let i = 0; i < segments; i++) {
+    const ni = (i + 1) % segments;
+    const a = i * 2, b = i * 2 + 1;     // this segment: top, bottom
+    const c = ni * 2, d = ni * 2 + 1;   // next segment: top, bottom
+    const k = i * 6;
+    indices[k] = a; indices[k + 1] = b; indices[k + 2] = c;
+    indices[k + 3] = b; indices[k + 4] = d; indices[k + 5] = c;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(new THREE.BufferAttribute(indices, 1));
+
+  // BackSide: the camera sits inside the ring looking out, same convention as
+  // the dome — draws the inward-facing surface regardless of winding.
+  const mat = new THREE.MeshBasicMaterial({
+    color: baseColor,
+    fog: true,
+    side: THREE.BackSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = renderOrder;
+
+  return { mesh, geo, mat, radius };
+}
+
+const RIDGE_SEED     = 0x51D6E17;
+const RIDGE_SEGMENTS = 56;
+const RIDGE_RADIUS   = 160;
+const RIDGE_BASE_H   = 58;
+const RIDGE_VARIANCE = 44;
+const RIDGE_PARALLAX = 0.1;  // fraction of world scroll
+
+const HILL_SEED     = 0x2A9C443;
+const HILL_SEGMENTS = 48;
+const HILL_RADIUS   = 110;
+const HILL_BASE_H   = 22;
+const HILL_VARIANCE = 15;
+const HILL_PARALLAX = 0.3;   // fraction of world scroll
+
+const SILHOUETTE_BOTTOM_Y = -40; // well below any terrain sample; hides the seam
 
 // ─── Main factory ─────────────────────────────────────────────────────────────
 
@@ -439,7 +546,7 @@ function buildClouds(cloudTexture) {
  *
  * @returns {{
  *   group:     THREE.Group,
- *   update:    (dt: number, t: number, cameraPos: THREE.Vector3) => void,
+ *   update:    (dt: number, t: number, cameraPos: THREE.Vector3, scrollZ?: number) => void,
  *   sunDirAt:  (t: number) => THREE.Vector3,
  *   applyTo:   (targets: { sun, hemi, scene }, t: number) => object,
  *   dispose:   () => void,
@@ -480,12 +587,40 @@ export function createSky({ cloudTexture }) {
   const stars = buildStars();
   group.add(stars);
 
-  // ── Clouds ──
-  const { sprites: cloudSprites, phases: cloudPhases, drifts: cloudDrifts } =
-    buildClouds(cloudTexture);
+  // ── Clouds: high slow deck + low fast deck ──
+  const cloudsHigh = buildCloudDeck(cloudTexture, {
+    seed: CLOUD_SEED, count: CLOUD_COUNT, wrapX: CLOUD_WRAP_X,
+    yMin: CLOUD_Y_MIN, yMax: CLOUD_Y_MAX, zMin: CLOUD_Z_MIN, zMax: CLOUD_Z_MAX,
+    scaleMin: 100, scaleMax: 260, driftMin: 0.3, driftMax: 1.2,
+    tint: 1.0, renderOrder: -8,
+  });
+  const cloudsLow = buildCloudDeck(cloudTexture, {
+    seed: CLOUD_LOW_SEED, count: CLOUD_LOW_COUNT, wrapX: CLOUD_WRAP_X,
+    yMin: CLOUD_LOW_Y_MIN, yMax: CLOUD_LOW_Y_MAX, zMin: CLOUD_LOW_Z_MIN, zMax: CLOUD_LOW_Z_MAX,
+    scaleMin: 45, scaleMax: 125, driftMin: 0.6, driftMax: 2.4,
+    tint: 0.8, renderOrder: -7,
+  });
+  const clouds = cloudsHigh.concat(cloudsLow);
   const cloudGroup = new THREE.Group();
-  for (const s of cloudSprites) cloudGroup.add(s);
+  for (const c of clouds) cloudGroup.add(c.sprite);
   group.add(cloudGroup);
+
+  // ── Distant silhouette bands: far ridge + nearer hill line ──
+  const ridge = buildSilhouetteRing({
+    seed: RIDGE_SEED, segments: RIDGE_SEGMENTS, radius: RIDGE_RADIUS,
+    baseHeight: RIDGE_BASE_H, variance: RIDGE_VARIANCE, bottomY: SILHOUETTE_BOTTOM_Y,
+    baseColor: prgb('silhouetteFar'), renderOrder: -9.4,
+  });
+  const hill = buildSilhouetteRing({
+    seed: HILL_SEED, segments: HILL_SEGMENTS, radius: HILL_RADIUS,
+    baseHeight: HILL_BASE_H, variance: HILL_VARIANCE, bottomY: SILHOUETTE_BOTTOM_Y,
+    baseColor: prgb('silhouetteNear'), renderOrder: -9.2,
+  });
+  group.add(ridge.mesh);
+  group.add(hill.mesh);
+  const _ridgeColor = prgb('silhouetteFar');
+  const _hillColor  = prgb('silhouetteNear');
+  const _tmpBandColor = new THREE.Color();
 
   // ── Internal state ──
   const _tmpSunDir = new THREE.Vector3();
@@ -511,8 +646,10 @@ export function createSky({ cloudTexture }) {
   // ── update ────────────────────────────────────────────────────────────────
   // Pure function of t for all visual state (dt used only for cloud drift
   // which is also driven by t so remains deterministic across equal-t calls).
+  // scrollZ is optional (trailing, default 0) and drives the two silhouette
+  // rings' parallax rotation — safe no-op for any caller not yet passing it.
 
-  function update(dt, t, cameraPos) {
+  function update(dt, t, cameraPos, scrollZ = 0) {
     // Ride the camera (dome must follow so it's always centred on the viewer).
     if (cameraPos) {
       group.position.copy(cameraPos);
@@ -551,17 +688,36 @@ export function createSky({ cloudTexture }) {
     // Overcast thickens the cloud deck.
     cloudOpacity = Math.max(cloudOpacity, 0.45 + 0.5 * _overcast);
 
-    for (let i = 0; i < cloudSprites.length; i++) {
-      const sprite = cloudSprites[i];
-      // Drift along +X; wrap in [-CLOUD_WRAP_X, +CLOUD_WRAP_X].
-      const rawX = cloudPhases[i] + cloudDrifts[i] * t * dayUnits;
-      const wrap = CLOUD_WRAP_X * 2;
-      sprite.position.x = ((((rawX + CLOUD_WRAP_X) % wrap) + wrap) % wrap) - CLOUD_WRAP_X;
-      sprite.material.opacity = cloudOpacity;
-      // Grey the clouds toward storm-cloud under overcast.
-      if (_overcast > 0) sprite.material.color.setRGB(1 - 0.35 * _overcast, 1 - 0.33 * _overcast, 1 - 0.3 * _overcast);
-      else sprite.material.color.setRGB(1, 1, 1);
+    for (let i = 0; i < clouds.length; i++) {
+      const c = clouds[i];
+      // Drift along +X; wrap in [-wrapX, +wrapX).
+      const rawX = c.phase + c.drift * t * dayUnits;
+      const wrap = c.wrapX * 2;
+      c.sprite.position.x = ((((rawX + c.wrapX) % wrap) + wrap) % wrap) - c.wrapX;
+      c.sprite.material.opacity = cloudOpacity;
+      // Grey the clouds toward storm-cloud under overcast; low deck stays
+      // slightly darker than the high deck (tint) at all times.
+      if (_overcast > 0) {
+        c.sprite.material.color.setRGB(
+          (1 - 0.35 * _overcast) * c.tint,
+          (1 - 0.33 * _overcast) * c.tint,
+          (1 - 0.3 * _overcast) * c.tint,
+        );
+      } else {
+        c.sprite.material.color.setRGB(c.tint, c.tint, c.tint);
+      }
     }
+
+    // ── Distant silhouette bands: colour toward the horizon (atmospheric
+    // perspective — the far ridge washes out more than the nearer hill line)
+    // and a slow rotation drift keyed off world scroll (0 with no scrollZ).
+    _tmpBandColor.copy(_ridgeColor).lerp(pal.horizon, 0.18);
+    ridge.mat.color.copy(_tmpBandColor);
+    ridge.mesh.rotation.y = (scrollZ * RIDGE_PARALLAX) / RIDGE_RADIUS;
+
+    _tmpBandColor.copy(_hillColor).lerp(pal.horizon, 0.10);
+    hill.mat.color.copy(_tmpBandColor);
+    hill.mesh.rotation.y = (scrollZ * HILL_PARALLAX) / HILL_RADIUS;
   }
 
   // ── applyTo ───────────────────────────────────────────────────────────────
@@ -608,10 +764,15 @@ export function createSky({ cloudTexture }) {
     stars.geometry.dispose();
     stars.material.dispose();
 
-    for (const sprite of cloudSprites) {
-      sprite.material.dispose();
+    for (const c of clouds) {
+      c.sprite.material.dispose();
       // Note: cloudTexture is caller-owned; we do not dispose it here.
     }
+
+    ridge.geo.dispose();
+    ridge.mat.dispose();
+    hill.geo.dispose();
+    hill.mat.dispose();
   }
 
   // v: 0..1 cover. color: optional THREE.Color the dome/light grey toward

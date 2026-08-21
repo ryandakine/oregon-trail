@@ -10,6 +10,7 @@
 // string. No Math.random() calls anywhere.
 
 import * as THREE from 'three';
+import { toonRamp } from './textures.mjs';
 
 // ── PALETTE (matches public/lib/draw.mjs + models.mjs) ──────────────────────
 const C = {
@@ -33,8 +34,10 @@ const C = {
 
 // ── Minimal local helpers (not imported from models.mjs per constraints) ─────
 
-function std(color, opts = {}) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
+// Toon off the shared ramp (§A3): landmark set-pieces are the hero shots, and
+// PBR falloff on box-and-cylinder architecture is what read as unfinished.
+function toon(color, opts = {}) {
+  return new THREE.MeshToonMaterial({ color, gradientMap: toonRamp(), ...opts });
 }
 
 function shadowed(mesh) {
@@ -193,7 +196,7 @@ function makeFlagpole(group, woodMat, flagMat, cx, cz, h = 7.5) {
   // flag: a flat quad pinned to the top of the pole
   const flag = new THREE.Mesh(
     new THREE.PlaneGeometry(1.1, 0.65),
-    new THREE.MeshStandardMaterial({ color: flagMat, roughness: 0.9, side: THREE.DoubleSide }),
+    toon(flagMat, { side: THREE.DoubleSide }),
   );
   flag.position.set(cx + 0.55, h - 0.1, cz);
   group.add(flag);
@@ -303,13 +306,13 @@ function buildFort(group, rng, textures) {
   const plankTex = textures.plankMaps?.();
 
   const barkMat = barkTex
-    ? new THREE.MeshStandardMaterial({ map: barkTex.map, normalMap: barkTex.normalMap ?? null, roughness: 0.9 })
-    : std(C.bark);
+    ? toon(0xffffff, { map: barkTex.map })
+    : toon(C.bark);
   const plankMat = plankTex
-    ? new THREE.MeshStandardMaterial({ map: plankTex.map, normalMap: plankTex.normalMap ?? null, roughness: 0.85 })
-    : std(C.plankWall);
-  const roofMat = std(C.roofShake, { roughness: 0.95 });
-  const stoneMat = std(C.stone, { roughness: 0.9 });
+    ? toon(0xffffff, { map: plankTex.map })
+    : toon(C.plankWall);
+  const roofMat = toon(C.roofShake);
+  const stoneMat = toon(C.stone);
 
   // Stockade footprint: ~22u wide, ~18u deep. Gate faces +Z (toward wagon).
   // Left and right walls run along Z, back wall runs along X.
@@ -342,7 +345,7 @@ function buildFort(group, rng, textures) {
   makeFlagpole(group, plankMat, flagColor, jitter(rng, 0, 1.5), jitter(rng, -13, 1.5), 7.5);
 
   // Clutter near the gate
-  const woodMat2 = std(C.woodLight, { roughness: 0.88 });
+  const woodMat2 = toon(C.woodLight);
   makeBarrel(group, woodMat2, -2.8, 0, 1.2);
   makeBarrel(group, woodMat2, -3.5, 0, 0.8);
   makeCrate(group, woodMat2, 2.5, 0, 1.0);
@@ -362,9 +365,9 @@ function buildFort(group, rng, textures) {
 function buildNatural(group, rng, name, textures) {
   const rockTex = textures.rockMaps?.();
   const rockMat = rockTex
-    ? new THREE.MeshStandardMaterial({ map: rockTex.map, normalMap: rockTex.normalMap ?? null, roughness: 0.9 })
-    : std(C.stone, { roughness: 0.9 });
-  const dirtMat = std(C.dirtMid, { roughness: 0.95 });
+    ? toon(0xffffff, { map: rockTex.map })
+    : toon(C.stone);
+  const dirtMat = toon(C.dirtMid);
 
   const lowerName = name.toLowerCase();
   const isChimney  = lowerName.includes('chimney');
@@ -439,7 +442,7 @@ function buildNatural(group, rng, name, textures) {
   // Cap
   const cap = shadowed(new THREE.Mesh(
     new THREE.CylinderGeometry(spireTopR * 0.7, spireTopR * 1.1, 0.8, 7),
-    std(C.stoneDark, { roughness: 0.95 }),
+    toon(C.stoneDark),
   ));
   cap.position.set(0, spireH + 1.8, 0);
   group.add(cap);
@@ -452,11 +455,11 @@ function buildNatural(group, rng, name, textures) {
 function buildSettlement(group, rng, textures) {
   const plankTex = textures.plankMaps?.();
   const wallMat = plankTex
-    ? new THREE.MeshStandardMaterial({ map: plankTex.map, normalMap: plankTex.normalMap ?? null, roughness: 0.88 })
-    : std(C.plankWall);
-  const roofMat = std(C.roofShake, { roughness: 0.95 });
-  const woodMat = std(C.woodLight, { roughness: 0.88 });
-  const stoneMat = std(C.stone, { roughness: 0.9 });
+    ? toon(0xffffff, { map: plankTex.map })
+    : toon(C.plankWall);
+  const roofMat = toon(C.roofShake);
+  const woodMat = toon(C.woodLight);
+  const stoneMat = toon(C.stone);
 
   const nBuildings = rng() > 0.4 ? 3 : 2;
   const layouts = [
@@ -494,14 +497,14 @@ function buildDestination(group, rng, textures) {
   const plankTex = textures.plankMaps?.();
   const stoneTex = textures.stoneMaps?.() ?? textures.plasterMaps?.();
   const wallMat = plankTex
-    ? new THREE.MeshStandardMaterial({ map: plankTex.map, normalMap: plankTex.normalMap ?? null, roughness: 0.86 })
-    : std(C.plankWall);
+    ? toon(0xffffff, { map: plankTex.map })
+    : toon(C.plankWall);
   const stoneWallMat = stoneTex
-    ? new THREE.MeshStandardMaterial({ map: stoneTex.map, normalMap: stoneTex.normalMap ?? null, roughness: 0.88 })
-    : std(C.stoneLight, { roughness: 0.88 });
-  const roofMat = std(C.roofShake, { roughness: 0.9 });
-  const woodMat = std(C.woodLight, { roughness: 0.88 });
-  const stoneMat = std(C.stone, { roughness: 0.9 });
+    ? toon(0xffffff, { map: stoneTex.map })
+    : toon(C.stoneLight);
+  const roofMat = toon(C.roofShake);
+  const woodMat = toon(C.woodLight);
+  const stoneMat = toon(C.stone);
 
   // 4 buildings: one larger central, two flanking, one set back
   makeBuilding(group, stoneWallMat, roofMat,  0.0, -8.0, 8.5, 5.5, 4.2, 2.0);
@@ -535,8 +538,8 @@ function buildDestination(group, rng, textures) {
  * bank and a stub ferry frame. Water owned by water.mjs.
  */
 function buildRiverCrossing(group, rng, textures) {
-  const woodMat = std(C.woodLight, { roughness: 0.88 });
-  const ropeMat = std(C.rope, { roughness: 0.9 });
+  const woodMat = toon(C.woodLight);
+  const ropeMat = toon(C.rope);
 
   // Two mooring posts at the bank edge (z ≈ 0 = near bank)
   for (const sx of [-2.0, 2.0]) {
@@ -566,7 +569,7 @@ function buildRiverCrossing(group, rng, textures) {
   group.add(ropeBeam);
 
   // Ferry stub: a couple of planks forming a flat raft edge on the near bank
-  const raftMat = std(C.wood, { roughness: 0.92 });
+  const raftMat = toon(C.wood);
   const raft = shadowed(new THREE.Mesh(
     new THREE.BoxGeometry(4.5, 0.18, 1.6),
     raftMat,
@@ -576,7 +579,7 @@ function buildRiverCrossing(group, rng, textures) {
   // Cross-plank
   const cp = shadowed(new THREE.Mesh(
     new THREE.BoxGeometry(0.18, 0.22, 1.65),
-    std(C.woodDark, { roughness: 0.92 }),
+    toon(C.woodDark),
   ));
   for (const sx of [-1.8, 0, 1.8]) {
     const c = cp.clone();

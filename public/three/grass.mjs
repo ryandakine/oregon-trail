@@ -45,6 +45,20 @@ export function createGrass({ terrain, tuftTexture, count = 2400 } = {}) {
   // every blade with the world-up normal instead, so tufts take exactly the
   // lighting of the ground they grow from, from every viewing angle.
   mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = { value: 0 };
+    // Wind sway: displace blade-top vertices in local space (before the
+    // instanceMatrix multiply in project_vertex) so each tuft sways as one
+    // rigid blade. Base (uv.y=0) stays pinned; tip (uv.y=1) gets full amp —
+    // that's the pivot-at-base look. Phase keyed off world XZ so the field
+    // doesn't sway in lockstep.
+    sh.vertexShader = `uniform float uTime;\n${sh.vertexShader}`.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+       vec4 grassWorld = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
+       float sway = sin(uTime * 1.6 + grassWorld.x * 0.6 + grassWorld.z * 0.4) * 0.09 * uv.y;
+       transformed.x += sway;
+       transformed.z += sway;`,
+    );
     sh.fragmentShader = sh.fragmentShader.replace(
       '#include <normal_fragment_begin>',
       // Provide exactly what the replaced chunk provides — `normal` and
@@ -53,6 +67,7 @@ export function createGrass({ terrain, tuftTexture, count = 2400 } = {}) {
       `vec3 normal = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
        vec3 nonPerturbedNormal = normal;`,
     );
+    mat.userData.shader = sh;
   };
   // Tufts shouldn't catch the directional shadow pass (acne on alpha cards).
   const mesh = new THREE.InstancedMesh(geo, mat, count);
@@ -110,6 +125,9 @@ export function createGrass({ terrain, tuftTexture, count = 2400 } = {}) {
     update(scrollZ) {
       if (builtAt === null || Math.abs(scrollZ - builtAt) > REBUILD_STEP) rebuild(scrollZ);
       else group.position.z = scrollZ - builtAt; // smooth scroll between seeds
+      // Driven by scrollZ (pure function of d, same as wagon/team setPhase) —
+      // never wall clock, so freezeAt(d) stays pixel-stable.
+      if (mat.userData.shader) mat.userData.shader.uniforms.uTime.value = scrollZ;
     },
     // Force a re-seed on the next update — terrain features changed under the
     // field (river carved/cleared) while the scroll position stood still.

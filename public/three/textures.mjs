@@ -124,6 +124,40 @@ export function heightToNormal(heightCanvas, strength = 2.0) {
 }
 
 // ---------------------------------------------------------------------------
+// Toon shading ramp
+// ---------------------------------------------------------------------------
+
+let _toonRampCache = null;
+
+/**
+ * The single 4-step gradient ramp every MeshToonMaterial in the 3D layer
+ * shares, so wagon / oxen / pioneers / fauna / landmarks all band on the same
+ * value steps.  three reads only the red channel (getGradientIrradiance), so
+ * this is a value LUT, not a color one — hue stays with each material.
+ * NearestFilter gives hard bands; NoColorSpace keeps the steps where authored.
+ * @returns {THREE.DataTexture}
+ */
+export function toonRamp() {
+  if (_toonRampCache) return _toonRampCache;
+  const STEPS = [0.22, 0.48, 0.74, 1.0];
+  const data = new Uint8Array(STEPS.length * 4);
+  for (let i = 0; i < STEPS.length; i++) {
+    const v = Math.round(STEPS[i] * 255);
+    data[i * 4] = v;
+    data[i * 4 + 1] = v;
+    data[i * 4 + 2] = v;
+    data[i * 4 + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, STEPS.length, 1, THREE.RGBAFormat);
+  tex.minFilter = tex.magFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  _toonRampCache = tex;
+  return tex;
+}
+
+// ---------------------------------------------------------------------------
 // Lazy-cached surface map builders
 // Each returns { map: THREE.CanvasTexture, normalMap: THREE.CanvasTexture }.
 // ---------------------------------------------------------------------------
@@ -559,6 +593,176 @@ export function canvasClothMaps() {
 
   _canvasClothCache = { map: mapTex, normalMap: heightToNormal(height, 1.3) };
   return _canvasClothCache;
+}
+
+// Hide / homespun — the hero-model surfaces that carried no map at all, which
+// is what made oxen and pioneers read as plastic. Painted NEAR-NEUTRAL: the
+// mesh material's palette color still drives hue, the map only supplies
+// mottling, hair strokes and weave. Small (128) and lazily cached like the rest.
+
+function hideMaps(salt, cfg) {
+  seedReset(salt);
+  const S = 128;
+
+  const albedo = makeRawCanvas(S, (ctx, s) => {
+    ctx.fillStyle = cfg.base;
+    ctx.fillRect(0, 0, s, s);
+    // Coat patches — the light/dark blotching that breaks a flat hex up
+    for (let i = 0; i < cfg.patches; i++) {
+      const x = rnd() * s, y = rnd() * s, r = cfg.patchR * (0.5 + rnd());
+      const [pr, pg, pb] = rnd() > cfg.darkBias ? cfg.light : cfg.dark;
+      const rot = rnd() * Math.PI;
+      drawWrapped(ctx, s, (ox, oy) => {
+        const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        g.addColorStop(0, `rgba(${pr},${pg},${pb},${cfg.patchAlpha})`);
+        g.addColorStop(1, `rgba(${pr},${pg},${pb},0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(x + ox, y + oy, r, r * 0.68, rot, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+    // Hair strokes — length and weight are what separates short fur from shag
+    for (let i = 0; i < cfg.hairs; i++) {
+      const x = rnd() * s, y = rnd() * s;
+      const v = Math.round(cfg.hairV + rnd() * cfg.hairSpread);
+      const len = cfg.hairLen * (0.7 + rnd() * 0.6);
+      ctx.strokeStyle = `rgba(${v},${Math.round(v * 0.96)},${Math.round(v * 0.89)},${cfg.hairAlpha})`;
+      ctx.lineWidth = cfg.hairW;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + len * 0.45, y + (rnd() - 0.5) * 3, x + len, y + (rnd() - 0.5) * 2);
+      ctx.stroke();
+    }
+  });
+
+  const mapTex = new THREE.CanvasTexture(albedo);
+  mapTex.wrapS = mapTex.wrapT = THREE.RepeatWrapping;
+  mapTex.colorSpace = THREE.SRGBColorSpace;
+  mapTex.repeat.set(cfg.repeat, cfg.repeat);
+
+  const height = makeRawCanvas(S, (ctx, s) => {
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < cfg.hairs; i++) {
+      const x = rnd() * s, y = rnd() * s;
+      const v = Math.round(58 + rnd() * 140);
+      ctx.strokeStyle = `rgba(${v},${v},${v},0.45)`;
+      ctx.lineWidth = cfg.hairW;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + cfg.hairLen * (0.7 + rnd() * 0.6), y + (rnd() - 0.5) * 2);
+      ctx.stroke();
+    }
+  });
+
+  return { map: mapTex, normalMap: heightToNormal(height, cfg.normalStrength) };
+}
+
+// Ox hide — short mottled fur, broad cream patches over the brown base.
+let _oxHideCache = null;
+export function oxHideMaps() {
+  if (_oxHideCache) return _oxHideCache;
+  _oxHideCache = hideMaps(14, {
+    base: '#cfc6b6',
+    light: [246, 239, 216], dark: [148, 124, 94],
+    patches: 26, patchR: 20, patchAlpha: 0.62, darkBias: 0.45,
+    hairs: 900, hairV: 148, hairSpread: 92, hairAlpha: 0.20, hairW: 1.1, hairLen: 5,
+    repeat: 3.5, normalStrength: 1.3,
+  });
+  return _oxHideCache;
+}
+
+// Deer hide — finer, tighter tan coat; less blotching than the oxen.
+let _deerHideCache = null;
+export function deerHideMaps() {
+  if (_deerHideCache) return _deerHideCache;
+  _deerHideCache = hideMaps(15, {
+    base: '#d2c9b8',
+    light: [246, 240, 222], dark: [166, 140, 108],
+    patches: 16, patchR: 15, patchAlpha: 0.34, darkBias: 0.5,
+    hairs: 1100, hairV: 158, hairSpread: 80, hairAlpha: 0.13, hairW: 0.9, hairLen: 4,
+    repeat: 2.5, normalStrength: 1.2,
+  });
+  return _deerHideCache;
+}
+
+// Bison hide — long dark shag: heavier strokes, deeper blotches, harder normal.
+let _bisonHideCache = null;
+export function bisonHideMaps() {
+  if (_bisonHideCache) return _bisonHideCache;
+  _bisonHideCache = hideMaps(16, {
+    base: '#bfb4a4',
+    light: [216, 206, 188], dark: [112, 94, 74],
+    patches: 30, patchR: 24, patchAlpha: 0.60, darkBias: 0.38,
+    hairs: 1600, hairV: 132, hairSpread: 100, hairAlpha: 0.22, hairW: 1.6, hairLen: 9,
+    repeat: 2, normalStrength: 2.0,
+  });
+  return _bisonHideCache;
+}
+
+// Homespun — coarse hand-loomed cloth for pioneer bodies. Wider, more irregular
+// threads than the wagon bonnet's mill canvas, plus trail dust wear.
+let _homespunCache = null;
+export function homespunMaps() {
+  if (_homespunCache) return _homespunCache;
+  seedReset(17);
+  const S = 128;
+
+  const mapTex = makeCanvas(S, (ctx, s) => {
+    ctx.fillStyle = '#d4ccbe';
+    ctx.fillRect(0, 0, s, s);
+    // Warp (vertical)
+    for (let xx = 0; xx < s; xx += 4) {
+      const v = Math.round(196 + rnd() * 44);
+      ctx.fillStyle = `rgba(${v},${Math.round(v * 0.97)},${Math.round(v * 0.90)},0.34)`;
+      ctx.fillRect(xx, 0, 2 + rnd(), s);
+    }
+    // Weft (horizontal) — darker, so the crossings read as a weave not stripes
+    for (let yy = 0; yy < s; yy += 4) {
+      const v = Math.round(166 + rnd() * 40);
+      ctx.fillStyle = `rgba(${v},${Math.round(v * 0.96)},${Math.round(v * 0.88)},0.30)`;
+      ctx.fillRect(0, yy, s, 2 + rnd());
+    }
+    // Slub knots — hand-spun thread is never even
+    for (let i = 0; i < 420; i++) {
+      const v = Math.round(150 + rnd() * 90);
+      ctx.fillStyle = `rgba(${v},${v},${Math.round(v * 0.92)},0.24)`;
+      ctx.fillRect(rnd() * s, rnd() * s, 2, 2);
+    }
+    // Trail wear
+    for (let i = 0; i < 14; i++) {
+      const x = rnd() * s, y = rnd() * s, r = 6 + rnd() * 14;
+      drawWrapped(ctx, s, (ox, oy) => {
+        const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        g.addColorStop(0, 'rgba(146,122,84,0.18)');
+        g.addColorStop(1, 'rgba(146,122,84,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  });
+  mapTex.repeat.set(3, 3);
+
+  const height = makeRawCanvas(S, (ctx, s) => {
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, s, s);
+    for (let xx = 0; xx < s; xx += 4) {
+      const v = Math.round(100 + rnd() * 70);
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      ctx.fillRect(xx, 0, 2, s);
+    }
+    for (let yy = 0; yy < s; yy += 4) {
+      const v = Math.round(108 + rnd() * 60);
+      ctx.fillStyle = `rgba(${v},${v},${v},0.6)`;
+      ctx.fillRect(0, yy, s, 2);
+    }
+  });
+
+  _homespunCache = { map: mapTex, normalMap: heightToNormal(height, 1.2) };
+  return _homespunCache;
 }
 
 // Bark — vertical ridge field keyed to PALETTE.wood [90,58,31].
