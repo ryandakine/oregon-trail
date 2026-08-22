@@ -469,14 +469,16 @@ export function createVfx() {
     const count = 2 + Math.floor(rng() * 3);
     for (let i = 0; i < count; i++) {
       const vx = (rng() - 0.5) * 1.4;
-      const vy =  1.2 + rng() * 1.6;
+      // Low kick, strong gravity, short life: wheel dust must stay below the
+      // wagon bed — against a deep-blue sky a rising puff column reads as smoke.
+      const vy =  0.35 + rng() * 0.55;
       const vz = (rng() - 0.5) * 1.0;
       const br = 0.65 + rng() * 0.25;
       const [dr, dg, db] = toSRGB01('dust');
       _c.setRGB(br * dr, br * dg, br * db);
       _spawn(x + (rng() - 0.5) * 0.4, y + 0.05, z + (rng() - 0.5) * 0.4,
-        vx, vy, vz, _c, 0.22 + rng() * 0.18, 1.2 + rng() * 0.8, 0.35, SPR.smoke,
-        rng() * Math.PI * 2);
+        vx, vy, vz, _c, 0.22 + rng() * 0.18, 0.7 + rng() * 0.5, 0.9, SPR.smoke,
+        rng() * Math.PI * 2, 0.6);
     }
   }
 
