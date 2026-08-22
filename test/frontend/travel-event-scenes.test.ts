@@ -41,14 +41,24 @@ describe("travel + event + bitter_path scenes", () => {
   });
 
   it("T-travel-3: travel renders in high tone (tone.mjs horror overlay)", async () => {
+    await h.seedEngine({ profession: "farmer", tone: "medium" });
+    await h.goScene("travel");
+    const medium = await h.readStats();
+
     await h.seedEngine({ profession: "farmer", tone: "high" });
     await h.goScene("travel");
     const s = await h.readStats();
     expect(s.pageErrors).toEqual([]);
     expect(s.kaplayErrors).toEqual([]);
-    // High tier adds the tone.mjs vignette/scanline layer on top — count
-    // rises vs medium.
     expect(s.total).toBeGreaterThanOrEqual(100);
+    // Regression pin (2026-08-21): engine.tone read simulation.tone_tier, which
+    // doesn't exist — settings.tone_tier is the real field — so this test rendered
+    // the medium look for months while claiming to cover the horror overlay.
+    const tone = await h.page.evaluate(() => (window.engine as { tone: string }).tone);
+    expect(tone).toBe("high");
+    // The tone.mjs high-tier layer (vignette + pulse + scanlines) must actually
+    // add objects over the medium render, whatever its internal object count.
+    expect(s.total).toBeGreaterThan(medium.total);
   });
 
   it("T-event-1: event with 3 choices renders", async () => {

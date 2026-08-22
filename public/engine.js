@@ -490,8 +490,9 @@ class GameEngine {
   }
 
   get tone() {
-    // State field is tone_tier (worker/src/types.ts:249); default medium when state absent.
-    return this.gameState?.simulation?.tone_tier ?? 'medium';
+    // tone_tier lives on Settings (worker/src/types.ts), NOT simulation — reading
+    // simulation.tone_tier silently returned 'medium' for every run (fixed 2026-08-21).
+    return this.gameState?.settings?.tone_tier ?? 'medium';
   }
 
   formatDate(dateStr) {
