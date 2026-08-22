@@ -1,5 +1,5 @@
 import { PALETTE } from "../lib/draw.mjs";
-import { createJuice } from "../lib/juice.mjs";
+import { createJuice, MOTION_OK } from "../lib/juice.mjs";
 
 export default function register(k, engine) {
   k.scene("river", (data) => {
@@ -164,7 +164,7 @@ export default function register(k, engine) {
         // this scene down before a "failed crossing" effect could ever
         // paint a frame. The splash reads as "you're crossing now."
         juice.minor();
-        spawnSplash(wagonX, wagonY);
+        if (MOTION_OK) spawnSplash(wagonX, wagonY);
         engine.resolveRiver(btn.choice);
       };
 

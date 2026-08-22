@@ -33,6 +33,9 @@ const LANTERN_NIGHT = 3.4;
 
 // Toon (§A3): 3-4 hard bands off the one shared ramp read as deliberate style;
 // smooth PBR falloff on primitive geometry reads as unfinished plastic.
+// Deliberate: no normalMap on any toon material — perturbing the normal at a
+// band boundary shreds the hard terminator into sawtooth (verified by
+// screenshot on the bonnet). Albedo maps carry all surface detail.
 function toon(color, opts = {}) {
   return new THREE.MeshToonMaterial({ color, gradientMap: toonRamp(), ...opts });
 }

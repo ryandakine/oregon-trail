@@ -176,11 +176,14 @@ export function initThree(engine) {
   sun.shadow.mapSize.set(HIGH ? 2048 : 1024, HIGH ? 2048 : 1024);
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 120;
-  const S = 60; // covers the ~90u terrain band half-width at the travel camera's visible mid-ground
+  // HIGH: wide box covers the ~90u terrain band (2048 map, verified clean by
+  // screenshot). LOW: tighter box keeps 1024-map texels dense enough that thin
+  // geometry (wheel spokes ~0.036u) still resolves.
+  const S = HIGH ? 60 : 40;
   sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
   sun.shadow.camera.top = S; sun.shadow.camera.bottom = -S;
   sun.shadow.bias = -0.0009;
-  sun.shadow.normalBias = 0.12;
+  sun.shadow.normalBias = HIGH ? 0.12 : 0.09;
   scene.add(sun);
   scene.add(sun.target);
 
@@ -409,7 +412,7 @@ export function initThree(engine) {
     moving = true;
   }
 
-  const sky = createSky({ cloudTexture: textures.cloudTexture() });
+  const sky = createSky({ cloudTexture: textures.cloudTexture(), lowDetail: !HIGH });
   scene.add(sky.group);
 
   // Caravan: stationary group at the trail anchor; forward = -Z.
@@ -583,7 +586,7 @@ export function initThree(engine) {
     // The preset's lantern value is the scene's LIT intensity (the camp wants a
     // hotter lamp than a dusk trail); pose() decides how lit it actually is from
     // the sun's elevation, then scales by this gain.
-    lanternGain = p.lantern / PRESETS.travel.lantern;
+    lanternGain = p.lantern / (PRESETS.travel.lantern || 1);
     audio.setScene(AUDIO_SCENE[name] || 'travel');
     audio.setMoving(moving);
     pose(scrollZ); // re-light + re-pose under the new preset immediately
@@ -637,7 +640,7 @@ export function initThree(engine) {
       scene.fog.far = baseFogFar * (1 - fogPull * 0.7);
     }
     // Re-anchor the sun close to the caravan so the ortho shadow frustum
-    // (near 1 / far 80) actually contains the world — sky.applyTo parks it
+    // (near 1 / far 120) actually contains the world — sky.applyTo parks it
     // 200u out on the sun arc, far outside the shadow camera.
     sun.position.copy(sunDir).multiplyScalar(34);
     sun.target.position.set(0, 0, 0);
@@ -692,9 +695,10 @@ export function initThree(engine) {
   let rafId = 0; // last requestAnimationFrame handle (for cancelAnimationFrame)
   let downgraded = false; // one-shot guard on downgrade()
 
-  // GPU resources the post chain owns. The downgrade path kills 3D for the rest
-  // of the session, so the grade pass's material and fullscreen quad go with it
-  // rather than leak until the tab closes.
+  // Frees only what the post chain owns (the grade pass material + quad).
+  // Scene geometry/materials/renderer survive downgrade() — accepted: the
+  // hidden canvas stops rendering, and a full renderer teardown here risks
+  // more than the memory it returns.
   function disposePost() {
     if (!gradePass) return;
     if (composer) composer.removePass(gradePass);

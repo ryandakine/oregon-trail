@@ -422,9 +422,12 @@ export function drawWagon(k, cx, cy, opts = {}) {
     k.add([k.circle(3), k.pos(wx, wy), k.color(...C(PALETTE.woodLight)), k.anchor("center")]);
     // handle.speed is in rotations/second; travel.js can call setSpeed() any
     // time after drawWagon() returns, whether or not opts.rolling was passed.
-    const handle = { speed: wopts.rolling ? (typeof wopts.rolling === "number" ? wopts.rolling : 1) : 0 };
+    // Phase must accumulate — deriving angle from speed*time() snaps the
+    // spokes to 0 on pause and to an arbitrary angle on resume.
+    const handle = { speed: wopts.rolling ? (typeof wopts.rolling === "number" ? wopts.rolling : 1) : 0, phase: 0 };
     spokes.onUpdate(() => {
-      spokes.angle = (handle.speed * k.time() * 360) % 360;
+      handle.phase = (handle.phase + handle.speed * k.dt() * 360) % 360;
+      spokes.angle = handle.phase;
     });
     return handle;
   }

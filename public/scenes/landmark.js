@@ -1,7 +1,11 @@
 import { addTopHud, addBottomHud } from "../lib/hud.mjs";
+import { createJuice } from "../lib/juice.mjs";
 
 export default function register(k, engine) {
   k.scene("landmark", (data) => {
+    // Arrival at a named landmark is a "big moment" beat — the one place the
+    // camera zoom-punch is reserved for (research § B3 restraint rules).
+    createJuice(k).zoomPunch();
     const W = 640;
     const H = 480;
     const landmark = data || {};

@@ -103,8 +103,12 @@ export function updateHud(k, engine, hudState) {
   top.dateText.text  = engine.formatDate(engine.currentDate);
   const food = engine.supplies?.food ?? 0;
   top.foodText.text  = String(food);
-  if (typeof top._prevFood === "number" && food < top._prevFood) {
-    spawnPulse(k, 255, top.foodText.pos.y + 7, 54, 18, PALETTE.hpRed, top.tag);
+  // Rations burn every simulated day, so any-decrease would pulse on every
+  // advance and signal nothing. Alarm only on event-scale losses or on
+  // crossing into the danger zone.
+  if (typeof top._prevFood === "number" &&
+      ((top._prevFood - food >= 30) || (food <= 25 && top._prevFood > 25))) {
+    spawnPulse(k, top.foodText.pos.x + 24, top.foodText.pos.y + 7, 54, 18, PALETTE.hpRed, top.tag);
   }
   top._prevFood = food;
   top.milesText.text = String(engine.milesTraveled ?? 0);
@@ -150,7 +154,10 @@ export function attachResizeRebuild(k, engine, hudState) {
 function mkText(k, str, x, y, size, color, tag) {
   return k.add([k.text(str, { size }), k.pos(x, y), k.color(...color), k.fixed(), k.z(52), tag]);
 }
+const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
 function spawnPulse(k, cx, cy, w, h, color, tag) {
+  if (!MOTION_OK) return null;
   const start = k.time();
   const dur = 0.4;
   const p = k.add([k.rect(w, h), k.pos(cx, cy), k.anchor("center"), k.color(...color), k.opacity(0.5), k.fixed(), k.z(55), tag]);

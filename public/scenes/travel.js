@@ -199,6 +199,10 @@ export default function register(k, engine) {
     // ── Engine handlers ──
     engineOn("daysAdvanced", ({ summaries }) => {
       updateHud(k, engine, hudState);
+      // One juice call per advance, escalated to the worst outcome in the
+      // batch — firing per event stacks flashes/shake queues (4 illnesses in
+      // one 5-day advance = 4 overlapping horror() flashes).
+      let worst = 0; // 0 none, 1 minor, 2 death
       for (const s of summaries) {
         for (const evt of (s.events ?? [])) {
           // Day events are plain strings (attrition + fired delayed effects);
@@ -214,13 +218,12 @@ export default function register(k, engine) {
           // guessed at.
           const isDeath = / has died$/.test(msg);
           const isBadOutcome = isDeath || /fell ill with|starvation taking its toll/i.test(msg);
-          if (isBadOutcome) {
-            if (tone === "high") juice.horror();
-            else if (isDeath) juice.major();
-            else juice.minor();
-          }
+          if (isDeath) worst = 2;
+          else if (isBadOutcome) worst = Math.max(worst, 1);
         }
       }
+      if (worst === 2) (tone === "high" ? juice.horror() : juice.major());
+      else if (worst === 1) (tone === "high" ? juice.horror() : juice.minor());
     });
     engineOn("error", ({ message }) => {
       // Forced renders (visual QA, smoke tests) have no game state; never

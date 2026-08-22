@@ -1,5 +1,5 @@
 import { PALETTE } from "../lib/draw.mjs";
-import { createJuice } from "../lib/juice.mjs";
+import { createJuice, MOTION_OK } from "../lib/juice.mjs";
 
 export default function register(k, engine) {
   k.scene("hunting", (data) => {
@@ -138,7 +138,7 @@ export default function register(k, engine) {
         instructObj.text = "Hunting...";
 
         juice.minor({ intensity: 2 + k.rand(0, 1) });
-        spawnShotBurst(bx + btnW / 2, btnY);
+        if (MOTION_OK) spawnShotBurst(bx + btnW / 2, btnY);
 
         // Hide buttons
         for (const b of btnObjs) {

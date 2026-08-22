@@ -641,22 +641,10 @@ function hideMaps(salt, cfg) {
   mapTex.colorSpace = THREE.SRGBColorSpace;
   mapTex.repeat.set(cfg.repeat, cfg.repeat);
 
-  const height = makeRawCanvas(S, (ctx, s) => {
-    ctx.fillStyle = '#808080';
-    ctx.fillRect(0, 0, s, s);
-    for (let i = 0; i < cfg.hairs; i++) {
-      const x = rnd() * s, y = rnd() * s;
-      const v = Math.round(58 + rnd() * 140);
-      ctx.strokeStyle = `rgba(${v},${v},${v},0.45)`;
-      ctx.lineWidth = cfg.hairW;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + cfg.hairLen * (0.7 + rnd() * 0.6), y + (rnd() - 0.5) * 2);
-      ctx.stroke();
-    }
-  });
-
-  return { map: mapTex, normalMap: heightToNormal(height, cfg.normalStrength) };
+  // No normal map: every consumer is a MeshToonMaterial, and normal
+  // perturbation at a toon band boundary shreds the hard edge into sawtooth
+  // (seen on the bonnet during the A3 conversion). Albedo carries the detail.
+  return { map: mapTex };
 }
 
 // Ox hide — short mottled fur, broad cream patches over the brown base.
@@ -668,7 +656,7 @@ export function oxHideMaps() {
     light: [246, 239, 216], dark: [148, 124, 94],
     patches: 26, patchR: 20, patchAlpha: 0.62, darkBias: 0.45,
     hairs: 900, hairV: 148, hairSpread: 92, hairAlpha: 0.20, hairW: 1.1, hairLen: 5,
-    repeat: 3.5, normalStrength: 1.3,
+    repeat: 3.5,
   });
   return _oxHideCache;
 }
@@ -682,7 +670,7 @@ export function deerHideMaps() {
     light: [246, 240, 222], dark: [166, 140, 108],
     patches: 16, patchR: 15, patchAlpha: 0.34, darkBias: 0.5,
     hairs: 1100, hairV: 158, hairSpread: 80, hairAlpha: 0.13, hairW: 0.9, hairLen: 4,
-    repeat: 2.5, normalStrength: 1.2,
+    repeat: 2.5,
   });
   return _deerHideCache;
 }
@@ -696,7 +684,7 @@ export function bisonHideMaps() {
     light: [216, 206, 188], dark: [112, 94, 74],
     patches: 30, patchR: 24, patchAlpha: 0.60, darkBias: 0.38,
     hairs: 1600, hairV: 132, hairSpread: 100, hairAlpha: 0.22, hairW: 1.6, hairLen: 9,
-    repeat: 2, normalStrength: 2.0,
+    repeat: 2,
   });
   return _bisonHideCache;
 }
@@ -746,22 +734,8 @@ export function homespunMaps() {
   });
   mapTex.repeat.set(3, 3);
 
-  const height = makeRawCanvas(S, (ctx, s) => {
-    ctx.fillStyle = '#808080';
-    ctx.fillRect(0, 0, s, s);
-    for (let xx = 0; xx < s; xx += 4) {
-      const v = Math.round(100 + rnd() * 70);
-      ctx.fillStyle = `rgb(${v},${v},${v})`;
-      ctx.fillRect(xx, 0, 2, s);
-    }
-    for (let yy = 0; yy < s; yy += 4) {
-      const v = Math.round(108 + rnd() * 60);
-      ctx.fillStyle = `rgba(${v},${v},${v},0.6)`;
-      ctx.fillRect(0, yy, s, 2);
-    }
-  });
-
-  _homespunCache = { map: mapTex, normalMap: heightToNormal(height, 1.2) };
+  // No normal map — same toon-band sawtooth rule as hideMaps above.
+  _homespunCache = { map: mapTex };
   return _homespunCache;
 }
 

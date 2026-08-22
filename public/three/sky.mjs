@@ -539,7 +539,7 @@ const SILHOUETTE_BOTTOM_Y = -40; // well below any terrain sample; hides the sea
 // ─── Main factory ─────────────────────────────────────────────────────────────
 
 /**
- * createSky({ cloudTexture })
+ * createSky({ cloudTexture, lowDetail })
  *
  * @param {Object}       opts
  * @param {THREE.Texture} opts.cloudTexture  — Caller-supplied sprite texture.
@@ -552,7 +552,7 @@ const SILHOUETTE_BOTTOM_Y = -40; // well below any terrain sample; hides the sea
  *   dispose:   () => void,
  * }}
  */
-export function createSky({ cloudTexture }) {
+export function createSky({ cloudTexture, lowDetail = false } = {}) {
   const group = new THREE.Group();
   group.name = 'sky';
 
@@ -588,13 +588,16 @@ export function createSky({ cloudTexture }) {
   group.add(stars);
 
   // ── Clouds: high slow deck + low fast deck ──
+  // 40 large alpha-blended sprites are pure fill-rate — the cost that hurts
+  // exactly the GPUs the fps-gate protects. Low tier keeps the old 11-sprite
+  // budget in one deck and skips the low deck entirely.
   const cloudsHigh = buildCloudDeck(cloudTexture, {
-    seed: CLOUD_SEED, count: CLOUD_COUNT, wrapX: CLOUD_WRAP_X,
+    seed: CLOUD_SEED, count: lowDetail ? 11 : CLOUD_COUNT, wrapX: CLOUD_WRAP_X,
     yMin: CLOUD_Y_MIN, yMax: CLOUD_Y_MAX, zMin: CLOUD_Z_MIN, zMax: CLOUD_Z_MAX,
     scaleMin: 100, scaleMax: 260, driftMin: 0.3, driftMax: 1.2,
     tint: 1.0, renderOrder: -8,
   });
-  const cloudsLow = buildCloudDeck(cloudTexture, {
+  const cloudsLow = lowDetail ? [] : buildCloudDeck(cloudTexture, {
     seed: CLOUD_LOW_SEED, count: CLOUD_LOW_COUNT, wrapX: CLOUD_WRAP_X,
     yMin: CLOUD_LOW_Y_MIN, yMax: CLOUD_LOW_Y_MAX, zMin: CLOUD_LOW_Z_MIN, zMax: CLOUD_LOW_Z_MAX,
     scaleMin: 45, scaleMax: 125, driftMin: 0.6, driftMax: 2.4,

@@ -4,7 +4,7 @@
 
 import { PALETTE } from "./draw.mjs";
 
-const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+export const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 export function createJuice(k) {
   // Small shake for a minor bad beat — health/oxen wear, a missed shot.
@@ -13,19 +13,20 @@ export function createJuice(k) {
     k.shake(opts.intensity ?? k.rand(3, 5));
   }
 
-  // Bigger shake + a hard color flash — death/disaster beats.
+  // Bigger shake + a hard color flash — death/disaster beats. Full-screen
+  // flashes are exactly what prefers-reduced-motion exists for
+  // (photosensitivity), so reduced motion suppresses the whole preset.
   function major(opts = {}) {
-    k.flash(k.rgb(...(opts.color ?? PALETTE.hpRed)), opts.flashDuration ?? 0.3);
     if (!MOTION_OK) return;
+    k.flash(k.rgb(...(opts.color ?? PALETTE.hpRed)), opts.flashDuration ?? 0.3);
     k.shake(opts.intensity ?? k.rand(8, 12));
   }
 
   // Slow creeping sickly-tint flash + sustained micro-shake — Bitter Path /
-  // high-tone dread beats. Flash always runs (safe, non-positional); the
-  // shake ticks are the only part reduced-motion suppresses.
+  // high-tone dread beats.
   function horror(opts = {}) {
-    k.flash(k.rgb(...(opts.color ?? PALETTE.sicklyHorizon)), opts.flashDuration ?? 0.6);
     if (!MOTION_OK) return;
+    k.flash(k.rgb(...(opts.color ?? PALETTE.sicklyHorizon)), opts.flashDuration ?? 0.6);
     const duration = opts.duration ?? 2;
     const ticks = opts.ticks ?? 8;
     for (let i = 0; i < ticks; i++) {
