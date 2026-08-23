@@ -263,8 +263,13 @@ function sampleVertex(x, absZ, biome) {
 // Float32Array buffers in-place — no per-recycle allocation.
 //
 // The chunk's world-space X runs [-BAND_HALF_W, BAND_HALF_W].
-// The chunk's world-space Z is absolute: from absZ0 to absZ0 + CHUNK_SIZE.
-// The mesh.position is set by the caller to (0, 0, absZ0 - scrollZ).
+// Vertex Z is CHUNK-LOCAL (0 .. CHUNK_SIZE); the caller places the chunk with
+// mesh.position.z = absZ0 - scrollZ, which is the one and only place absZ0 is
+// applied. Height/splat sampling still uses the ABSOLUTE wz = absZ0 + local, so
+// the field is continuous across recycles. Baking absZ0 into the vertices too
+// double-counts it and tears the band into CHUNK_SIZE-wide strips separated by
+// CHUNK_SIZE-wide voids — grass and props (placed at absZ - scrollZ) then hang
+// over nothing. Local Z also keeps vertex magnitudes bounded as scrollZ grows.
 //
 // Layout: (nz+1) rows × (nx+1) columns of interior verts, wrapped by a 1-vert
 // skirt ring (indices -1 and n+1 in each axis) that hangs SKIRT_DROP below the
@@ -277,6 +282,7 @@ const SKIRT_DROP    = 0.35;
 // Two LOD tiers: near chunks (|chunkCenterZ - scrollZ| < LOD_NEAR_Z) are dense
 const LOD_NEAR_SPACING  = 1.5;   // <= 1.5u as required by brief
 const LOD_FAR_SPACING   = 3.0;
+const LOD_NEAR_Z        = 90;    // |display centre| under this = dense tier
 
 function buildChunkGeometry(absZ0, spacing, biome) {
   const nx = Math.max(4, Math.round((BAND_HALF_W * 2) / spacing));
@@ -312,7 +318,7 @@ function buildChunkGeometry(absZ0, spacing, biome) {
       const vi = gj * gw + gi;
       positions[vi * 3]     = wx;
       positions[vi * 3 + 1] = s.height - (isSkirt ? SKIRT_DROP : 0);
-      positions[vi * 3 + 2] = wz;          // absolute; caller subtracts scrollZ via mesh.position
+      positions[vi * 3 + 2] = cj * stepZ;  // chunk-local; mesh.position carries absZ0 - scrollZ
       normals[vi * 3]     = s.normal[0];
       normals[vi * 3 + 1] = s.normal[1];
       normals[vi * 3 + 2] = s.normal[2];
@@ -391,7 +397,7 @@ function rewriteChunkGeometry(geo, absZ0, spacing, biome) {
       const vi = gj * gw + gi;
       posArr[vi * 3]     = wx;
       posArr[vi * 3 + 1] = s.height - (isSkirt ? SKIRT_DROP : 0);
-      posArr[vi * 3 + 2] = wz;
+      posArr[vi * 3 + 2] = cj * stepZ;
       normArr[vi * 3]     = s.normal[0];
       normArr[vi * 3 + 1] = s.normal[1];
       normArr[vi * 3 + 2] = s.normal[2];
@@ -562,15 +568,18 @@ function buildSplatMaterial(textures) {
 // Chunk absZ0 values advance by CHUNK_SIZE; the wagon anchor is always at the
 // chunk ring's nominal centre.
 
-const CHUNK_COUNT = 5;  // 5 × 60u = 300u band; ~3 visible at once
+// The wagon travels toward -Z (grass AHEAD, landmark worldZ, river absZ and six
+// of the seven camera presets all read -Z as forward), so the band is weighted
+// forward: REAR_SPAN behind, the remainder ahead. Both spans have to outrun the
+// widest preset fog far (300u, arrival) or the band's own edge shows as a step
+// into open sky — and anything scattered on absZ beyond the edge (grass reaches
+// 150u ahead) hangs over nothing.
+const CHUNK_COUNT = 9;    // 9 × 60u = 540u band
+const REAR_SPAN   = 240;  // kept behind the wagon (+Z); the travel cam looks back down the trail
 
-/**
- * Initial absZ positions for the chunk ring, centred so the wagon (absZ=0)
- * sits in the middle chunk.
- */
+/** Initial absZ positions — already the seating update() would wrap to at scrollZ=0. */
 function initialChunkZ(index) {
-  const mid = Math.floor(CHUNK_COUNT / 2);
-  return (index - mid) * CHUNK_SIZE;
+  return REAR_SPAN - CHUNK_SIZE - index * CHUNK_SIZE;
 }
 
 // ---------------------------------------------------------------------------
@@ -615,7 +624,10 @@ export function createTerrain({ textures = null, biome = null } = {}) {
 
   for (let i = 0; i < CHUNK_COUNT; i++) {
     const absZ0   = initialChunkZ(i);
-    const spacing = LOD_NEAR_SPACING;
+    // Same LOD rule update() applies, so the far half of the ring isn't built
+    // dense and then immediately thrown away on the first update pass.
+    const spacing = Math.abs(absZ0 + CHUNK_SIZE / 2) > LOD_NEAR_Z
+      ? LOD_FAR_SPACING : LOD_NEAR_SPACING;
     const geo     = buildChunkGeometry(absZ0, spacing, currentBiome);
     const mesh    = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
@@ -642,44 +654,37 @@ export function createTerrain({ textures = null, biome = null } = {}) {
    * @param {number} scrollZ — total world-units the terrain has scrolled (+Z).
    */
   function update(dt, scrollZ) {
-    // Determine the current scroll-relative Z for each chunk and recycle as
-    // needed.  The wagon is always at world origin; a chunk's display Z is
+    // The wagon is always at world origin; a chunk's display Z is
     // (absZ0 - scrollZ), i.e. how far it is behind/ahead in world space.
     //
-    // Recycle policy: when a chunk's far edge (absZ0 + CHUNK_SIZE - scrollZ)
-    // drops below -FAR_CULL (well behind camera), move it to the front.
-    const BAND_TOTAL  = CHUNK_COUNT * CHUNK_SIZE;
-    const FAR_CULL    = 20;   // units behind world origin before recycling
+    // Recycle policy: wrap each chunk into the one-band-wide window ending at
+    // (scrollZ + REAR_SPAN - CHUNK_SIZE), by whole-band steps. Whole-band steps
+    // (not one CHUNK_SIZE per call) because freezeAt(d)
+    // jumps scrollZ arbitrarily and a nudge-per-frame ring would be stranded
+    // mid-jump — and because the resulting seating is a pure function of
+    // scrollZ, so the same d re-seats identically no matter the play history.
+    // Chunk absZ0 values stay distinct mod BAND_TOTAL, so the ring never
+    // collapses two chunks onto the same span.
+    const BAND_TOTAL = CHUNK_COUNT * CHUNK_SIZE;
+    const windowMax  = scrollZ + REAR_SPAN - CHUNK_SIZE;
 
     for (const chunk of chunks) {
-      const displayZ0  = chunk.absZ0 - scrollZ;
-      const displayZFar = displayZ0 + CHUNK_SIZE;
+      const steps = Math.floor((windowMax - chunk.absZ0) / BAND_TOTAL);
+      if (steps !== 0) chunk.absZ0 += steps * BAND_TOTAL;
 
-      if (displayZFar < -FAR_CULL) {
-        // Chunk is fully behind camera — move to front
-        // Find the maximum current absZ0 among all chunks to place ahead of it
-        let maxAbsZ0 = -Infinity;
-        for (const c of chunks) {
-          if (c.absZ0 > maxAbsZ0) maxAbsZ0 = c.absZ0;
-        }
-        const newAbsZ0 = maxAbsZ0 + CHUNK_SIZE;
-        chunk.absZ0    = newAbsZ0;
-
-        // Choose LOD spacing based on display distance after recycling
-        const newDisplayZ0  = newAbsZ0 - scrollZ;
-        const newDisplayMid = newDisplayZ0 + CHUNK_SIZE / 2;
-        const spacing = newDisplayMid > 90 ? LOD_FAR_SPACING : LOD_NEAR_SPACING;
-
+      // LOD is re-evaluated every frame, not only on recycle: a chunk enters the
+      // band at the far edge, so a recycle-time-only choice pinned every chunk to
+      // the coarse tier forever once the ring had turned over once.
+      const mid = chunk.absZ0 + CHUNK_SIZE / 2 - scrollZ;
+      const spacing = Math.abs(mid) > LOD_NEAR_Z ? LOD_FAR_SPACING : LOD_NEAR_SPACING;
+      if (steps !== 0 || spacing !== chunk.spacing) {
         // Try in-place rewrite first; full rebuild if grid dimensions changed
         const ok = spacing === chunk.spacing
-          ? rewriteChunkGeometry(chunk.mesh.geometry, newAbsZ0, spacing, currentBiome)
-          : false;
+          && rewriteChunkGeometry(chunk.mesh.geometry, chunk.absZ0, spacing, currentBiome);
         if (!ok) {
           chunk.mesh.geometry.dispose();
-          chunk.mesh.geometry = buildChunkGeometry(newAbsZ0, spacing, currentBiome);
+          chunk.mesh.geometry = buildChunkGeometry(chunk.absZ0, spacing, currentBiome);
           chunk.spacing = spacing;
-        } else {
-          // spacing unchanged and rewrite succeeded
         }
       }
 

@@ -21,6 +21,7 @@ const C = {
   stone:      0x968e84,
   stoneLight: 0xbab2a8,
   stoneDark:  0x6b6460,
+  rockWarm:   0xc9a074,
   dirtMid:    0x8b6033,
   ironDark:   0x2b2620,
   plankWall:  0x7a5530,
@@ -206,11 +207,29 @@ function makeFlagpole(group, woodMat, flagMat, cx, cz, h = 7.5) {
  * A rock slab: scaled squashed sphere, for mounds / formations.
  * color, scale, position from caller.
  */
+// The rock albedo tiles ONCE across a primitive's 0..1 UV, so a slab scaled to
+// 10+ world-units smeared that single 256px tile into featureless bands. Re-tile
+// from the mesh's own world size instead, so grain reads at the same texel
+// density on a boulder and on a mesa cap — and reads all the way around rather
+// than resolving on one face only.
+const ROCK_UV_TILE = 7; // world-units per texture tile
+
+function retileUv(geo, uRep, vRep) {
+  const uv = geo.attributes.uv;
+  const u = Math.max(1, Math.round(uRep));
+  const v = Math.max(1, Math.round(vRep));
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * u, uv.getY(i) * v);
+  uv.needsUpdate = true;
+  return geo;
+}
+
 function makeRockSlab(group, mat, cx, cy, cz, sx, sy, sz, rotY = 0) {
-  const rock = shadowed(new THREE.Mesh(
-    new THREE.SphereGeometry(1, 8, 6),
-    mat,
-  ));
+  const geo = retileUv(
+    new THREE.SphereGeometry(1, 10, 7),
+    (Math.PI * (sx + sz)) / ROCK_UV_TILE,  // once around the widest section
+    (Math.PI * sy) / ROCK_UV_TILE,
+  );
+  const rock = shadowed(new THREE.Mesh(geo, mat));
   rock.scale.set(sx, sy, sz);
   rock.rotation.y = rotY;
   rock.position.set(cx, cy, cz);
@@ -367,7 +386,12 @@ function buildNatural(group, rng, name, textures) {
   const rockMat = rockTex
     ? toon(0xffffff, { map: rockTex.map })
     : toon(C.stone);
-  const dirtMat = toon(C.dirtMid);
+  // The alternating band material keeps the rock map and only shifts tint. It
+  // used to be flat untextured dirt, which read as a smooth orange half welded
+  // to the textured half with a hard vertical seam down the formation.
+  const bandMat = rockTex
+    ? toon(C.rockWarm, { map: rockTex.map })
+    : toon(C.dirtMid);
 
   const lowerName = name.toLowerCase();
   const isChimney  = lowerName.includes('chimney');
@@ -375,47 +399,70 @@ function buildNatural(group, rng, name, textures) {
   const isRock     = lowerName.includes('rock') && !isChimney;
 
   // ── base mound: 4-7 overlapping squashed slabs ──
+  // Slabs are seated so the ground plane cuts near an ellipsoid's WIDEST
+  // section (SEAT below its own half-height) instead of tangent to its bottom.
+  // A tangent sphere reads as a balloon resting on the world and shows daylight
+  // under its rim the moment the ground rolls — these formations get no flat
+  // pad, so the terrain under a 14-22u footprint genuinely undulates.
+  // Spread is wider and each lump smaller than the footprint it fills, so the
+  // mass reads as overlapping boulders rather than one smooth capsule.
+  // A mesa keeps the compact broad mass its flat cap has to rest on; the spire
+  // and default forms get smaller lumps pushed further out, which is what stops
+  // them fusing into one smooth capsule.
+  const SEAT   = 0.18;
+  const spread = isMesa ? 0.45 : 0.7;
+  const wide   = isMesa ? 1.5 : 1.0;
   const nBase = 4 + Math.floor(rng() * 3);
   const baseR = isMesa ? 9.0 : isChimney ? 6.0 : 7.0;
   for (let i = 0; i < nBase; i++) {
     const angle = (i / nBase) * Math.PI * 2 + rng() * 0.5;
     const r = baseR * (0.55 + rng() * 0.4);
-    const cx = Math.cos(angle) * r * 0.45;
-    const cz = Math.sin(angle) * r * 0.45;
-    const sx = baseR * (0.5 + rng() * 0.4);
+    const cx = Math.cos(angle) * r * spread;
+    const cz = Math.sin(angle) * r * spread;
+    const sx = baseR * (0.34 + rng() * 0.3) * wide;
     const sy = isMesa ? 1.8 + rng() * 0.8 : 1.2 + rng() * 0.7;
-    const sz = baseR * (0.4 + rng() * 0.4);
-    const mat = i % 2 === 0 ? rockMat : dirtMat;
-    makeRockSlab(group, mat, cx, sy, cz, sx, sy, sz, rng() * Math.PI);
+    const sz = baseR * (0.28 + rng() * 0.26) * wide;
+    const mat = i % 2 === 0 ? rockMat : bandMat;
+    makeRockSlab(group, mat, cx, sy * SEAT, cz, sx, sy, sz, rng() * Math.PI);
   }
 
   if (isMesa) {
     // Wide flat-topped cap
     const capMesh = shadowed(new THREE.Mesh(
-      new THREE.CylinderGeometry(baseR * 0.7, baseR * 0.85, 1.6, 8),
+      retileUv(new THREE.CylinderGeometry(baseR * 0.7, baseR * 0.85, 1.6, 8),
+        (2 * Math.PI * baseR * 0.78) / ROCK_UV_TILE, 1.6 / ROCK_UV_TILE),
       rockMat,
     ));
-    capMesh.position.set(0, 3.8, 0);
+    // Bedded into the mound (whose slabs top out at 2.1-3.1) rather than
+    // balanced on its highest point, so no daylight shows under the rim.
+    capMesh.position.set(0, 3.3, 0);
     group.add(capMesh);
     // Optional small secondary formation to the side
     const sx2 = baseR * 0.45;
     const capB = shadowed(new THREE.Mesh(
-      new THREE.CylinderGeometry(sx2 * 0.6, sx2 * 0.8, 1.2, 7),
+      retileUv(new THREE.CylinderGeometry(sx2 * 0.6, sx2 * 0.8, 1.2, 7),
+        (2 * Math.PI * sx2 * 0.7) / ROCK_UV_TILE, 1.2 / ROCK_UV_TILE),
       rockMat,
     ));
-    capB.position.set(jitter(rng, -5, 2), 2.6, jitter(rng, 3, 2));
+    // Its own outcrop out on the prairie — seated into the ground, not hovering
+    // at mound height where the mound doesn't reach.
+    capB.position.set(jitter(rng, -5, 2), 0.35, jitter(rng, 3, 2));
     group.add(capB);
     return;
   }
 
   if (isRock) {
     // Low dome — Independence Rock: wide, rounded, low
+    const dsx = baseR * 0.75, dsy = 3.8, dsz = baseR * 0.7;
     const dome = shadowed(new THREE.Mesh(
-      new THREE.SphereGeometry(1, 10, 7),
+      retileUv(new THREE.SphereGeometry(1, 12, 8),
+        (Math.PI * (dsx + dsz)) / ROCK_UV_TILE, (Math.PI * dsy) / ROCK_UV_TILE),
       rockMat,
     ));
-    dome.scale.set(baseR * 0.75, 3.8, baseR * 0.7);
-    dome.position.set(0, 3.0, 0);
+    dome.scale.set(dsx, dsy, dsz);
+    // Seated well below its own centre — a whaleback rising out of the prairie,
+    // not a hemisphere balanced on it (same reason as the base slabs).
+    dome.position.set(0, dsy * 0.42, 0);
     group.add(dome);
     return;
   }
@@ -427,22 +474,25 @@ function buildNatural(group, rng, name, textures) {
 
   // Lower drum
   const drum = shadowed(new THREE.Mesh(
-    new THREE.CylinderGeometry(spireBaseR * 1.3, spireBaseR * 1.6, spireH * 0.35, 9),
+    retileUv(new THREE.CylinderGeometry(spireBaseR * 1.3, spireBaseR * 1.6, spireH * 0.35, 9),
+      (2 * Math.PI * spireBaseR * 1.45) / ROCK_UV_TILE, (spireH * 0.35) / ROCK_UV_TILE),
     rockMat,
   ));
   drum.position.set(0, spireH * 0.175 + 1.5, 0);
   group.add(drum);
   // Upper shaft
   const shaft = shadowed(new THREE.Mesh(
-    new THREE.CylinderGeometry(spireTopR, spireBaseR * 1.1, spireH * 0.7, 8),
+    retileUv(new THREE.CylinderGeometry(spireTopR, spireBaseR * 1.1, spireH * 0.7, 8),
+      (2 * Math.PI * (spireTopR + spireBaseR * 1.1) * 0.5) / ROCK_UV_TILE, (spireH * 0.7) / ROCK_UV_TILE),
     rockMat,
   ));
   shaft.position.set(0, spireH * 0.35 + spireH * 0.35 + 1.5, 0);
   group.add(shaft);
   // Cap
   const cap = shadowed(new THREE.Mesh(
-    new THREE.CylinderGeometry(spireTopR * 0.7, spireTopR * 1.1, 0.8, 7),
-    toon(C.stoneDark),
+    retileUv(new THREE.CylinderGeometry(spireTopR * 0.7, spireTopR * 1.1, 0.8, 7),
+      (2 * Math.PI * spireTopR * 0.9) / ROCK_UV_TILE, 0.8 / ROCK_UV_TILE),
+    rockTex ? toon(C.stoneDark, { map: rockTex.map }) : toon(C.stoneDark),
   ));
   cap.position.set(0, spireH + 1.8, 0);
   group.add(cap);
