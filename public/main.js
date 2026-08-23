@@ -178,9 +178,11 @@ setTimeout(() => engine.init(), 100);
 // it doubles as a manual escape hatch (?gfx=high / ?gfx=low). ──
 {
   // The load decision is the pure shouldInit3D() (see render-mode.mjs): the
-  // ?test guard wins first, then an explicit 2d/3d preference, then the
-  // "auto" device+gfx default. An unset preference reproduces the old gate
-  // exactly (?gfx || desktop), so existing behavior is unchanged.
+  // ?test guard wins first, then an explicit 2d/3d preference, then "auto",
+  // which is now 2D unless ?gfx forces 3D — the desktop-pointer heuristic was
+  // dropped because default-3D shipped a HUD-less soft-lock (the 3D canvas
+  // paints over Kaplay until the compositing rebuild lands). 3D remains
+  // opt-in via the title toggle or ?gfx.
   const params = new URLSearchParams(location.search);
   if (shouldInit3D({
     hasTest: params.has("test"),
