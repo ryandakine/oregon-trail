@@ -14,9 +14,15 @@ export function applyToneOverlay(k, tone) {
     // Cool-shift base
     k.add([k.rect(640, 480), k.pos(0, 0), k.color(30, 15, 40), k.opacity(0.28), k.z(45), k.fixed()]);
 
-    // Vignette
-    for (const [x, y, w, h] of [[0,0,640,60],[0,420,640,60],[0,0,60,480],[580,0,60,480]]) {
-      k.add([k.rect(w, h), k.pos(x, y), k.color(10, 5, 15), k.opacity(0.5), k.z(46), k.fixed()]);
+    // Vignette — stacked, decreasing-depth/decreasing-opacity bands per edge
+    // instead of one hard-edged rect, so the edge fades out instead of
+    // cutting off in a visible seam (playtest H2-HOLD: seams at x≈250/x≈1030).
+    const vign = [[60, 0.14], [46, 0.12], [32, 0.10], [18, 0.08], [6, 0.06]];
+    for (const [depth, opacity] of vign) {
+      k.add([k.rect(640, depth), k.pos(0, 0), k.color(10, 5, 15), k.opacity(opacity), k.z(46), k.fixed()]);
+      k.add([k.rect(640, depth), k.pos(0, 480 - depth), k.color(10, 5, 15), k.opacity(opacity), k.z(46), k.fixed()]);
+      k.add([k.rect(depth, 480), k.pos(0, 0), k.color(10, 5, 15), k.opacity(opacity), k.z(46), k.fixed()]);
+      k.add([k.rect(depth, 480), k.pos(640 - depth, 0), k.color(10, 5, 15), k.opacity(opacity), k.z(46), k.fixed()]);
     }
 
     // Slow pulse (only if reduced-motion is NOT set)

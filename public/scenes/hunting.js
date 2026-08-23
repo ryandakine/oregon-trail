@@ -173,13 +173,18 @@ export default function register(k, engine) {
       huntDone = true;
 
       const foodGained = results?.food_gained || 0;
-      const ammoUsed = results?.ammo_used || 0;
+      const shotsUsed = results?.shots || 0;
       const narrative = results?.narrative || "";
 
-      let resultText = narrative || `You used ${ammoUsed} rounds and got ${foodGained} lbs of food.`;
+      let resultText = narrative || `You used ${shotsUsed} rounds and got ${foodGained} lbs of food.`;
       resultsObj.text = resultText;
       instructObj.text = "Press ENTER or tap to continue";
       ammoText.text = `Ammunition: ${(engine.supplies?.ammo || 0)} rounds`;
+
+      for (const b of btnObjs) {
+        b.bg.opacity = 0;
+        b.txt.opacity = 0;
+      }
     };
     engine.on("huntResults", onResults);
     k.onSceneLeave(() => engine.off("huntResults", onResults));

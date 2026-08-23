@@ -129,8 +129,9 @@ function paintNightFallback(k) {
 
 /** Full-bleed cover of titleHero into 640×480 (D-Crop: south bias → wagon lower third). */
 function paintHeroCoverFixed(k) {
-  const sw = 1280;
-  const sh = 720;
+  const heroData = k.getSprite("titleHero")?.data;
+  const sw = heroData?.width || 1280;
+  const sh = heroData?.height || 720;
   const cover = Math.max(640 / sw, 480 / sh);
   k.add([
     k.sprite("titleHero"),

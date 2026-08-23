@@ -6,6 +6,11 @@ function hashSeed(str) {
   return h;
 }
 
+function humanize(str) {
+  if (!str) return str;
+  return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 // Print authenticity: seeded ink specks, edge blotches, a top/bottom +
 // margin vignette, and a horizontal fold line, layered as background-image
 // gradients on #newspaper-content. Keyed on the article content, so it's
@@ -89,7 +94,7 @@ export default function register(k, engine) {
     // Build death sidebar
     const deathEntries = deaths.map((d) => {
       const name = esc(d.name || 'Unknown');
-      const cause = esc(d.cause || 'unknown causes');
+      const cause = esc(humanize(d.cause || 'unknown causes'));
       return `<div style="margin-bottom:0.4rem;"><strong>${name}</strong><br><span style="font-size:0.85em;font-style:italic;">${cause}</span></div>`;
     }).join('');
 

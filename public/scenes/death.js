@@ -6,13 +6,18 @@ function hashSeed(str) {
   return h;
 }
 
+function humanize(str) {
+  if (!str) return str;
+  return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function register(k, engine) {
   k.scene("death", (data) => {
     const W = 640;
     const H = 480;
     const death = data || {};
     const name = death.name || "Unknown";
-    const cause = death.cause || "unknown causes";
+    const cause = humanize(death.cause || "unknown causes");
     const date = death.date || engine.currentDate;
 
     // Vibrate on death
@@ -156,7 +161,8 @@ export default function register(k, engine) {
 
     // Fetch epitaph from engine
     engine.generateEpitaph(name).then((text) => {
-      epitaphFull = text || `Here lies ${name}, taken too soon on the Oregon Trail.`;
+      const raw = text || `Here lies ${name}, taken too soon on the Oregon Trail.`;
+      epitaphFull = raw.replace(/\d{4}-\d{2}-\d{2}/g, (iso) => engine.formatDate(iso));
       epitaphLoading = false;
     });
 
