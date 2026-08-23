@@ -17,12 +17,12 @@ export function getSizes() {
 }
 
 const LANDMARKS = [
-  { name: "Kearney",    short: "K", miles: 304 },
-  { name: "Chimney",    short: "C", miles: 592 },
-  { name: "Laramie",    short: "L", miles: 672 },
-  { name: "South Pass", short: "S", miles: 932 },
-  { name: "Fort Hall",  short: "F", miles: 1288 },
-  { name: "Blue Mtns",  short: "B", miles: 1564 },
+  { name: "Kearney",    miles: 304 },
+  { name: "Chimney",    miles: 592 },
+  { name: "Laramie",    miles: 672 },
+  { name: "South Pass", miles: 932 },
+  { name: "Fort Hall",  miles: 1288 },
+  { name: "Blue Mtns",  miles: 1564 },
 ];
 const TRAIL_MILES = 1764;
 
@@ -36,8 +36,12 @@ export function addTopHud(k, engine) {
   const tag = "hud-top";
   const y = 10;
 
-  k.add([k.rect(640, 36), k.pos(0, 0), k.color(...PALETTE.parchmentDark), k.fixed(), k.z(50), tag]);
-  k.add([k.rect(632, 28), k.pos(4, 4), k.color(...PALETTE.parchment), k.outline(2, k.rgb(...PALETTE.outline)), k.fixed(), k.z(51), tag]);
+  // Strip is 44 tall (was 36) so the landmark/% row above the bar has real
+  // clearance at both UI scales — the old 36px box clipped that row's glyphs
+  // against the panel's top edge once text left the bar itself (playtest
+  // finding: labels reading as a clipped, overlapping smear).
+  k.add([k.rect(640, 44), k.pos(0, 0), k.color(...PALETTE.parchmentDark), k.fixed(), k.z(50), tag]);
+  k.add([k.rect(632, 36), k.pos(4, 4), k.color(...PALETTE.parchment), k.outline(2, k.rgb(...PALETTE.outline)), k.fixed(), k.z(51), tag]);
 
   const dateText  = mkText(k, engine.formatDate(engine.currentDate),        12,  y, S.body, PALETTE.parchmentDark, tag);
   mkText(k, "FOOD",  180, y, S.body, PALETTE.parchmentDark, tag);
@@ -48,24 +52,35 @@ export function addTopHud(k, engine) {
   mkText(k, "OXEN",  410, y, S.body, PALETTE.parchmentDark, tag);
   const oxenText  = mkText(k, String(engine.supplies?.oxen ?? 0),           460, y, S.body, PALETTE.goldBright, tag);
 
-  const barX = 500, barY = 14, barW = 128, barH = 10;
+  const barX = 500, barY = 27, barW = 128, barH = 10;
   const curMiles = engine.milesTraveled ?? 0;
+  // Every scene re-entry rebuilds the HUD from scratch (travel is left and
+  // returned to constantly — after every event/landmark/river), so the fill
+  // must start at the real progress, not 0, or the bar flashes empty each
+  // time until the next updateHud() call catches up.
+  const fillFrac = Math.min(1, curMiles / TRAIL_MILES);
   k.add([k.rect(barW, barH), k.pos(barX, barY), k.color(...PALETTE.outline), k.fixed(), k.z(52), tag]);
-  const barFill = k.add([k.rect(0, 8), k.pos(barX + 1, barY + 1), k.color(...PALETTE.goldBright), k.fixed(), k.z(53), tag]);
-  const barFillHighlight = k.add([k.rect(0, 2), k.pos(barX + 1, barY + 1), k.color(...BAR_HIGHLIGHT), k.opacity(0.6), k.fixed(), k.z(53), tag]);
+  const barFill = k.add([k.rect((barW - 2) * fillFrac, 8), k.pos(barX + 1, barY + 1), k.color(...PALETTE.goldBright), k.fixed(), k.z(53), tag]);
+  const barFillHighlight = k.add([k.rect((barW - 2) * fillFrac, 2), k.pos(barX + 1, barY + 1), k.color(...BAR_HIGHLIGHT), k.opacity(0.6), k.fixed(), k.z(53), tag]);
 
   for (const lm of LANDMARKS) {
     const tx = barX + (lm.miles / TRAIL_MILES) * barW;
     const passed = curMiles >= lm.miles;
     const tickCol = passed ? PALETTE.goldBright : PALETTE.parchmentDark;
     k.add([k.rect(2, barH), k.pos(tx, barY), k.color(...tickCol), k.fixed(), k.z(54), tag]);
-    k.add([k.text(lm.short, { size: S.tick }), k.pos(tx, barY - 3), k.color(...PALETTE.parchmentDark), k.anchor("bot"), k.fixed(), k.z(52), tag]);
   }
 
-  const pct = Math.round(curMiles / TRAIL_MILES * 100);
-  const progressText = k.add([k.text(`${pct}%`, { size: S.label }), k.pos(barX + barW / 2, barY + barH + 2), k.color(...PALETTE.parchmentDark), k.anchor("center"), k.fixed(), k.z(52), tag]);
+  // Six clipped single-letter tick labels read as an illegible smear
+  // (playtest finding). Show only the single next upcoming landmark, and
+  // give the % readout its own corner of the same row instead of stacking
+  // a third line the strip has no room for.
+  const labelY = barY - 2;
+  const nextLandmarkText = k.add([k.text(nextLandmarkLabel(curMiles), { size: S.tick }), k.pos(barX, labelY), k.color(...PALETTE.parchmentDark), k.anchor("botleft"), k.fixed(), k.z(52), tag]);
 
-  return { dateText, foodText, milesText, oxenText, barFill, barFillHighlight, barW, progressText, tag, _prevFood: initialFood };
+  const pct = Math.round(curMiles / TRAIL_MILES * 100);
+  const progressText = k.add([k.text(`${pct}%`, { size: S.label }), k.pos(barX + barW, labelY), k.color(...PALETTE.parchmentDark), k.anchor("botright"), k.fixed(), k.z(52), tag]);
+
+  return { dateText, foodText, milesText, oxenText, barFill, barFillHighlight, barW, progressText, nextLandmarkText, tag, _prevFood: initialFood };
 }
 
 export function addBottomHud(k, engine) {
@@ -74,13 +89,17 @@ export function addBottomHud(k, engine) {
   const tag = "hud-bottom";
   const members = engine.party?.members ?? [];
   const n = Math.max(1, members.length);
-  const spacing = Math.round(54 * scale);
+  const spacing = Math.round(64 * scale);
   const panelW = Math.max(220, n * spacing + 24);
   const panelX = (640 - panelW) / 2;
-  const panelY = 440;
+  // Flush to the canvas bottom edge (480), matching the top HUD's flush-to-0
+  // convention — the extra height gives the name label room to clear 480
+  // without truncating, at both UI scales.
+  const panelH = 40;
+  const panelY = 480 - panelH;
 
-  k.add([k.rect(panelW, 36), k.pos(panelX, panelY), k.color(...PALETTE.outline), k.fixed(), k.z(50), tag]);
-  k.add([k.rect(panelW - 6, 30), k.pos(panelX + 3, panelY + 3), k.color(...PALETTE.parchment), k.fixed(), k.z(51), tag]);
+  k.add([k.rect(panelW, panelH), k.pos(panelX, panelY), k.color(...PALETTE.outline), k.fixed(), k.z(50), tag]);
+  k.add([k.rect(panelW - 6, panelH - 6), k.pos(panelX + 3, panelY + 3), k.color(...PALETTE.parchment), k.fixed(), k.z(51), tag]);
 
   const contentW = (n - 1) * spacing;
   const startX = panelX + (panelW - contentW) / 2;
@@ -88,10 +107,10 @@ export function addBottomHud(k, engine) {
   const icons = [];
   members.forEach((m, i) => {
     const cx = Math.round(startX + i * spacing);
-    const cy = panelY + 14;
+    const cy = panelY + 13;
     const state = hpState(m);
     const iconTag = drawHealthIcon(k, cx, cy, state);
-    const label = k.add([k.text(shortName(m.name), { size: S.label }), k.pos(cx, cy + 22), k.color(...PALETTE.parchmentDark), k.anchor("center"), k.fixed(), k.z(52), tag]);
+    const label = k.add([k.text(shortName(m.name), { size: S.label }), k.pos(cx, panelY + panelH - 3), k.color(...PALETTE.parchmentDark), k.anchor("bot"), k.fixed(), k.z(52), tag]);
     icons.push({ member: m, cx, cy, label, state, tag: iconTag });
     _prevHealthByIndex.set(i, state);
   });
@@ -117,6 +136,7 @@ export function updateHud(k, engine, hudState) {
   top.barFill.width = (top.barW - 2) * pct;
   top.barFillHighlight.width = top.barFill.width;
   top.progressText.text = `${Math.round(pct * 100)}%`;
+  top.nextLandmarkText.text = nextLandmarkLabel(engine.milesTraveled ?? 0);
 
   bottom.icons.forEach((icon, i) => {
     k.destroyAll(icon.tag);
@@ -151,6 +171,11 @@ export function attachResizeRebuild(k, engine, hudState) {
   };
 }
 
+function nextLandmarkLabel(curMiles) {
+  const next = LANDMARKS.find((lm) => lm.miles > curMiles);
+  return next ? `${next.name} ${next.miles - curMiles}mi` : "";
+}
+
 function mkText(k, str, x, y, size, color, tag) {
   return k.add([k.text(str, { size }), k.pos(x, y), k.color(...color), k.fixed(), k.z(52), tag]);
 }
@@ -169,7 +194,7 @@ function spawnPulse(k, cx, cy, w, h, color, tag) {
   return p;
 }
 function shortName(name) {
-  return (name || "?").slice(0, 4).toUpperCase();
+  return (name || "?").slice(0, 6).toUpperCase();
 }
 
 export function hpState(member) {
