@@ -178,6 +178,28 @@ function saveMeta(meta) {
   } catch (_) {}
 }
 
+// ── Pacing ───────────────────────────────────────
+// The travel scene carries every piece of art in the game, and the auto-advance
+// loop used to fire again 200-400ms after each response — a measured 0.3% of
+// playtime on screen, so the game read as a chain of text panels. These are the
+// dwell beats the wagon actually rolls for before the next /api/advance.
+const TRAVEL_DWELL_MS = 3600;        // returning to the trail (post event/river/landmark)
+const TRAVEL_DWELL_REPEAT_MS = 3000; // routine beat, nothing new to read
+const TRAVEL_DWELL_READ_MS = 3800;   // routine beat with floating text on screen
+
+// Result beats (choice outcome, river crossing) are dismissed by the player via
+// a Continue button in the scene. This is only the safety net for a beat nothing
+// ever acknowledges (scene torn down mid-flight) — long enough that a reading
+// player never trips it, short enough that the run can't strand in EVENT/RIVER.
+const RESULT_BEAT_MAX_MS = 60000;
+
+const DELTA_KEYS = ['food', 'ammo', 'money', 'oxen', 'clothing', 'spare_parts', 'medicine'];
+const DELTA_LABELS = {
+  food: 'Food', ammo: 'Ammo', money: 'Money', oxen: 'Oxen',
+  clothing: 'Clothing', spare_parts: 'Spare parts', medicine: 'Medicine',
+  health: 'Health',
+};
+
 // ── GameEngine Class ─────────────────────────────
 
 class GameEngine {
@@ -199,6 +221,8 @@ class GameEngine {
     this.pendingPace = null;
     this.pendingRations = null;
     this._advancePaused = false;
+    this._advanceTimer = null;
+    this._resultBeat = null;
     this.activeChallenge = null;
     this.dailyMode = false;
     this.dailyTrailNumber = 0;
@@ -566,6 +590,20 @@ class GameEngine {
 
   async advance() {
     if (this._advancePaused || this._advancing) return;
+    // Invariant 3.4: the server rejects /api/advance while an event is
+    // unresolved. With a dwell timer in the loop there is now a window where a
+    // queued advance could outlive an unresolved event — never fire it. If the
+    // event body is still in hand, route back to it instead of stalling on a
+    // timer that will never be re-armed.
+    if (this.gameState?.simulation?.pending_event_hash) {
+      if (this.currentEvent && this.state !== 'EVENT') {
+        this.transition('EVENT', this.currentEvent);
+      } else if (!this.currentEvent) {
+        this.emit('error', { message: 'resolve_pending_event', recoverable: true });
+      }
+      return;
+    }
+    this.cancelQueuedAdvance();
     this._advancing = true;
     this.emit('loading', true);
     try {
@@ -659,25 +697,131 @@ class GameEngine {
   }
 
   _scheduleNextAdvance(summaries) {
-    // Calculate display time based on content
+    // Dwell on the moving wagon between routine advances. Longer when the day
+    // produced journal text, since travel.js is floating that text on screen.
     const hasEvents = summaries && summaries.some(s => s.events && s.events.length > 0);
-    const delay = hasEvents ? 400 : 200;
-    setTimeout(() => this.advance(), delay);
+    this.queueAdvance(hasEvents ? TRAVEL_DWELL_READ_MS : TRAVEL_DWELL_REPEAT_MS);
+  }
+
+  // The auto-advance driver. Every path back onto the trail goes through here,
+  // so the wagon is always visibly rolling for a beat before the next call.
+  queueAdvance(delay = TRAVEL_DWELL_MS) {
+    this.cancelQueuedAdvance();
+    if (this._advancePaused) return;
+    this._advanceTimer = setTimeout(() => {
+      this._advanceTimer = null;
+      this.advance();
+    }, delay);
+  }
+
+  cancelQueuedAdvance() {
+    if (!this._advanceTimer) return;
+    clearTimeout(this._advanceTimer);
+    this._advanceTimer = null;
+  }
+
+  // Snapshot of everything a result beat can report on. /api/choice and
+  // /api/river return only the new signed state — what changed is measured
+  // here, before vs after, not reported by the server.
+  _statsSnapshot() {
+    const s = this.supplies || {};
+    const members = {};
+    for (const m of (this.party?.members || [])) members[m.name] = m.alive ? m.health : 0;
+    const snap = { members };
+    for (const key of DELTA_KEYS) snap[key] = s[key] ?? 0;
+    return snap;
+  }
+
+  _statsDelta(before, after) {
+    const out = {};
+    for (const key of DELTA_KEYS) {
+      const d = (after[key] ?? 0) - (before[key] ?? 0);
+      if (d !== 0) out[key] = d;
+    }
+    // Health as the average change across everyone who was alive going in, so
+    // a death reads as the large negative it is instead of raising the average
+    // of the survivors.
+    const living = Object.keys(before.members).filter(n => before.members[n] > 0);
+    if (living.length) {
+      const sum = living.reduce((acc, n) => acc + ((after.members[n] ?? 0) - before.members[n]), 0);
+      const avg = Math.round(sum / living.length);
+      if (avg !== 0) out.health = avg;
+      const died = living.filter(n => (after.members[n] ?? 0) === 0);
+      if (died.length) out.died = died;
+    }
+    return out;
+  }
+
+  // One compact line for the result beat, shared by the event and river scenes
+  // so both read identically. Empty string when nothing measurable changed —
+  // the caller supplies its own wording for that case.
+  formatDeltas(deltas) {
+    if (!deltas) return '';
+    const parts = [];
+    for (const key of [...DELTA_KEYS, 'health']) {
+      const d = deltas[key];
+      if (!d) continue;
+      const sign = d > 0 ? '+' : '−';
+      const mag = Math.abs(d);
+      if (key === 'money') parts.push(`Money ${sign}${this.formatMoney(mag)}`);
+      else if (key === 'food') parts.push(`Food ${sign}${mag} lbs`);
+      else parts.push(`${DELTA_LABELS[key]} ${sign}${mag}`);
+    }
+    if (deltas.died?.length) parts.push(`${deltas.died.join(', ')} did not survive`);
+    return parts.join('  ·  ');
+  }
+
+  // Hold the scene on a result beat until the player presses Continue. The
+  // scene stays mounted because no transition fires here — without that the
+  // outcome text would be torn down within a frame of rendering.
+  _holdResultBeat(done) {
+    this.clearResultBeat();
+    const beat = { release: () => { this.clearResultBeat(); done(); } };
+    beat.timer = setTimeout(beat.release, RESULT_BEAT_MAX_MS);
+    this._resultBeat = beat;
+  }
+
+  clearResultBeat() {
+    if (!this._resultBeat) return;
+    clearTimeout(this._resultBeat.timer);
+    this._resultBeat = null;
+  }
+
+  // Continue button on a result beat.
+  continueFromResult() {
+    const beat = this._resultBeat;
+    if (beat) { beat.release(); return; }
+    if (this.state === 'EVENT' || this.state === 'RIVER') this.transition('TRAVEL');
   }
 
   async makeChoice(choiceIndex) {
+    // Nothing pending means the caller is asking to leave the result beat,
+    // mirroring resolveRiver's no-crossing branch.
+    if (!this.currentEvent) { this.continueFromResult(); return; }
+    const event = this.currentEvent;
+    const before = this._statsSnapshot();
     this.emit('loading', true);
     try {
       const res = await this.api('/api/choice', {
         signed_state: this.signedState,
-        event: this.currentEvent,
+        event,
         choice_index: choiceIndex,
       });
       this.signedState = res.signed_state;
       this.currentEvent = null;
       this._saveRun();
       this.emit('loading', false);
-      this.transition('TRAVEL');
+      const choice = event.choices?.[choiceIndex] || null;
+      this.emit('choiceResolved', {
+        choiceIndex,
+        choiceLabel: choice?.label || choice?.text || '',
+        // The server appends the event's journal entry to state.journal as it
+        // applies the choice, so the freshly signed state carries the outcome
+        // line. Fall back to the event body if journal is empty.
+        outcome: this.gameState?.journal?.slice(-1)[0] || event.journal_entry || '',
+        deltas: this._statsDelta(before, this._statsSnapshot()),
+      });
+      this._holdResultBeat(() => this.transition('TRAVEL'));
     } catch (e) {
       this.emit('loading', false);
       this.emit('error', { message: e.message, recoverable: true });
@@ -804,6 +948,7 @@ class GameEngine {
       this.transition('TRAVEL');
       return;
     }
+    const before = this._statsSnapshot();
     this.emit('loading', true);
     try {
       const res = await this.api('/api/river', {
@@ -815,8 +960,15 @@ class GameEngine {
       this.currentRiver = null;
       this._saveRun();
       this.emit('loading', false);
-      this.emit('riverResolved', { narrative: res.narrative, choice });
-      this.transition('TRAVEL');
+      // The river scene renders this as a result beat and owns the Continue
+      // button; transitioning here would tear the scene down before the
+      // crossing's outcome ever painted a frame.
+      this.emit('riverResolved', {
+        narrative: res.narrative,
+        choice,
+        deltas: this._statsDelta(before, this._statsSnapshot()),
+      });
+      this._holdResultBeat(() => this.transition('TRAVEL'));
     } catch (e) {
       this.emit('loading', false);
       this.emit('error', { message: e.message, recoverable: true });
@@ -986,6 +1138,9 @@ class GameEngine {
 
   pauseAdvance() {
     this._advancePaused = true;
+    // A dwell in flight must die with the pause, or the wagon keeps ticking
+    // behind the pause overlay / hunting scene.
+    this.cancelQueuedAdvance();
   }
 
   resumeAdvance() {
@@ -1007,6 +1162,8 @@ class GameEngine {
     this.pendingPace = null;
     this.pendingRations = null;
     this._advancePaused = false;
+    this.cancelQueuedAdvance();
+    this.clearResultBeat();
     this.activeChallenge = null;
     localStorage.removeItem('ot_journal');
     this._clearSavedRun();

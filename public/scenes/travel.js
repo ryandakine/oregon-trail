@@ -18,6 +18,9 @@ export default function register(k, engine) {
       for (const { event, fn } of listeners) engine.off(event, fn);
       for (const l of loops) l?.cancel?.();
       detachResize?.();
+      // A dwell queued by this scene must not outlive it — every route back to
+      // travel re-queues on mount.
+      engine.cancelQueuedAdvance();
     });
 
     // ── Scene setup ──
@@ -191,9 +194,42 @@ export default function register(k, engine) {
     }
 
     // ── Floating text ──
+    // Deaths and illnesses arrive in batches, and at the old 0.008/frame fade
+    // they overwrote each other at a single position and were gone in ~2s.
+    // Hold each one legible, then stack: newest at the bottom, older pushed up.
+    const FLOAT_HOLD = 2.6;
+    const FLOAT_FADE = 1.0;
+    const FLOAT_BASE_Y = 418;
+    const FLOAT_LINE_H = 17;
+    const FLOAT_MAX = 5;
+    const floats = [];
+
+    function layoutFloats() {
+      floats.forEach((f, i) => { f.slotY = FLOAT_BASE_Y - (floats.length - 1 - i) * FLOAT_LINE_H; });
+    }
+
+    function dropFloat(ft) {
+      const i = floats.indexOf(ft);
+      if (i >= 0) floats.splice(i, 1);
+      ft.destroy();
+      layoutFloats();
+    }
+
     function showFloatingText(msg) {
-      const ft = k.add([k.text(msg, { size: 12, width: 400 }), k.pos(320, 430), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.opacity(1), k.z(60)]);
-      ft.onUpdate(() => { ft.pos.y -= 0.3; ft.opacity -= 0.008; if (ft.opacity <= 0) ft.destroy(); });
+      const ft = k.add([k.text(msg, { size: 12, width: 400 }), k.pos(320, FLOAT_BASE_Y), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.opacity(1), k.z(60)]);
+      ft.age = 0;
+      ft.slotY = FLOAT_BASE_Y;
+      ft.onUpdate(() => {
+        if (paused) return;
+        ft.age += k.dt();
+        const fading = Math.max(0, ft.age - FLOAT_HOLD);
+        ft.opacity = 1 - Math.min(1, fading / FLOAT_FADE);
+        ft.pos.y = ft.slotY - (MOTION_OK ? fading * 12 : 0);
+        if (ft.opacity <= 0) dropFloat(ft);
+      });
+      floats.push(ft);
+      if (floats.length > FLOAT_MAX) dropFloat(floats[0]);
+      layoutFloats();
     }
 
     // ── Engine handlers ──
@@ -396,7 +432,7 @@ export default function register(k, engine) {
         k.destroyAll("pauseTag");
         pauseOverlay?.destroy();
         pauseOverlay = null;
-        engine.advance();
+        engine.queueAdvance();
       }
     }
     k.onKeyPress("p", togglePause);
@@ -412,9 +448,11 @@ export default function register(k, engine) {
 
     // No signed state means a forced render (QA/smoke) — auto-advancing would
     // hit the API with a null state and paint an error. Render statically.
+    // Otherwise queue rather than fire: this scene is the only place the art
+    // lives, so it gets a paced beat of rolling before the next advance.
     if (engine.gameState) {
       engine.resumeAdvance();
-      engine.advance();
+      engine.queueAdvance();
     }
   });
 }

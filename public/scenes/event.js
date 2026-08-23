@@ -52,6 +52,8 @@ export default function register(k, engine) {
     const overlay = document.getElementById("html-overlay");
     const content = overlay.querySelector(".overlay-content");
     let autoTimer = null;
+    let resolving = false;
+    const choiceButtons = [];
 
     drawEventBackdrop(k, engine.tone ?? "medium", getDayPhase(engine.currentDate));
 
@@ -112,6 +114,31 @@ export default function register(k, engine) {
 
     typeNext();
 
+    // Picking a choice no longer wipes the panel — it disables the buttons and
+    // waits for the engine's choiceResolved, which repaints this same panel as
+    // the result beat. The old cleanup()-then-transition path meant the outcome
+    // was never visible anywhere.
+    function choose(idx) {
+      if (resolving) return;
+      resolving = true;
+      clearAutoTimer();
+      setChoicesDisabled(true);
+      engine.makeChoice(idx);
+    }
+
+    function setChoicesDisabled(disabled) {
+      for (const b of choiceButtons) {
+        if (disabled) b.setAttribute("disabled", "true");
+        else b.removeAttribute("disabled");
+      }
+    }
+
+    function clearAutoTimer() {
+      if (!autoTimer) return;
+      clearInterval(autoTimer);
+      autoTimer = null;
+    }
+
     function showChoices() {
       overlay.removeEventListener("click", skipTypewriter);
       const choicesEl = document.getElementById("event-choices");
@@ -123,11 +150,9 @@ export default function register(k, engine) {
         const btn = document.createElement("button");
         btn.className = "choice-btn";
         btn.textContent = "Continue...";
-        btn.addEventListener("click", () => {
-          cleanup();
-          engine.makeChoice(0);
-        });
+        btn.addEventListener("click", () => choose(0));
         choicesEl.appendChild(btn);
+        choiceButtons.push(btn);
         return;
       }
 
@@ -135,11 +160,9 @@ export default function register(k, engine) {
         const btn = document.createElement("button");
         btn.className = "choice-btn";
         btn.textContent = `${idx + 1}. ${choice.text || choice.label || choice}`;
-        btn.addEventListener("click", () => {
-          cleanup();
-          engine.makeChoice(idx);
-        });
+        btn.addEventListener("click", () => choose(idx));
         choicesEl.appendChild(btn);
+        choiceButtons.push(btn);
       });
 
       // Agency-steal: auto-select after 3s if sanity < 30 (High horror tier)
@@ -157,11 +180,9 @@ export default function register(k, engine) {
         autoTimer = setInterval(() => {
           countdown--;
           if (countdown <= 0) {
-            clearInterval(autoTimer);
-            autoTimer = null;
+            clearAutoTimer();
             // Auto-select worst choice (last one, typically)
-            cleanup();
-            engine.makeChoice(choices.length - 1);
+            choose(choices.length - 1);
           } else {
             countdownEl.textContent = `Something compels you... (${countdown}s)`;
           }
@@ -169,17 +190,52 @@ export default function register(k, engine) {
       }
 
       // Keyboard shortcuts
-      k.onKeyPress("1", () => { if (choices.length >= 1) { cleanup(); engine.makeChoice(0); } });
-      k.onKeyPress("2", () => { if (choices.length >= 2) { cleanup(); engine.makeChoice(1); } });
-      k.onKeyPress("3", () => { if (choices.length >= 3) { cleanup(); engine.makeChoice(2); } });
-      k.onKeyPress("4", () => { if (choices.length >= 4) { cleanup(); engine.makeChoice(3); } });
+      k.onKeyPress("1", () => { if (choices.length >= 1) choose(0); });
+      k.onKeyPress("2", () => { if (choices.length >= 2) choose(1); });
+      k.onKeyPress("3", () => { if (choices.length >= 3) choose(2); });
+      k.onKeyPress("4", () => { if (choices.length >= 4) choose(3); });
     }
 
+    // ── Result beat ──
+    // The outcome of a choice used to be invisible: the engine transitioned to
+    // travel the instant /api/choice resolved, and travel floated the text for
+    // ~300ms before its own scene was torn down. Now the panel stays and
+    // repaints with what happened, what it cost, and a Continue button.
+    function showResultBeat({ choiceLabel, outcome, deltas }) {
+      clearAutoTimer();
+      choiceButtons.length = 0;
+      const deltaLine = engine.formatDeltas?.(deltas) || "";
+      content.innerHTML =
+        `<h2>${escapeHtml(title)}</h2>` +
+        (choiceLabel
+          ? `<p style="color:#b89b5e;font-style:italic;">You chose: ${escapeHtml(choiceLabel)}</p>`
+          : "") +
+        `<p>${escapeHtml(outcome || "The party moves on.")}</p>` +
+        `<p style="color:#d4a017;font-size:14px;letter-spacing:0.3px;">${escapeHtml(deltaLine || "Nothing in the wagon changed.")}</p>` +
+        `<div id="event-continue" style="margin-top:20px;"></div>`;
+      overlay.classList.add("active", "tableau");
+
+      const btn = document.createElement("button");
+      btn.className = "choice-btn";
+      btn.textContent = "Continue";
+      btn.addEventListener("click", () => engine.continueFromResult());
+      document.getElementById("event-continue").appendChild(btn);
+      requestAnimationFrame(() => btn.focus?.());
+
+      const a11y = document.getElementById("a11y-status");
+      if (a11y) a11y.textContent = `${outcome || ""} ${deltaLine}`.trim();
+
+      // continueFromResult() is idempotent, so a keypress landing alongside the
+      // focused button's own Enter handler can't double-transition.
+      k.onKeyPress("space", () => engine.continueFromResult());
+      k.onKeyPress("enter", () => engine.continueFromResult());
+    }
+
+    const onResolved = (payload) => showResultBeat(payload || {});
+    engine.on("choiceResolved", onResolved);
+
     function cleanup() {
-      if (autoTimer) {
-        clearInterval(autoTimer);
-        autoTimer = null;
-      }
+      clearAutoTimer();
       overlay.classList.remove("active", "tableau");
       content.innerHTML = "";
     }
@@ -188,6 +244,8 @@ export default function register(k, engine) {
     const onError = ({ message }) => {
       // Re-show overlay with choices and error message
       overlay.classList.add('active', 'tableau');
+      resolving = false;
+      setChoicesDisabled(false);
       const choicesEl = document.getElementById('event-choices');
       if (choicesEl) {
         const errP = document.createElement('p');
@@ -203,6 +261,7 @@ export default function register(k, engine) {
     k.onSceneLeave(() => {
       cleanup();
       engine.off('error', onError);
+      engine.off('choiceResolved', onResolved);
     });
   });
 }

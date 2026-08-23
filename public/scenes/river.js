@@ -19,7 +19,13 @@ export default function register(k, engine) {
     const difficulty = typeof rawDifficulty === "number"
       ? (DIFFICULTY_LABELS[rawDifficulty] || "moderate")
       : String(rawDifficulty);
-    const ferryCost = river.ferry_cost_1848_dollars || river.ferry_cost || 500;
+    // river.ferry_cost_1848_dollars is DOLLARS (worker/src/types.ts RiverCrossing);
+    // formatMoney() expects CENTS like every other money value in the engine.
+    // Convert here — mirrors the `* 100` in handleRiver's ferry branch, which is
+    // why the actual charge was always right while the button read "$0.01".
+    const ferryCost = river.ferry_cost_1848_dollars != null
+      ? river.ferry_cost_1848_dollars * 100
+      : (river.ferry_cost || 500);
 
     // Sky
     k.add([k.rect(W, 180), k.pos(0, 0), k.color(22, 33, 62)]);
@@ -159,10 +165,9 @@ export default function register(k, engine) {
         if (selected) return;
         if (btn.choice === "ferry" && money < ferryCost) return;
         selected = true;
-        // juice fires here, not on the result: resolveRiver() transitions
-        // straight to TRAVEL the instant it resolves (engine.js), tearing
-        // this scene down before a "failed crossing" effect could ever
-        // paint a frame. The splash reads as "you're crossing now."
+        // juice fires on commit, not on the result — the splash reads as
+        // "you're crossing now". The outcome gets its own beat below, once
+        // the server answers.
         juice.minor();
         if (MOTION_OK) spawnSplash(wagonX, wagonY);
         engine.resolveRiver(btn.choice);
@@ -176,6 +181,7 @@ export default function register(k, engine) {
         k.color(btn.color[0], btn.color[1], btn.color[2]),
         k.opacity(0.85),
         k.area(),
+        "riverChoice",
       ]);
       bg.onClick(choose);
 
@@ -184,6 +190,7 @@ export default function register(k, engine) {
         k.pos(bx + btnW / 2, btnY + btnH / 2),
         k.anchor("center"),
         k.color(255, 255, 255),
+        "riverChoice",
       ]);
 
       k.onKeyPress(btn.key, choose);
@@ -196,14 +203,16 @@ export default function register(k, engine) {
       k.pos(20, panelY),
       k.color(26, 26, 46),
       k.opacity(0.8),
+      "riverPrompt",
     ]);
 
     const desc = river.description || "The river blocks your path. Choose how to cross.";
     k.add([
-      k.text(desc, { size: 13, width: W - 80 }),
+      k.text(desc, { size: 13, width: W - 80, align: "center" }),
       k.pos(W / 2, panelY + 22),
       k.anchor("center"),
       k.color(222, 184, 135),
+      "riverPrompt",
     ]);
 
     // Error message display
@@ -214,12 +223,70 @@ export default function register(k, engine) {
       k.color(204, 68, 68),
     ]);
 
-    // Error recovery
+    // ── Result beat ──
+    // resolveRiver() used to transition to TRAVEL the instant the server
+    // answered, so a swamped wagon or a drowned member never painted a frame —
+    // the crossing just cut to the trail. Nothing listened to riverResolved.
+    // Now the scene stays mounted and shows what the crossing cost.
+    const METHOD_LINE = {
+      ford: "You forded the river.",
+      caulk: "You caulked the wagon and floated across.",
+      ferry: "You paid the ferryman.",
+    };
+
+    let resolved = false;
+
+    const onResolved = ({ narrative, choice, deltas }) => {
+      resolved = true;
+      k.destroyAll("riverChoice");
+      k.destroyAll("riverPrompt");
+      errorObj.text = "";
+
+      const panelTop = panelY;
+      k.add([k.rect(W - 60, 200, { radius: 6 }), k.pos(30, panelTop), k.color(26, 26, 46), k.opacity(0.92), k.z(50)]);
+      k.add([
+        k.text(METHOD_LINE[choice] || "The crossing is behind you.", { size: 16, width: W - 110, align: "center" }),
+        k.pos(W / 2, panelTop + 26), k.anchor("center"), k.color(252, 227, 138), k.z(51),
+      ]);
+      k.add([
+        k.text(narrative || "The party reached the far bank.", { size: 13, width: W - 110, align: "center" }),
+        k.pos(W / 2, panelTop + 90), k.anchor("center"), k.color(222, 184, 135), k.z(51),
+      ]);
+      const deltaLine = engine.formatDeltas?.(deltas) || "";
+      k.add([
+        k.text(deltaLine || "No losses.", { size: 13, width: W - 110, align: "center" }),
+        k.pos(W / 2, panelTop + 162), k.anchor("center"),
+        k.color(...(deltaLine ? [212, 160, 23] : [46, 139, 87])), k.z(51),
+      ]);
+
+      const contW = 200, contH = 36, contX = (W - contW) / 2;
+      const cont = k.add([
+        k.rect(contW, contH, { radius: 4 }), k.pos(contX, btnY),
+        k.color(46, 139, 87), k.opacity(0.9), k.area(), k.z(51),
+      ]);
+      k.add([
+        k.text("Continue", { size: 14 }), k.pos(W / 2, btnY + contH / 2),
+        k.anchor("center"), k.color(255, 255, 255), k.z(52),
+      ]);
+      const goOn = () => engine.continueFromResult();
+      cont.onClick(goOn);
+      k.onKeyPress("space", goOn);
+      k.onKeyPress("enter", goOn);
+    };
+    engine.on('riverResolved', onResolved);
+
+    // Error recovery — only before the crossing resolves; once the result beat
+    // is up the choice buttons are gone and re-arming them would let a keypress
+    // re-post a crossing that already happened.
     const onError = ({ message }) => {
+      if (resolved) return;
       selected = false; // Re-enable buttons
       errorObj.text = message || 'Crossing failed. Try again.';
     };
     engine.on('error', onError);
-    k.onSceneLeave(() => engine.off('error', onError));
+    k.onSceneLeave(() => {
+      engine.off('error', onError);
+      engine.off('riverResolved', onResolved);
+    });
   });
 }
