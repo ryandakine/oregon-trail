@@ -69,6 +69,18 @@ export default function register(k, engine) {
         border-radius:3px;font-family:Georgia,serif;
       `.replace(/\n/g, '');
 
+      const step10Style = `
+        background:#8b4513;color:#deb887;border:1px solid #a0522d;
+        padding:0 6px;height:28px;font-size:0.7rem;cursor:pointer;
+        border-radius:3px;font-family:Georgia,serif;white-space:nowrap;
+      `.replace(/\n/g, '');
+
+      const disabledStep10Style = `
+        background:#3a3a3a;color:#666;border:1px solid #555;
+        padding:0 6px;height:28px;font-size:0.7rem;cursor:not-allowed;
+        border-radius:3px;font-family:Georgia,serif;white-space:nowrap;
+      `.replace(/\n/g, '');
+
       content.innerHTML = `
         <h1 class="overlay-title">Matt's General Store</h1>
         <p class="overlay-text" style="margin-bottom:0.3rem;">
@@ -93,10 +105,12 @@ export default function register(k, engine) {
                   <strong>${nameLabel}</strong>
                   <br><span style="font-size:0.8em;opacity:0.7;">${item.unit_label} @ ${formatMoney(item.price_cents)}</span>
                 </div>
-                <div style="display:flex;align-items:center;gap:0.4rem;">
+                <div style="display:flex;align-items:center;gap:0.3rem;">
+                  <button class="store-minus10" data-item="${key}" style="${disabled ? disabledStep10Style : step10Style}" ${disabled ? 'disabled' : ''}>-10</button>
                   <button class="store-minus" data-item="${key}" style="${disabled ? disabledBtnStyle : btnStyle}" ${disabled ? 'disabled' : ''}>-</button>
                   <span class="store-qty" style="min-width:30px;text-align:center;font-weight:bold;">${qty}</span>
                   <button class="store-plus" data-item="${key}" style="${disabled ? disabledBtnStyle : btnStyle}" ${disabled ? 'disabled' : ''}>+</button>
+                  <button class="store-plus10" data-item="${key}" style="${disabled ? disabledStep10Style : step10Style}" ${disabled ? 'disabled' : ''}>+10</button>
                 </div>
                 <div style="min-width:70px;text-align:right;">
                   <span class="store-cost">${formatMoney(cost)}</span>
@@ -112,41 +126,49 @@ export default function register(k, engine) {
           <button id="store-clear" class="overlay-choice" style="flex:0.5;min-width:100px;padding:0.7rem 1rem;">
             Clear All
           </button>
-          <button id="store-buy" class="overlay-choice" style="flex:1;min-width:140px;padding:0.7rem 1rem;background:rgba(80,120,60,0.3);border-color:#6aad6a;">
+          <button id="store-buy" class="overlay-choice overlay-choice-primary" style="flex:1;min-width:140px;padding:0.7rem 1rem;">
             Hit the Trail
           </button>
         </div>
         <div id="store-error" style="display:none;color:#cc3333;text-align:center;margin-top:0.8rem;font-size:0.9em;"></div>
       `;
 
-      // Wire minus buttons
-      content.querySelectorAll('.store-minus').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const key = btn.dataset.item;
-          if (disabledItems[key]) return;
-          if (quantities[key] > 0) {
-            quantities[key]--;
-            render();
-          }
-        });
-      });
-
-      // Wire plus buttons
-      content.querySelectorAll('.store-plus').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const key = btn.dataset.item;
-          if (disabledItems[key]) return;
-          const newTotal = calcTotal() + STORE_PRICES[key].price_cents;
-          if (newTotal <= budget) {
-            quantities[key]++;
-            render();
-          } else {
+      // Change quantity by delta (±1 or ±10), clamped to [0, budget-affordable].
+      // A partial fill (e.g. +10 with room for only 3) still applies as much
+      // as fits, rather than blocking the click outright.
+      function addQty(key, delta) {
+        if (disabledItems[key]) return;
+        if (delta > 0) {
+          const affordable = Math.floor((budget - calcTotal()) / STORE_PRICES[key].price_cents);
+          const actual = Math.min(delta, affordable);
+          if (actual <= 0) {
             const errEl = document.getElementById('store-error');
             errEl.textContent = 'Not enough money!';
             errEl.style.display = 'block';
             setTimeout(() => { errEl.style.display = 'none'; }, 1500);
+            return;
           }
-        });
+          quantities[key] += actual;
+        } else {
+          const actual = Math.max(delta, -quantities[key]);
+          if (actual === 0) return;
+          quantities[key] += actual;
+        }
+        render();
+      }
+
+      // Wire minus/plus/±10 buttons
+      content.querySelectorAll('.store-minus10').forEach((btn) => {
+        btn.addEventListener('click', () => addQty(btn.dataset.item, -10));
+      });
+      content.querySelectorAll('.store-minus').forEach((btn) => {
+        btn.addEventListener('click', () => addQty(btn.dataset.item, -1));
+      });
+      content.querySelectorAll('.store-plus').forEach((btn) => {
+        btn.addEventListener('click', () => addQty(btn.dataset.item, 1));
+      });
+      content.querySelectorAll('.store-plus10').forEach((btn) => {
+        btn.addEventListener('click', () => addQty(btn.dataset.item, 10));
       });
 
       // Recommend button

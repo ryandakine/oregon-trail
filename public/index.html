@@ -118,23 +118,61 @@
       margin-bottom: 12px;
       font-size: 15px;
     }
-    #html-overlay .choice-btn {
-      display: block;
-      width: 100%;
-      padding: 12px 16px;
-      margin: 8px 0;
+    /* Shared button register for #html-overlay: dark-parchment body, cream
+       text, gold border — matches .overlay-content's panel palette. Scoped
+       by element + the classes scenes already emit (profession/tone/store/
+       event/landmark/share buttons) so they inherit without editing those
+       files; any bare <button> that shows up later is covered too. */
+    #html-overlay button,
+    #html-overlay .overlay-choice {
       background: #2a1f0e;
       color: #f5e6c8;
       border: 1px solid #8b6914;
       border-radius: 3px;
-      font-family: Georgia, serif;
+      font-family: Georgia, 'Times New Roman', serif;
       font-size: 15px;
+      padding: 12px 16px;
       cursor: pointer;
-      text-align: left;
-      transition: background 0.15s;
+      transition: background 0.15s, border-color 0.15s;
     }
-    #html-overlay .choice-btn:hover {
+    #html-overlay button:hover,
+    #html-overlay .overlay-choice:hover {
       background: #3d2b14;
+      border-color: #d4a017;
+    }
+    #html-overlay button:active,
+    #html-overlay .overlay-choice:active {
+      background: #241a0c;
+    }
+    #html-overlay button:focus-visible,
+    #html-overlay .overlay-choice:focus-visible {
+      outline: 2px solid #d4a017;
+      outline-offset: 2px;
+    }
+    #html-overlay button:disabled,
+    #html-overlay .overlay-choice:disabled {
+      cursor: not-allowed;
+    }
+    /* Primary CTA variant — gold fill, dark text. Store's "Hit the Trail"
+       is the current consumer; any future primary action can reuse it. */
+    #html-overlay .overlay-choice-primary {
+      background: #d4a017;
+      color: #1a1207;
+      border-color: #d4a017;
+      font-weight: bold;
+    }
+    #html-overlay .overlay-choice-primary:hover {
+      background: #e8b52a;
+      border-color: #e8b52a;
+    }
+    #html-overlay .overlay-choice-primary:active {
+      background: #b8890f;
+    }
+    #html-overlay .choice-btn {
+      display: block;
+      width: 100%;
+      margin: 8px 0;
+      text-align: left;
     }
     /* Rotate-to-landscape hint. The game is a 4:3 landscape layout; in portrait
        it letterboxes into a thin band and the type shrinks. Show only on touch
@@ -181,6 +219,31 @@
     }
     #newspaper-overlay { position: fixed; inset: 0; z-index: 200; display: none; background: rgba(0,0,0,0.9); overflow-y: auto; padding: 2rem; }
     #newspaper-overlay.active { display: flex; align-items: center; justify-content: center; }
+    /* Scroll affordance for the newspaper card (newspaper.js), which scrolls
+       internally (overflow-y:auto, max-height:85vh) and can clip its CTA row
+       below the fold on short viewports. Pure CSS — no scene-file edit — via
+       a sticky pseudo-element that rides the bottom of the scrollport while
+       content remains below it, then settles back into flow once the real
+       end of the card is reached. Only on viewports short enough to clip. */
+    @media (max-height: 820px) {
+      #newspaper-content::after {
+        content: "\25BE";
+        position: sticky;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 34px;
+        margin-top: -34px;
+        padding-bottom: 4px;
+        pointer-events: none;
+        color: #5a3a1a;
+        font-size: 14px;
+        background: linear-gradient(to bottom, rgba(244,228,193,0), rgba(244,228,193,0.92) 65%);
+      }
+    }
     #tombstone-overlay { position: fixed; inset: 0; z-index: 200; display: none; background: rgba(0,0,0,0.9); overflow-y: auto; padding: 2rem; }
     #tombstone-overlay.active { display: flex; align-items: center; justify-content: center; }
   </style>
