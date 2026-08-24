@@ -2,10 +2,17 @@
 // See IMPLEMENTATION_PLAN_v3.md § 4.1.
 
 import { PALETTE } from "./draw.mjs";
+import { createHorrorFx } from "./horror-fx.mjs";
 
 const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 export function applyToneOverlay(k, tone) {
+  // The HIGH-tier shader pass is driven from here rather than per scene: this
+  // is the one place that already knows the tier, so every scene applying the
+  // overlay inherits the signature, and low/medium clear a slot a previous
+  // run may have installed. No-ops when the shader failed to load.
+  createHorrorFx(k).setTier(tone);
+
   if (tone === "low") {
     k.add([k.rect(640, 480), k.pos(0, 0), k.color(255, 240, 200), k.opacity(0.08), k.z(45), k.fixed()]);
   } else if (tone === "medium") {

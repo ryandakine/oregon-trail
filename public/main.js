@@ -58,6 +58,16 @@ k.loadSprite("titleHero", "/assets/title-hero.png")
     console.warn("title-hero.png missing; using night fallback:", err?.message);
   });
 
+// HIGH tone tier post effect (graphics-pop-research § 3 Phase C). Only the
+// composed pass is fetched — kaplay's post-effect slot holds a single shader,
+// so the other frags in lib/shaders/ are source units, not runtime programs.
+// Failure-tolerant like the font above, and doubly so: horror-fx.mjs asks
+// getShader() before every usePostEffect call, so a 404 or a compile error
+// costs the horror tier its shader and leaves every scene otherwise intact.
+k.loadShaderURL("horror", null, "/lib/shaders/horror.frag").catch((err) => {
+  console.warn("horror post-effect shader failed to load; high tier runs without it:", err?.message);
+});
+
 window.k = k;
 
 // A11y: describe the canvas for assistive tech since its content is dynamic.
