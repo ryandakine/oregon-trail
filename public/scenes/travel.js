@@ -1,9 +1,25 @@
 import * as draw from "../lib/draw.mjs";
+import { segmentBlend, segmentForMiles } from "../lib/segments.mjs";
 import { addTopHud, addBottomHud, updateHud, attachResizeRebuild, attachStatCorruption } from "../lib/hud.mjs";
 import { applyToneOverlay } from "../lib/tone.mjs";
 import { createJuice } from "../lib/juice.mjs";
 
 const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+// Mood-arc dressing: which of the existing draw helpers the biome puts on
+// screen, keyed off the segment's dressing[] hints. Prairie is the historical
+// layout unchanged; open country loses the cottonwood, rock country grows its
+// stones, forest gains fir. Fixed coordinates, so this stays repaint-stable.
+const DRESSING = {
+  prairie:      { trees: [[560, 330]],                        rocks: [[70, 360, 36, 22], [110, 455, 24, 14]],                          tufts: [[60, 390], [90, 430], [540, 380], [580, 440]] },
+  river_valley: { trees: [[560, 330]],                        rocks: [[92, 452, 22, 12]],                                              tufts: [[60, 390], [90, 430], [540, 380], [580, 440]] },
+  bluffs:       { trees: [],                                  rocks: [[64, 352, 58, 34], [116, 455, 30, 17], [566, 344, 44, 26]],      tufts: [[540, 380], [580, 440]] },
+  foothills:    { trees: [],                                  rocks: [[70, 360, 40, 24], [112, 452, 26, 15], [560, 350, 30, 18]],      tufts: [[60, 390], [90, 430], [540, 380], [580, 440]] },
+  snow:         { trees: [],                                  rocks: [[66, 356, 52, 26], [114, 456, 28, 14], [560, 348, 38, 20]],      tufts: [] },
+  desert:       { trees: [],                                  rocks: [[60, 350, 66, 30], [118, 458, 34, 16], [556, 342, 50, 24]],      tufts: [] },
+  forest:       { trees: [[560, 330], [56, 322], [148, 306]], rocks: [[104, 452, 30, 18]],                                             tufts: [[540, 380]] },
+  arrival:      { trees: [[560, 330], [72, 324]],             rocks: [[110, 455, 24, 14]],                                             tufts: [[60, 390], [90, 430], [540, 380], [580, 440]] },
+};
 
 export default function register(k, engine) {
   k.scene("travel", () => {
@@ -29,20 +45,41 @@ export default function register(k, engine) {
     const tone = engine.tone ?? "medium";
     const dayPhase = getDayPhase(engine.currentDate);
 
-    const sky = draw.drawSky(k, tone, dayPhase);
-    const hills = draw.drawHills(k);
-    draw.drawMountains(k);
-    draw.drawGround(k, { tone });
+    // Mood arc: 1,764 miles read as 8 looks, cross-faded over a 40-mile window
+    // so no advance ever jumps the palette. Colors come from the blend; the
+    // discrete choices (props, weather) come from whichever segment owns this
+    // mile, which flips at the same place the blend passes t=0.5.
+    const miles = engine.milesTraveled ?? 0;
+    const segment = segmentBlend(miles);
+    const here = segmentForMiles(miles);
+
+    const sky = draw.drawSky(k, tone, dayPhase, { segment });
+    const hills = draw.drawHills(k, { segment });
+    draw.drawMountains(k, { segment });
+    draw.drawGround(k, { tone, segment });
+    // The trail itself stays churned earth in every biome — like the shared
+    // darks in segments.mjs, it's the through-line that keeps this one game.
     draw.drawTrail(k);
 
     // Environment
-    draw.drawTree(k, 560, 330);
-    draw.drawRock(k, 70, 360);
-    draw.drawRock(k, 110, 455, 24, 14);
-    draw.drawGrassTuft(k, 60, 390);
-    draw.drawGrassTuft(k, 90, 430);
-    draw.drawGrassTuft(k, 540, 380);
-    draw.drawGrassTuft(k, 580, 440);
+    const dressing = DRESSING[here.biome] ?? DRESSING.prairie;
+    for (const [tx, ty] of dressing.trees) draw.drawTree(k, tx, ty);
+    for (const [rx, ry, rw, rh] of dressing.rocks) draw.drawRock(k, rx, ry, rw, rh);
+    for (const [gx, gy] of dressing.tufts) draw.drawGrassTuft(k, gx, gy);
+
+    // Ground-hugging haze bands: valley mist on arrival, wind-packed snow on
+    // the divide. Low-opacity rects over the meadow and the head of the trail.
+    if (here.biome === "arrival" || here.biome === "snow") {
+      const mist = here.biome === "snow"
+        ? draw.PALETTE.snow
+        : draw.segmentColor(segment, "horizon", draw.PALETTE.skyPale);
+      const bands = here.biome === "snow"
+        ? [[268, 9, 0.5], [292, 7, 0.38], [332, 6, 0.26]]
+        : [[262, 10, 0.3], [280, 8, 0.22], [304, 7, 0.15]];
+      for (const [by, bh, bop] of bands) {
+        k.add([k.rect(640, bh), k.pos(0, by), k.color(...mist), k.opacity(bop)]);
+      }
+    }
 
     // HIGH-tier atmospheric horror
     if (tone === "high") {
@@ -188,10 +225,12 @@ export default function register(k, engine) {
     }
 
     // ── Weather FX ──
-    const miles = engine.milesTraveled ?? 0;
-    const weather = miles > 1200 ? (Math.random() > 0.5 ? "snow" : "clear")
-                  : miles > 600  ? (Math.random() > 0.5 ? "dust" : "clear")
-                  :                 (Math.random() > 0.7 ? "rain" : "clear");
+    // Kind and odds come from the segment's weatherBias (the same pair the 3D
+    // layer feeds vfx.setWeather), not a mile threshold. The roll is seeded off
+    // the mile so a given position always draws the same sky.
+    const bias = here.weatherBias;
+    const weatherRoll = draw.seededRng(draw.seedFrom(miles, here.index));
+    const weather = bias.kind !== "none" && weatherRoll() < bias.intensity ? bias.kind : "clear";
 
     if (weather === "rain" && MOTION_OK) {
       loops.push(k.loop(0.05, () => {

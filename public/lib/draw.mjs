@@ -24,6 +24,27 @@ export const seededRng = (seed) => mulberry32(seed | 0);
 // Linear blend of two palette colors. Keeps PALETTE the single color source.
 export const mixColor = (a, b, t) => [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * t));
 
+// Mood arc (lib/segments.mjs). The terrain drawers take a trailing
+// opts.segment; the convention is the {a,b,t} blend from segmentBlend(), and a
+// bare segment object is accepted as the degenerate a===b, t===0 case. Roles
+// are PALETTE key names, so no hex ever leaves palette.mjs. With no segment
+// every drawer falls back to the color it always used, so any call site that
+// doesn't pass one renders byte-for-byte as before.
+export function segmentColor(segment, role, fallback = null) {
+  if (!segment) return fallback;
+  const bare = !!segment.palette;
+  const ca = PALETTE[(bare ? segment : segment.a)?.palette?.[role]];
+  const cb = PALETTE[(bare ? segment : segment.b)?.palette?.[role]];
+  if (!ca || !cb) return fallback;
+  const t = bare ? 0 : (segment.t ?? 0);
+  return t > 0 ? mixColor(ca, cb, t) : ca;
+}
+
+// How far the high tier drags a segment's sky toward twilight. Crush, not
+// replace: 0.6 still leaves ~70 luma between the palest and darkest segment,
+// so the journey reads on the horror tier instead of flattening to one dusk.
+const HIGH_CRUSH = 0.6;
+
 // B1: shared ink-outline + shadow-hatch helpers. Warm-dark #3a2a1a
 // (PALETTE.outline) register only — never pure black. Replaces ad-hoc
 // double-draw outline offsets scattered across the composite drawers.
@@ -93,9 +114,21 @@ export function drawSky(k, tone, dayPhase, opts = {}) {
     dusk:  { top: PALETTE.skyDusk,  horizon: PALETTE.skyDawn,        cloudOp: 0.7, celestial: "sun",  cx: 120, cy: 160, r: 15 },
     night: { top: PALETTE.skyNight, horizon: PALETTE.skyNightHorizon, cloudOp: 0.3, celestial: "moon", cx: 510, cy: 70,  r: 13 },
   };
+  // Segment ramp first, high-tier crush on top of it. The day phase keeps the
+  // light (sun/moon position, cloud opacity); the segment owns the dome, and
+  // horizon stays the pure segment color so it still matches the 3D fog.
+  const seg = opts.segment;
+  const segTop = segmentColor(seg, "zenith");
+  const segHorizon = segmentColor(seg, "horizon");
+  const base = phaseMap[dayPhase] ?? phaseMap.day;
   const phase = (tone === "high")
-    ? { top: PALETTE.skyTwilight, horizon: PALETTE.skyTwilightHorizon, cloudOp: 0.5, celestial: null }
-    : (phaseMap[dayPhase] ?? phaseMap.day);
+    ? {
+        top: segTop ? mixColor(segTop, PALETTE.skyTwilight, HIGH_CRUSH) : PALETTE.skyTwilight,
+        horizon: segHorizon ? mixColor(segHorizon, PALETTE.skyTwilightHorizon, HIGH_CRUSH) : PALETTE.skyTwilightHorizon,
+        cloudOp: 0.5,
+        celestial: null,
+      }
+    : { ...base, top: segTop ?? base.top, horizon: segHorizon ?? base.horizon };
 
   // Stepped gradient: 16 horizontal bands top→horizon, then a soft blend
   // strip. (Was 4×45px bands with visible seams — mixColor lerp is near-free.)
@@ -107,8 +140,11 @@ export function drawSky(k, tone, dayPhase, opts = {}) {
   }
   k.add([k.rect(640, 40), k.pos(0, 180), k.color(...phase.horizon), k.opacity(0.7)]);
   if (tone === "high") {
-    // Sickly green-yellow horizon accent (AESTHETIC_SPEC § 3 horror shift).
-    k.add([k.rect(640, 18), k.pos(0, 196), k.color(...PALETTE.sicklyHorizon), k.opacity(0.14)]);
+    // Sickly green-yellow horizon accent (AESTHETIC_SPEC § 3 horror shift) —
+    // or, under a segment, that segment's single accent, which is the one
+    // saturated hue the crush is allowed to leave standing.
+    const accent = segmentColor(seg, "accent");
+    k.add([k.rect(640, 18), k.pos(0, 196), k.color(...(accent ?? PALETTE.sicklyHorizon)), k.opacity(accent ? 0.2 : 0.14)]);
   }
 
   // Sun disc with concentric glow rings, or moon at night. None for high (bleak).
@@ -155,13 +191,26 @@ export function drawCloud(k, cx, cy, scale = 1, opacity = 0.9, opts = {}) {
 }
 
 export function drawMountains(k, opts = {}) {
+  // The whole range hangs off the segment's `far` role: the hazy back peaks
+  // lean into the horizon (atmospheric perspective), the near ones step down
+  // toward the shared warm dark, and the caps lean back toward `far` so they
+  // read as sunlit rock on the desert and as snow on the divide.
+  const far = segmentColor(opts.segment, "far");
+  const horizon = segmentColor(opts.segment, "horizon");
+  const hazeCol  = far ? mixColor(far, horizon ?? far, 0.45)   : PALETTE.mountainHaze;
+  const peakFar  = far ?? PALETTE.mountainFar;
+  const peakMid  = far ? mixColor(far, PALETTE.outline, 0.12)  : PALETTE.mountainMid;
+  const peakDk   = far ? mixColor(far, PALETTE.outline, 0.30)  : PALETTE.mountainDk;
+  const shadeCol = far ? mixColor(far, PALETTE.outline, 0.45)  : PALETTE.mountainShade;
+  const capCol   = far ? mixColor(PALETTE.snow, far, 0.45)     : PALETTE.snow;
+
   // Far range — hazy, no outline, lighter (atmospheric perspective).
   const farPeak = (cx, w, h) => k.add([
     k.polygon([
       k.vec2(-w/2, 0), k.vec2(-w/5, -h), k.vec2(-w/16, -h*0.6),
       k.vec2(w/6, -h*0.85), k.vec2(w/3, -h*0.45), k.vec2(w/2, 0),
     ]),
-    k.pos(cx, 228), k.color(...PALETTE.mountainHaze), k.opacity(0.8),
+    k.pos(cx, 228), k.color(...hazeCol), k.opacity(0.8),
   ]);
   farPeak(80, 300, 52);
   farPeak(310, 340, 64);
@@ -184,14 +233,14 @@ export function drawMountains(k, opts = {}) {
         k.vec2(0, -h), k.vec2(w/6, -h*0.7), k.vec2(w/3, -h*0.4),
         k.vec2(w/2, 0), k.vec2(w/7, 0),
       ]),
-      k.pos(cx, cy), k.color(...PALETTE.mountainShade), k.opacity(0.5),
+      k.pos(cx, cy), k.color(...shadeCol), k.opacity(0.5),
     ]);
     // Small secondary facet under the left shoulder.
     k.add([
       k.polygon([
         k.vec2(-w/4, -h*0.8), k.vec2(-w/8, -h*0.6), k.vec2(-w/9, -h*0.3), k.vec2(-w/4, -h*0.35),
       ]),
-      k.pos(cx, cy), k.color(...PALETTE.mountainShade), k.opacity(0.28),
+      k.pos(cx, cy), k.color(...shadeCol), k.opacity(0.28),
     ]);
     if (snow) {
       k.add([
@@ -199,19 +248,32 @@ export function drawMountains(k, opts = {}) {
           k.vec2(-w/12, -h*0.76), k.vec2(-w/24, -h*0.82), k.vec2(0, -h),
           k.vec2(w/14, -h*0.78), k.vec2(w/24, -h*0.72), k.vec2(-w/28, -h*0.74),
         ]),
-        k.pos(cx, cy), k.color(...PALETTE.snow), k.opacity(0.95),
+        k.pos(cx, cy), k.color(...capCol), k.opacity(0.95),
       ]);
     }
   };
-  mtn(150, 230, 280, 70, PALETTE.mountainFar, true);
-  mtn(420, 230, 320, 55, PALETTE.mountainMid, false);
-  mtn(320, 230, 180, 90, PALETTE.mountainDk, true);
+  mtn(150, 230, 280, 70, peakFar, true);
+  mtn(420, 230, 320, 55, peakMid, false);
+  mtn(320, 230, 180, 90, peakDk, true);
 }
 
-export function drawHills(k) {
+export function drawHills(k, opts = {}) {
+  // Hills sit between the mountains and the meadow, so they interpolate the
+  // segment the same way: backing ridge on `far`, mid ridges halfway to
+  // `ground`, front ridges on `groundAlt`.
+  const far = segmentColor(opts.segment, "far");
+  const ground = segmentColor(opts.segment, "ground");
+  const groundAlt = segmentColor(opts.segment, "groundAlt");
+  const backingCol  = far ?? PALETTE.hillMid;
+  const ridgeFarCol = far && ground ? mixColor(far, ground, 0.45) : PALETTE.grassDeep;
+  // Pulled a third of the way back to `ground`: on segments where groundAlt is
+  // the dark mass (basalt, conifer) an untempered ridge reads as a black bar
+  // laid across the horizon rather than as rimrock.
+  const ridgeNearCol = groundAlt && ground ? mixColor(groundAlt, ground, 0.3) : PALETTE.grassLight;
+
   // Continuous backing ridge so gaps between drifting hills never leak the
   // page background (visible as dark notches in the v2 renderer).
-  k.add([k.rect(640, 40), k.pos(0, 222), k.color(...PALETTE.hillMid)]);
+  k.add([k.rect(640, 40), k.pos(0, 222), k.color(...backingCol)]);
 
   // Soft rounded ridges, no hard outline (atmospheric, golf-course register).
   // Rolling tonal variation: three greens across the two parallax bands.
@@ -220,16 +282,16 @@ export function drawHills(k) {
     k.pos(cx - w/2, cy - h),
     k.color(...col),
   ]);
-  const far = [
-    roundedHill(120, 261, 240, 34, PALETTE.grassDeep),
-    roundedHill(380, 261, 280, 40, PALETTE.grassDeep),
-    roundedHill(620, 262, 200, 26, PALETTE.grassDeep),
+  const farRidges = [
+    roundedHill(120, 261, 240, 34, ridgeFarCol),
+    roundedHill(380, 261, 280, 40, ridgeFarCol),
+    roundedHill(620, 262, 200, 26, ridgeFarCol),
   ];
   const near = [
-    roundedHill(240, 263, 190, 18, PALETTE.grassLight),
-    roundedHill(580, 262, 220, 26, PALETTE.grassLight),
+    roundedHill(240, 263, 190, 18, ridgeNearCol),
+    roundedHill(580, 262, 220, 26, ridgeNearCol),
   ];
-  return { far, near };
+  return { far: farRidges, near };
 }
 
 // Trail trapezoid geometry (shared by drawGround scatter + drawTrail).
@@ -242,11 +304,26 @@ function trailEdgesAt(y) {
 
 export function drawGround(k, opts = {}) {
   const tone = opts.tone ?? "medium";
-  k.add([k.rect(640, 220), k.pos(0, 260), k.color(...PALETTE.grassMid)]);
+  // The 30% of the budget. Patch darks and tuft blades are pulled off `ground`
+  // toward the shared warm dark rather than given hues of their own, so the
+  // only saturated color down here is the segment's one accent on the flowers.
+  const ground = segmentColor(opts.segment, "ground");
+  const groundAlt = segmentColor(opts.segment, "groundAlt");
+  const accent = segmentColor(opts.segment, "accent");
+  const baseCol   = ground ?? PALETTE.grassMid;
+  const seamFar   = segmentColor(opts.segment, "far") ?? PALETTE.hillMid;
+  const seamNear  = groundAlt ?? PALETTE.grassLight;
+  const patchLite = groundAlt ?? PALETTE.grassLight;
+  const patchDark = ground ? mixColor(ground, PALETTE.outline, 0.28) : PALETTE.grassDeep;
+  const tuftCol   = ground ? mixColor(ground, PALETTE.outline, 0.4)  : PALETTE.grassBorder;
+  const dotWarm   = accent ?? PALETTE.flowerGold;
+  const dotPale   = accent ? mixColor(accent, PALETTE.cloud, 0.55)   : PALETTE.flowerCream;
+
+  k.add([k.rect(640, 220), k.pos(0, 260), k.color(...baseCol)]);
 
   // Soft horizon blend — kills the hard hills/ground seam.
-  k.add([k.rect(640, 8), k.pos(0, 256), k.color(...PALETTE.hillMid),    k.opacity(0.55)]);
-  k.add([k.rect(640, 5), k.pos(0, 262), k.color(...PALETTE.grassLight), k.opacity(0.3)]);
+  k.add([k.rect(640, 8), k.pos(0, 256), k.color(...seamFar),  k.opacity(0.55)]);
+  k.add([k.rect(640, 5), k.pos(0, 262), k.color(...seamNear), k.opacity(0.3)]);
 
   const rng = mulberry32(seedFrom(640, 260));
   const onTrail = (x, y, pad) => {
@@ -259,7 +336,7 @@ export function drawGround(k, opts = {}) {
   while (placed < 16) {
     const x = rng() * 640, y = 268 + rng() * 205;
     const w = 36 + rng() * 70, h = 9 + rng() * 13;
-    const col = rng() < 0.5 ? PALETTE.grassLight : PALETTE.grassDeep;
+    const col = rng() < 0.5 ? patchLite : patchDark;
     const op = 0.22 + rng() * 0.16;
     placed++;
     if (onTrail(x, y, 24)) continue;
@@ -273,7 +350,7 @@ export function drawGround(k, opts = {}) {
     const tuft = k.add([k.pos(x, y)]);
     const blades = 2 + Math.floor(rng() * 2);
     for (let b = 0; b < blades; b++) {
-      tuft.add([k.rect(2, 5 + rng() * 4), k.pos(-3 + b * 3, -(4 + rng() * 3)), k.color(...PALETTE.grassBorder), k.opacity(0.7)]);
+      tuft.add([k.rect(2, 5 + rng() * 4), k.pos(-3 + b * 3, -(4 + rng() * 3)), k.color(...tuftCol), k.opacity(0.7)]);
     }
   }
 
@@ -290,7 +367,7 @@ export function drawGround(k, opts = {}) {
     for (let i = 0; i < 11; i++) {
       const x = rng() * 640, y = 286 + rng() * 186;
       if (onTrail(x, y, 16)) continue;
-      const col = rng() < 0.6 ? PALETTE.flowerGold : PALETTE.flowerCream;
+      const col = rng() < 0.6 ? dotWarm : dotPale;
       k.add([k.circle(1.5 + rng()), k.pos(x, y), k.color(...col), k.opacity(0.85), k.anchor("center")]);
     }
   }

@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { startHarness, type Harness } from "./harness";
+import { segmentForMiles } from "../../public/lib/segments.mjs";
 import * as eventFx from "./fixtures/event";
 import * as bpFx from "./fixtures/bitter_path";
 
@@ -60,6 +61,38 @@ describe("travel + event + bitter_path scenes", () => {
     // add objects over the medium render, whatever its internal object count.
     expect(s.total).toBeGreaterThan(medium.total);
   });
+
+  // Mood-arc bands (lib/segments.mjs). Travel is the only scene that paints the
+  // arc, and each band swaps both palette and dressing — a bad palette key or a
+  // missing biome row throws inside scene setup, so a clean render with zero
+  // errors is the real assertion. The segment id is pinned alongside so a later
+  // boundary edit can't silently move a band out from under these seeds.
+  const bandCases: Array<{ id: string; miles: number; segment: string; label: string }> = [
+    { id: "T-travel-4", miles: 1000, segment: "arc_divide", label: "snow band (South Pass divide)" },
+    { id: "T-travel-5", miles: 1300, segment: "arc_snake", label: "desert band (Snake River plain)" },
+    { id: "T-travel-6", miles: 1550, segment: "arc_blue_mtns", label: "forest band (Blue Mountains)" },
+  ];
+
+  for (const band of bandCases) {
+    it(`${band.id}: travel renders in the ${band.label}`, async () => {
+      await h.seedEngine({
+        profession: "farmer",
+        tone: "medium",
+        signedStateOverrides: {
+          position: { current_segment_id: "seg_01", miles_traveled: band.miles, date: "1848-08-14" },
+        },
+      });
+      await h.goScene("travel");
+      const s = await h.readStats();
+      expect(s.pageErrors).toEqual([]);
+      expect(s.kaplayErrors).toEqual([]);
+      expect(s.total).toBeGreaterThanOrEqual(100);
+
+      const miles = await h.page.evaluate(() => (window.engine as { milesTraveled: number }).milesTraveled);
+      expect(miles).toBe(band.miles);
+      expect(segmentForMiles(miles).id).toBe(band.segment);
+    });
+  }
 
   it("T-event-1: event with 3 choices renders", async () => {
     await h.seedEngine({ profession: "farmer", tone: "medium" });
