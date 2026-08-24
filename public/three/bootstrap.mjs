@@ -25,6 +25,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { toHex } from '../lib/palette.mjs';
+import { segmentBlend, segmentForMiles } from '../lib/segments.mjs';
 import * as textures from './textures.mjs';
 import { createTerrain, BIOMES } from './terrain.mjs';
 import { createSky, HIGH_TONE_FOG } from './sky.mjs';
@@ -51,12 +52,26 @@ const WAGON_SPEED = 1.9; // world-units/sec — plodding ox pace, drives scroll 
 // but uses Math.random per transition — which would flicker the 3D storm on every
 // stateChange. Instead hash a stable 150-mile band to a fixed 0..99 roll, so the
 // same stretch of trail always yields the same weather. No PRNG anywhere.
+//
+// The mood arc BIASES this: each segment declares in segments.mjs how storm-prone
+// its stretch of trail is, and that lean moves both the odds a band is stormy and
+// how hard the storm lands — a dust segment storms more, and harder, than a green
+// one; a segment whose bias is 'none' (the Willamette arrival) is always clear.
+// The KIND still comes from the mile band. Swapping kind to the segment's own
+// would move miles=1300 from snow to dust and miles=750 from dust to rain, and
+// both of those are pinned by test/frontend/three-adapter.test.ts and are not
+// this change's to move — see the follow-up note.
 function weatherForMiles(miles) {
+  const bias = segmentForMiles(miles).weatherBias;
+  if (bias.kind === 'none') return { kind: 'none', intensity: 0 };
   const band = Math.floor((miles || 0) / 150);
   const roll = ((band * 2654435761) >>> 0) % 100; // stable per-band, no randomness
-  if (miles > 1200) return roll < 55 ? { kind: 'snow', intensity: 0.6 } : { kind: 'none', intensity: 0 };
-  if (miles > 600) return roll < 45 ? { kind: 'dust', intensity: 0.5 } : { kind: 'none', intensity: 0 };
-  return roll < 30 ? { kind: 'rain', intensity: 0.5 } : { kind: 'none', intensity: 0 };
+  const lean = 0.6 + bias.intensity;              // 1.0 at the arc's nominal 0.4
+  const hit = (chance) => roll < chance * lean;
+  const strength = (base) => Math.max(0, Math.min(1, base * lean));
+  if (miles > 1200) return hit(55) ? { kind: 'snow', intensity: strength(0.6) } : { kind: 'none', intensity: 0 };
+  if (miles > 600) return hit(45) ? { kind: 'dust', intensity: strength(0.5) } : { kind: 'none', intensity: 0 };
+  return hit(30) ? { kind: 'rain', intensity: strength(0.5) } : { kind: 'none', intensity: 0 };
 }
 
 function tierFromQuery() {
@@ -463,6 +478,45 @@ export function initThree(engine) {
   const sky = createSky({ cloudTexture: textures.cloudTexture(), lowDetail: !HIGH });
   scene.add(sky.group);
 
+  // ── Mood arc (Phase D): miles → look ──────────────────────────────────────
+  // lib/segments.mjs owns the eight-segment ramp and the cross-fade; this is the
+  // ONLY place the 3D layer reads it, and it hands each role to whichever module
+  // renders that part of the frame:
+  //
+  //   ground / groundAlt → terrain.setBiomeBlend   (the 30%)
+  //   zenith / horizon / accent → sky.setSegmentTint (the 60% + the 10%, and
+  //                                the fog, which follows the tinted horizon)
+  //   far → the backstop disc, so rays that clear a crest land in this
+  //         segment's distance instead of prairie green
+  //
+  // Roles are key NAMES throughout — both modules resolve them against
+  // palette.mjs themselves, so no hex ever appears here.
+  let arcMiles = 0;
+  let arcSegment = segmentForMiles(0);
+  const _farA = new THREE.Color();
+  const _farB = new THREE.Color();
+  const _grassA = new THREE.Color();
+  const _grassB = new THREE.Color();
+
+  function applyArc(miles) {
+    arcMiles = Math.max(0, Number(miles) || 0);
+    const { a, b, t } = segmentBlend(arcMiles);
+    // The quantised half of the terrain blend rewrites vertex heights; grass is
+    // scattered on terrain.heightAt(), so it has to re-seed on the same step or
+    // tufts hang above (or sink into) the new ground.
+    if (terrain.setBiomeBlend(a, b, t)) grass.invalidate();
+    sky.setSegmentTint(a, b, t);
+    _farA.setHex(toHex(a.palette.far));
+    _farB.setHex(toHex(b.palette.far));
+    backstop.material.color.copy(_farA).lerp(_farB, t);
+    // Tufts follow the segment ground chromaticity (0.65 keeps some green life
+    // in every biome — full mix reads as dead AstroTurf on the alkali divide).
+    _grassA.setHex(toHex(a.palette.ground));
+    _grassB.setHex(toHex(b.palette.ground));
+    grass.setTint(_grassA.lerp(_grassB, t), a.biome === 'prairie' && a === b ? 0 : 0.65);
+    arcSegment = t < 0.5 ? a : b;
+  }
+
   // Caravan: stationary group at the trail anchor; forward = -Z.
   const caravan = new THREE.Group();
   scene.add(caravan);
@@ -672,6 +726,10 @@ export function initThree(engine) {
   // those are `let`s declared above this line. Calling it up beside the composer
   // build would hit their temporal dead zone. Nothing renders in between.
   setGrade(gradeTier);
+  // Seat the arc at mile 0 before the first pose. arc_prairie is the identity
+  // segment in both modules (terrain tintMix 0, sky strength 0), so the boot
+  // frame is the exact pre-arc frame — the regression baseline.
+  applyArc(0);
 
   function pose(d) {
     terrain.update(0, d);
@@ -883,6 +941,13 @@ export function initThree(engine) {
     setWeather,
     setGrade,
     get grade() { return gradeTier; },
+    // Drive the mood arc directly, for the screenshot harness and for probes
+    // that want a mile marker without forging a signed GameState. Pure: same
+    // miles + same preset → same pixels.
+    setMiles(m) { applyArc(m); pose(scrollZ); },
+    get segment() {
+      return { id: arcSegment.id, biome: arcSegment.biome, name: arcSegment.name, miles: arcMiles };
+    },
     // Read-only view of the active weather so tests (Builder D) can observe what
     // the state→3D bridge set. Mirrors the closure vars setWeather writes.
     get weather() { return { kind: weatherKind, intensity: weatherIntensity }; },
@@ -940,6 +1005,9 @@ export function initThree(engine) {
     const applyState = (to, data) => {
       if (!WORLD_STATES.has(to)) { api.hide(); return; }
       setGrade(toneTier());
+      // Before the preset: preset() poses immediately, and pose() reads the
+      // terrain biome and sky tint this call installs.
+      applyArc(engine.milesTraveled);
       switch (to) {
         case 'TRAVEL':
           api.setMoving(true);
@@ -990,6 +1058,15 @@ export function initThree(engine) {
       api.show();
     };
     engine.on('stateChange', ({ to, data }) => applyState(to, data));
+    // stateChange is NOT enough for the mood arc. engine.transition() only fires
+    // when a day's advance produced a trigger; the routine case (`default:` in
+    // the advance handler) just schedules the next advance, so a party can cover
+    // hundreds of miles without one — and the arc would sit frozen on whichever
+    // segment the last landmark happened to be in. `daysAdvanced` fires on every
+    // advance, triggered or not, which is the clock miles actually move on.
+    // No pose() here: the render loop already poses every visible frame, and a
+    // hidden or frozen world re-poses on its next preset().
+    engine.on('daysAdvanced', () => applyArc(engine.milesTraveled));
   }
 
   window.__three = api;

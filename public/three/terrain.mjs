@@ -146,9 +146,55 @@ const C_SAND_BED   = new THREE.Color(toHex('dirtLight'));
 // Biome grass tint colour objects (created once, lerped into per-vertex)
 const C_TMP  = new THREE.Color();
 
+// Palette key → THREE.Color, memoised. ColorManagement is on and the working
+// space is Linear-sRGB, so `new THREE.Color(hex)` already lands linear — the
+// same space the vertex-colour attribute and the shader uniforms both want.
+const _paletteColors = new Map();
+function pcolor(key) {
+  let c = _paletteColors.get(key);
+  if (!c) {
+    c = new THREE.Color(toHex(key));
+    _paletteColors.set(key, c);
+  }
+  return c;
+}
+
+function lerpNum(a, b, t) {
+  return a + (b - a) * t;
+}
+
 // ---------------------------------------------------------------------------
 // Biome definitions
 // ---------------------------------------------------------------------------
+//
+// A biome entry is SHAPE + STRENGTHS only — no palette roles. Which key fills
+// `ground`/`groundAlt` for a stretch of trail is owned by lib/segments.mjs and
+// arrives through setBiomeBlend(), so the role assignment lives in exactly one
+// file and can't drift between the 2D and 3D readings of the same segment.
+//
+//   hillAmp     height multiplier. Deliberately a NARROW band (0.80–1.40): the
+//               caravan rides terrain.heightAt() while the camera presets are
+//               fixed world-space points, so a genuinely mountainous amplitude
+//               would lift the wagon out of frame. Rock country reads as rock
+//               through rockiness + splat + colour, not through altitude.
+//   rockiness   >0.5 turns on the high-frequency crag octave and drops the
+//               slope threshold where rock albedo takes over.
+//   baseSplat   the starting [grass, dirt, rock, sand] weight vector. The trail,
+//               riverbed and slope rules still lerp on top of it exactly as
+//               before — this only moves where they start from, which is how the
+//               existing splat pipeline is meant to be biased.
+//   tintMix     how hard the segment's `ground` colour recolours the blended
+//               splat albedo (0 = the texture's own colour, untouched).
+//   tintValue   value gain applied inside that recolour — a bone-white divide
+//               has to get brighter than the grass texture, a conifer slope
+//               darker, and chromaticity alone can't do that.
+//   altAmt      how far the per-vertex tint leans toward the segment's
+//               `groundAlt` in the low-frequency patches (the second terrain
+//               tone; the 30% budget is ground + groundAlt together).
+//
+// prairie is the identity entry on purpose: tintMix 0 / altAmt 0 / baseSplat
+// [1,0,0,0] reproduce the pre-arc renderer byte for byte, so mile 0 is the
+// regression baseline the rest of the arc is measured against.
 
 export const BIOMES = {
   prairie: {
@@ -157,12 +203,90 @@ export const BIOMES = {
     grassTint: new THREE.Color(toHex('grassTintMild')),
     hillAmp: 1.0,
     rockiness: 0.0,
+    baseSplat: [1, 0, 0, 0],
+    tintMix: 0,
+    tintValue: 1,
+    altAmt: 0,
   },
   mountains: {
     key: 'mountains',
     grassTint: new THREE.Color(toHex('hillMid')),
     hillAmp: 2.4,
     rockiness: 0.85,
+    baseSplat: [1, 0, 0, 0],
+    tintMix: 0,
+    tintValue: 1,
+    altAmt: 0,
+  },
+  river_valley: {
+    key: 'river_valley',
+    grassTint: new THREE.Color(toHex('grassTintMild')),
+    hillAmp: 0.80,
+    rockiness: 0.10,
+    baseSplat: [0.72, 0.08, 0.00, 0.20],
+    tintMix: 0.42,
+    tintValue: 1.06,
+    altAmt: 0.22,
+  },
+  bluffs: {
+    key: 'bluffs',
+    grassTint: new THREE.Color(toHex('grassTintMild')),
+    hillAmp: 1.20,
+    rockiness: 0.62,
+    baseSplat: [0.22, 0.46, 0.18, 0.14],
+    tintMix: 0.62,
+    tintValue: 1.12,
+    altAmt: 0.30,
+  },
+  foothills: {
+    key: 'foothills',
+    grassTint: new THREE.Color(toHex('grassTintMild')),
+    hillAmp: 1.30,
+    rockiness: 0.58,
+    baseSplat: [0.48, 0.10, 0.34, 0.08],
+    tintMix: 0.54,
+    tintValue: 0.96,
+    altAmt: 0.28,
+  },
+  snow: {
+    key: 'snow',
+    grassTint: new THREE.Color(toHex('grassTintMild')),
+    hillAmp: 1.15,
+    rockiness: 0.66,
+    baseSplat: [0.24, 0.04, 0.40, 0.32],
+    tintMix: 0.74,
+    tintValue: 1.34,
+    altAmt: 0.34,
+  },
+  desert: {
+    key: 'desert',
+    grassTint: new THREE.Color(toHex('grassTintMild')),
+    hillAmp: 0.95,
+    rockiness: 0.52,
+    baseSplat: [0.10, 0.22, 0.18, 0.50],
+    tintMix: 0.62,
+    tintValue: 1.14,
+    altAmt: 0.36,
+  },
+  forest: {
+    key: 'forest',
+    grassTint: new THREE.Color(toHex('grassTintMild')),
+    hillAmp: 1.40,
+    rockiness: 0.40,
+    baseSplat: [0.74, 0.14, 0.12, 0.00],
+    tintMix: 0.70,
+    tintValue: 0.70,
+    altAmt: 0.32,
+  },
+  arrival: {
+    key: 'arrival',
+    grassTint: new THREE.Color(toHex('grassTintMild')),
+    hillAmp: 0.90,
+    rockiness: 0.06,
+    baseSplat: [0.86, 0.06, 0.00, 0.08],
+    tintMix: 0.50,
+    tintValue: 1.04,
+    altAmt: 0.24,
   },
 };
 
@@ -197,8 +321,9 @@ function sampleVertex(x, absZ, biome) {
   const ny = invLen;
   const nz = -(hz / (2 * SLOPE_EPS)) * invLen;
 
-  // Splat weights: [grass, dirt, rock, sand]
-  const w = [1, 0, 0, 0];
+  // Splat weights: [grass, dirt, rock, sand] — the biome's own starting mix.
+  const bs = biome && biome.baseSplat;
+  const w = bs ? [bs[0], bs[1], bs[2], bs[3]] : [1, 0, 0, 0];
 
   // Base grass — patchy variation via trig noise (no Math.random)
   const v  = (Math.sin(x * 0.21) * Math.cos(absZ * 0.17) + 1) / 2;
@@ -206,6 +331,11 @@ function sampleVertex(x, absZ, biome) {
   C_TMP.copy(biome ? biome.grassTint : C_GRASS);
   C_TMP.lerp(C_GRASS_DARK, v * 0.45);
   C_TMP.lerp(C_GRASS_YLW, v2 * 0.28);
+  // Second terrain tone. Rides the low-frequency v2 patches so groundAlt reads
+  // as broad country (a basalt field, a bank of dirt), never as speckle.
+  if (biome && biome.altAmt > 0 && biome.groundAltColor) {
+    C_TMP.lerp(biome.groundAltColor, v2 * biome.altAmt);
+  }
 
   // Trail — dirt within road distance profile. The reference's rd<2/3.4 is a
   // village ROAD; this is a wagon TRACK (the wagon itself is 1.8u wide), so
@@ -283,6 +413,10 @@ const SKIRT_DROP    = 0.35;
 const LOD_NEAR_SPACING  = 1.5;   // <= 1.5u as required by brief
 const LOD_FAR_SPACING   = 3.0;
 const LOD_NEAR_Z        = 90;    // |display centre| under this = dense tier
+
+// Steps the mood arc's per-vertex half is quantised to across one transition
+// window (see setBiomeBlend). 8 → at most 8 full-band rewrites over 40 miles.
+const BLEND_STEPS = 8;
 
 function buildChunkGeometry(absZ0, spacing, biome) {
   const nx = Math.max(4, Math.round((BAND_HALF_W * 2) / spacing));
@@ -446,6 +580,22 @@ function buildSplatMaterial(textures) {
     metalness: 0,
   });
 
+  // Mood-arc recolour. This is the CONTINUOUS half of a segment transition:
+  // uniforms are material-global, so a chunk recycling mid-fade cannot disagree
+  // with the eight chunks beside it — there is no retint-on-recycle and no pop,
+  // which is why the dominant colour move lives here rather than in the vertex
+  // buffer. uBiomeTint is pre-normalised on the JS side (chromaticity × value
+  // gain ÷ its own luminance) so the shader only has to scale it by the splat
+  // albedo's luminance: texture detail survives, hue and level come from the
+  // segment. uBiomeMix 0 is an exact identity — mix(alb, x, 0.0) === alb.
+  // Created out here (not inside onBeforeCompile) so setBiomeBlend holds a
+  // stable reference; a shader recompile re-binds these same objects.
+  const biomeUniforms = {
+    uBiomeTint: { value: new THREE.Color(1, 1, 1) },
+    uBiomeMix:  { value: 0 },
+  };
+  mat.userData.biomeUniforms = biomeUniforms;
+
   // GLSL is generated CONDITIONALLY at compile time based on which textures
   // exist. WebGL GLSL ES cannot construct or compare sampler values (the
   // `uGrass != sampler2D(0)` guard pattern is a compile ERROR, not a fallback),
@@ -481,6 +631,8 @@ function buildSplatMaterial(textures) {
     if (rockMaps) sh.uniforms.uRock = { value: rockMaps.map };
     if (sandMaps) sh.uniforms.uSand = { value: sandMaps.map };
     if (macroTex) sh.uniforms.uMacro = { value: macroTex };
+    sh.uniforms.uBiomeTint = biomeUniforms.uBiomeTint;
+    sh.uniforms.uBiomeMix  = biomeUniforms.uBiomeMix;
     if (hasNormals) {
       sh.uniforms.uGrassN = { value: grassMaps.normalMap };
       sh.uniforms.uDirtN = { value: dirtMaps.normalMap };
@@ -502,6 +654,8 @@ function buildSplatMaterial(textures) {
       .replace('#include <common>', `#include <common>
         varying vec4 vSplat;
         varying vec3 vWPos;
+        uniform vec3  uBiomeTint;
+        uniform float uBiomeMix;
         ${samplerDecls}`)
       .replace('#include <map_fragment>', `
         // World-space tile UV (scale ≈ 0.22u⁻¹ matches the reference)
@@ -516,6 +670,12 @@ function buildSplatMaterial(textures) {
                  + dirtAlb  * vSplat.y
                  + rockAlb  * vSplat.z
                  + sandAlb  * vSplat.w;
+
+        // Mood arc: keep the albedo's luminance detail, take the segment's hue
+        // and level. Four fixed textures can't make Wyoming stop looking like
+        // Kansas on their own; this is what does it.
+        float albL = dot(alb, vec3(0.2126, 0.7152, 0.0722));
+        alb = mix(alb, uBiomeTint * albL, uBiomeMix);
 
         // Macro brightness modulation — breaks distant tiling (ref §texture)
         float macro = ${macroExpr};
@@ -599,6 +759,7 @@ function initialChunkZ(index) {
  *   group:      THREE.Group,
  *   update:     (dt: number, scrollZ: number) => void,
  *   setBiome:   (b: object) => void,
+ *   setBiomeBlend: (a: object, b: object, t: number) => boolean,
  *   heightAt:   (x: number, absZ: number) => number,
  *   trailXAt:   (absZ: number) => number,
  *   dispose:    () => void,
@@ -609,6 +770,18 @@ export function createTerrain({ textures = null, biome = null } = {}) {
 
   // ── Material ──
   const mat = buildSplatMaterial(textures);
+  const biomeUniforms = mat.userData.biomeUniforms;
+
+  // ── Mood-arc blend state (see setBiomeBlend) ──
+  // blendKey is the signature of the QUANTISED half; null forces the next
+  // setBiomeBlend to rebuild. The scratch colours are rewritten in place and
+  // handed to currentBiome by reference — safe because the only reader is the
+  // rewriteAll() that runs synchronously on the same step.
+  let blendKey = null;
+  const _blendTint      = new THREE.Color();
+  const _blendGrassTint = new THREE.Color();
+  const _blendGroundAlt = new THREE.Color();
+  const _blendSplat     = [1, 0, 0, 0];
 
   // ── Chunk ring ──
   const group = new THREE.Group();
@@ -697,6 +870,11 @@ export function createTerrain({ textures = null, biome = null } = {}) {
   // Deferred to next recycle cycle for determinism.
   function setBiome(b) {
     currentBiome = b || BIOMES.prairie;
+    // A hand-set biome takes the module out of the mood arc: clear the blend
+    // signature so the next setBiomeBlend() is guaranteed to rebuild, and drop
+    // the recolour back to identity so a legacy caller gets the raw textures.
+    blendKey = null;
+    biomeUniforms.uBiomeMix.value = 0;
     // Force an immediate rewrite of all visible chunks so the palette change
     // takes effect without waiting for a recycle.
     for (const chunk of chunks) {
@@ -706,6 +884,73 @@ export function createTerrain({ textures = null, biome = null } = {}) {
         chunk.mesh.geometry = buildChunkGeometry(chunk.absZ0, chunk.spacing, currentBiome);
       }
     }
+  }
+
+  // ── setBiomeBlend ──
+  // The mood arc's terrain half. `a` and `b` are segments from lib/segments.mjs
+  // (anything carrying { biome, palette: { ground, groundAlt } } works); `t` is
+  // that module's cross-fade weight, already hermite-eased.
+  //
+  // The blend is split across two clocks on purpose:
+  //
+  //   CONTINUOUS — the dominant ground colour, in two material uniforms. Every
+  //     chunk samples the same uniform every frame, so the recycle ring can
+  //     turn over mid-transition without a single chunk carrying a stale look.
+  //     This is the answer to "chunk recycling must pick up the current blend":
+  //     the part that would pop isn't in the geometry at all.
+  //
+  //   QUANTISED — height amplitude, crag strength, the splat start vector and
+  //     the groundAlt lean, all of which live in the vertex buffers and need a
+  //     rewrite of the whole band to change. Lerping those per frame would mean
+  //     nine chunk rewrites every frame; snapping them once at the midpoint
+  //     would visibly morph the ground under the wagon. Quantising t to
+  //     BLEND_STEPS spreads it over a handful of small rewrites across the
+  //     40-mile window instead, and the continuous recolour riding on top hides
+  //     the steps. Quantised t is a pure function of miles, so freezeAt() and
+  //     the screenshot harness stay deterministic.
+  //
+  // Returns true when the quantised half actually rewrote — the caller uses it
+  // to re-seed anything scattered on terrain.heightAt() (grass tufts), which
+  // would otherwise float or sink after an amplitude step.
+  function setBiomeBlend(a, b, t) {
+    if (!a || !a.palette) return false;
+    const segB = b && b.palette ? b : a;
+    const shapeA = BIOMES[a.biome] || BIOMES.prairie;
+    const shapeB = BIOMES[segB.biome] || BIOMES.prairie;
+    const f = t < 0 ? 0 : t > 1 ? 1 : t;
+
+    // Continuous half.
+    _blendTint.copy(pcolor(a.palette.ground)).lerp(pcolor(segB.palette.ground), f);
+    const value = lerpNum(shapeA.tintValue, shapeB.tintValue, f);
+    const lum = Math.max(
+      0.2126 * _blendTint.r + 0.7152 * _blendTint.g + 0.0722 * _blendTint.b,
+      1e-4,
+    );
+    biomeUniforms.uBiomeTint.value.copy(_blendTint).multiplyScalar(value / lum);
+    biomeUniforms.uBiomeMix.value = lerpNum(shapeA.tintMix, shapeB.tintMix, f);
+
+    // Quantised half.
+    const q = Math.round(f * BLEND_STEPS) / BLEND_STEPS;
+    const key = `${shapeA.key}>${shapeB.key}@${q}|${a.palette.groundAlt}>${segB.palette.groundAlt}`;
+    if (key === blendKey) return false;
+    blendKey = key;
+
+    _blendGrassTint.copy(shapeA.grassTint).lerp(shapeB.grassTint, q);
+    _blendGroundAlt.copy(pcolor(a.palette.groundAlt)).lerp(pcolor(segB.palette.groundAlt), q);
+    for (let i = 0; i < 4; i++) {
+      _blendSplat[i] = lerpNum(shapeA.baseSplat[i], shapeB.baseSplat[i], q);
+    }
+    currentBiome = {
+      key,
+      grassTint: _blendGrassTint,
+      groundAltColor: _blendGroundAlt,
+      altAmt: lerpNum(shapeA.altAmt, shapeB.altAmt, q),
+      hillAmp: lerpNum(shapeA.hillAmp, shapeB.hillAmp, q),
+      rockiness: lerpNum(shapeA.rockiness, shapeB.rockiness, q),
+      baseSplat: _blendSplat,
+    };
+    rewriteAll();
+    return true;
   }
 
   // ── setRiver ──
@@ -768,6 +1013,7 @@ export function createTerrain({ textures = null, biome = null } = {}) {
     group,
     update,
     setBiome,
+    setBiomeBlend,
     setRiver,
     setFlatPad,
     heightAt,

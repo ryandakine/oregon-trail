@@ -63,6 +63,18 @@ function prgb(key) {
   return rgb(c[0], c[1], c[2]);
 }
 
+// Memoised prgb for the per-frame mood-arc path — setSegmentTint runs on every
+// miles change and prgb allocates.
+const _prgbCache = new Map();
+function pkey(key) {
+  let c = _prgbCache.get(key);
+  if (!c) {
+    c = prgb(key);
+    _prgbCache.set(key, c);
+  }
+  return c;
+}
+
 function lerpColor(out, a, b, t) {
   out.r = a.r + (b.r - a.r) * t;
   out.g = a.g + (b.g - a.g) * t;
@@ -279,6 +291,41 @@ function crush(c, anchor, mix, sat, ceil) {
   if (l > ceil) c.multiplyScalar(ceil / l);
   return c;
 }
+
+// ─── Mood arc: per-segment tint ───────────────────────────────────────────────
+// Same architecture as the tone tier: one time-of-day table, then a post-lerp
+// stage that pulls the result toward the segment. A parallel per-segment
+// keyframe table would have to re-state the whole day eight times and would
+// drift from this one within a week.
+//
+// How hard each biome pulls. prairie is 0 by design — mile 0 renders the exact
+// pixels it rendered before the arc existed, which is the regression baseline
+// the other seven are read against. The ramp climbs toward the segments the
+// player reaches late, so the trail visibly leaves home behind.
+const SEGMENT_STRENGTH = {
+  prairie: 0,
+  river_valley: 0.45,
+  bluffs: 0.75,
+  foothills: 0.70,
+  snow: 0.80,
+  desert: 0.85,
+  forest: 0.90,
+  arrival: 0.55,
+};
+const SEGMENT_STRENGTH_DEFAULT = 0.6;
+
+// Budget from the colour script: zenith + horizon are the 60%, the accent is
+// the 10%. hemi carries the same colours into the lighting so the ground is lit
+// by the segment's own sky rather than by prairie light.
+const SEG_ZENITH   = 0.62;
+const SEG_HORIZON  = 0.68;
+const SEG_ACCENT   = 0.14;
+const SEG_HEMI_SKY = 0.35;
+const SEG_HEMI_GND = 0.55;
+// Atmospheric perspective: the far ridge takes more of the segment's `far` than
+// the nearer hill line does.
+const SEG_RIDGE = 0.55;
+const SEG_HILL  = 0.40;
 
 // ─── Sun/moon direction ───────────────────────────────────────────────────────
 // t in [0,1).  Sun rises NE, arcs south, sets NW.  Moon follows −sunDir.
@@ -591,6 +638,7 @@ const SILHOUETTE_BOTTOM_Y = -40; // well below any terrain sample; hides the sea
  *   sunDirAt:  (t: number) => THREE.Vector3,
  *   applyTo:   (targets: { sun, hemi, scene }, t: number) => object,
  *   setTone:   (tier: 'low'|'medium'|'high') => void,
+ *   setSegmentTint: (a: object|null, b: object, t: number) => void,
  *   dispose:   () => void,
  * }}
  */
@@ -688,13 +736,70 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
     return pal;
   }
 
+  // Mood arc 0..1 — how far this stretch of trail is from prairie. Zero means
+  // no segment has been set (or the segment is prairie), and applySegment is a
+  // no-op, so every pre-arc caller renders unchanged.
+  let _segStrength = 0;
+  const _segZenith  = new THREE.Color();
+  const _segHorizon = new THREE.Color();
+  const _segGround  = new THREE.Color();
+  const _segFar     = new THREE.Color();
+  const _segAccent  = new THREE.Color();
+
+  function segLerp(out, keyA, keyB, t) {
+    out.copy(pkey(keyA)).lerp(pkey(keyB), t);
+  }
+
+  /**
+   * Mood arc: cross-fade the sky toward a segment's palette.
+   * `a`/`b` are segments from lib/segments.mjs — anything carrying
+   * { biome, palette: { zenith, horizon, ground, far, accent } } works — and
+   * `t` is that module's already-eased cross-fade weight. Pass null to leave
+   * the arc (identity).
+   */
+  function setSegmentTint(a, b, t) {
+    if (!a || !a.palette) { _segStrength = 0; return; }
+    const segB = b && b.palette ? b : a;
+    const f = t < 0 ? 0 : t > 1 ? 1 : t;
+    const sa = SEGMENT_STRENGTH[a.biome] ?? SEGMENT_STRENGTH_DEFAULT;
+    const sb = SEGMENT_STRENGTH[segB.biome] ?? SEGMENT_STRENGTH_DEFAULT;
+    _segStrength = sa + (sb - sa) * f;
+    segLerp(_segZenith,  a.palette.zenith,  segB.palette.zenith,  f);
+    segLerp(_segHorizon, a.palette.horizon, segB.palette.horizon, f);
+    segLerp(_segGround,  a.palette.ground,  segB.palette.ground,  f);
+    segLerp(_segFar,     a.palette.far,     segB.palette.far,     f);
+    segLerp(_segAccent,  a.palette.accent,  segB.palette.accent,  f);
+  }
+
+  // Runs immediately after the time-of-day lerp and BEFORE overcast and tone,
+  // so a storm still greys this segment and the horror tier still crushes it —
+  // the arc changes where the day starts from, it never escapes either.
+  //
+  // Fog takes the SAME segment component as the horizon, in the same order, so
+  // the fog==horizon invariant survives the arc: mismatched fog is the single
+  // biggest cheap-3D tell and it must not be reintroduced one segment at a time.
+  function applySegment(pal) {
+    const s = _segStrength;
+    if (s <= 0) return pal;
+    pal.zenith.lerp(_segZenith, SEG_ZENITH * s);
+    pal.horizon.lerp(_segHorizon, SEG_HORIZON * s);
+    pal.horizon.lerp(_segAccent, SEG_ACCENT * s);
+    pal.fogColor.lerp(_segHorizon, SEG_HORIZON * s);
+    pal.fogColor.lerp(_segAccent, SEG_ACCENT * s);
+    pal.hemiSky.lerp(_segZenith, SEG_HEMI_SKY * s);
+    pal.hemiGround.lerp(_segGround, SEG_HEMI_GND * s);
+    return pal;
+  }
+
   // Tone tier. Only 'high' does anything; low/medium are identity, so the
   // classroom and default tiers render the exact pixels they always did.
   let _high = false;
   function setTone(tier) { _high = tier === 'high'; }
 
-  // Runs LAST — after the time-of-day lerp and after overcast — so a storm can
-  // darken the horror tier further but never lighten it back out.
+  // Runs LAST — after the time-of-day lerp, after the segment tint and after
+  // overcast — so a storm or a segment can darken the horror tier further but
+  // neither can lighten it back out. (The brief sketched tone-then-overcast;
+  // keeping overcast inside the crush is the Phase C invariant and it wins.)
   function applyTone(pal) {
     if (!_high) return pal;
     crush(pal.zenith,     HIGH_ZENITH,   0.70, 0.55, 0.085);
@@ -724,7 +829,7 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
       group.position.copy(cameraPos);
     }
 
-    const pal = applyTone(applyOvercast(lerpPalette(t)));
+    const pal = applyTone(applyOvercast(applySegment(lerpPalette(t))));
     const sunDir = sunDirAt(t);
 
     // ── Dome uniforms ──
@@ -784,11 +889,18 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
     // ── Distant silhouette bands: colour toward the horizon (atmospheric
     // perspective — the far ridge washes out more than the nearer hill line)
     // and a slow rotation drift keyed off world scroll (0 with no scrollZ).
-    _tmpBandColor.copy(_ridgeColor).lerp(pal.horizon, 0.18);
+    // The segment's `far` role lands here: these two rings ARE the distance
+    // band, so a snow divide reads as pale rock on the skyline and a conifer
+    // slope as blue-green, before the horizon wash goes on top.
+    _tmpBandColor.copy(_ridgeColor);
+    if (_segStrength > 0) _tmpBandColor.lerp(_segFar, SEG_RIDGE * _segStrength);
+    _tmpBandColor.lerp(pal.horizon, 0.18);
     ridge.mat.color.copy(_tmpBandColor);
     ridge.mesh.rotation.y = (scrollZ * RIDGE_PARALLAX) / RIDGE_RADIUS;
 
-    _tmpBandColor.copy(_hillColor).lerp(pal.horizon, 0.10);
+    _tmpBandColor.copy(_hillColor);
+    if (_segStrength > 0) _tmpBandColor.lerp(_segFar, SEG_HILL * _segStrength);
+    _tmpBandColor.lerp(pal.horizon, 0.10);
     hill.mat.color.copy(_tmpBandColor);
     hill.mesh.rotation.y = (scrollZ * HILL_PARALLAX) / HILL_RADIUS;
   }
@@ -801,7 +913,7 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
   const SUN_DIST  = 200;
 
   function applyTo(targets, t) {
-    const pal    = applyTone(applyOvercast(lerpPalette(t)));
+    const pal    = applyTone(applyOvercast(applySegment(lerpPalette(t))));
     const sunDir = sunDirAt(t);
 
     if (targets.sun) {
@@ -862,6 +974,7 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
     applyTo,
     setOvercast,
     setTone,
+    setSegmentTint,
     dispose,
   };
 }

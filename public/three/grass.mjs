@@ -58,6 +58,15 @@ export function createGrass({ terrain, tuftTexture, count = 2400 } = {}) {
     // Lambert (not Standard): thousands of alpha-tested quads don't need PBR,
     // and it keeps the mobile tier honest.
   });
+  // Mood-arc tint (Phase D): material.color multiplies the tuft map, and it is
+  // material-global, so every blade shifts together with no per-instance pop.
+  // White = the untinted prairie look; bootstrap lerps toward the segment
+  // ground chromaticity so tufts stop reading bright green on desert/alkali.
+  const _tintTarget = new THREE.Color(1, 1, 1);
+  function setTint(color, mix) {
+    _tintTarget.set(1, 1, 1).lerp(color, Math.min(1, Math.max(0, mix)));
+    mat.color.copy(_tintTarget);
+  }
   // Grass cards are VERTICAL quads — their geometric normals are horizontal, so
   // a high sun leaves them almost unlit (they rendered as black spikes). Shade
   // every blade with the world-up normal instead, so tufts take exactly the
@@ -145,6 +154,7 @@ export function createGrass({ terrain, tuftTexture, count = 2400 } = {}) {
 
   return {
     group,
+    setTint,
     update(scrollZ) {
       // The seed anchor is quantised to REBUILD_STEP so it is a pure function of
       // scrollZ. It used to be whatever scroll value the free-running frames
