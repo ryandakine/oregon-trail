@@ -171,6 +171,71 @@ export function attachResizeRebuild(k, engine, hudState) {
   };
 }
 
+// HIGH-tier stat corruption (docs/design/graphics-pop-research.md § C8). The
+// real value never changes — this overlays a short-lived glitch text object
+// on top of it, like spawnPulse. Learns tone from engine.tone each tick
+// rather than a snapshot, since this scheduler outlives any one advance.
+export function attachStatCorruption(k, engine, hudState) {
+  if (!MOTION_OK) return () => {};
+  const mountedAt = k.time();
+  let active = false;
+  let timer = null;
+
+  const schedule = () => { timer = k.wait(6 + k.rand(0, 6), tick); };
+
+  function tick() {
+    if (engine.tone === "high" && !active && k.time() - mountedAt >= 2) {
+      const S = getSizes();
+      const targets = [];
+      const food = engine.supplies?.food ?? 0;
+      if (food <= 25 && hudState.top?.foodText) {
+        targets.push({ text: hudState.top.foodText, size: S.body, tag: hudState.top.tag, numeric: true });
+      }
+      const dying = (engine.party?.members ?? []).find((m) => hpState(m) === "dying");
+      const dyingIcon = dying && hudState.bottom?.icons?.find((ic) => ic.member === dying);
+      if (dyingIcon?.label) {
+        targets.push({ text: dyingIcon.label, size: S.label, tag: hudState.bottom.tag, anchor: "bot" });
+      }
+      if (targets.length) {
+        active = true;
+        spawnCorruption(k, targets[Math.floor(k.rand(0, targets.length))], () => { active = false; });
+      }
+    }
+    schedule();
+  }
+
+  schedule();
+  return () => { timer?.cancel?.(); };
+}
+
+function spawnCorruption(k, target, onDone) {
+  const frames = k.rand(0, 1) < 0.5 ? 2 : 3;
+  const content = target.numeric && k.rand(0, 1) < 0.5 ? glitchDigit(k, target.text.text) : target.text.text;
+  const { x, y } = target.text.pos;
+  const mk = (dx, color) => {
+    const comps = [k.text(content, { size: target.size }), k.pos(x + dx, y), k.color(...color), k.opacity(0.75), k.fixed(), k.z(56), target.tag];
+    if (target.anchor) comps.push(k.anchor(target.anchor));
+    return k.add(comps);
+  };
+  const red = mk(-1, [255, 70, 70]);
+  const cyan = mk(1, [70, 220, 220]);
+  let n = 0;
+  red.onUpdate(() => {
+    n++;
+    if (n >= frames) { red.destroy(); cyan.destroy(); onDone(); }
+  });
+}
+
+function glitchDigit(k, str) {
+  const idx = [...str].map((c, i) => (/\d/.test(c) ? i : -1)).filter((i) => i >= 0);
+  if (!idx.length) return str;
+  const i = idx[Math.floor(k.rand(0, idx.length))];
+  const orig = str[i];
+  let repl;
+  do { repl = String(Math.floor(k.rand(0, 10))); } while (repl === orig);
+  return str.slice(0, i) + repl + str.slice(i + 1);
+}
+
 function nextLandmarkLabel(curMiles) {
   const next = LANDMARKS.find((lm) => lm.miles > curMiles);
   return next ? `${next.name} ${next.miles - curMiles}mi` : "";

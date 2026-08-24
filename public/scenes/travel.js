@@ -1,5 +1,5 @@
 import * as draw from "../lib/draw.mjs";
-import { addTopHud, addBottomHud, updateHud, attachResizeRebuild } from "../lib/hud.mjs";
+import { addTopHud, addBottomHud, updateHud, attachResizeRebuild, attachStatCorruption } from "../lib/hud.mjs";
 import { applyToneOverlay } from "../lib/tone.mjs";
 import { createJuice } from "../lib/juice.mjs";
 
@@ -11,6 +11,7 @@ export default function register(k, engine) {
     const listeners = [];
     const loops = [];
     let detachResize = null;
+    let detachCorruption = null;
     const juice = createJuice(k);
     function engineOn(event, fn) { engine.on(event, fn); listeners.push({ event, fn }); }
 
@@ -18,6 +19,7 @@ export default function register(k, engine) {
       for (const { event, fn } of listeners) engine.off(event, fn);
       for (const l of loops) l?.cancel?.();
       detachResize?.();
+      detachCorruption?.();
       // A dwell queued by this scene must not outlive it — every route back to
       // travel re-queues on mount.
       engine.cancelQueuedAdvance();
@@ -63,9 +65,36 @@ export default function register(k, engine) {
       }
     }
 
+    // HIGH-tier temporal wrongness: roughly once per 40-70s, one distant
+    // bird holds motionless mid-air for 1.5-2s then resumes — rare enough
+    // to be felt, not staged.
+    if (tone === "high" && MOTION_OK && birds.length) {
+      let freezeTimer = null;
+      const scheduleFreeze = () => {
+        freezeTimer = k.wait(40 + k.rand(0, 30), () => {
+          const b = birds[Math.floor(k.rand(0, birds.length))];
+          b.frozenUntil = k.time() + 1.5 + k.rand(0, 0.5);
+          scheduleFreeze();
+        });
+      };
+      scheduleFreeze();
+      loops.push({ cancel: () => freezeTimer?.cancel?.() });
+    }
+
     // ── Hero convoy ──
     const WAGON_X = 300, WAGON_Y = 360;
     const wagon = draw.drawWagon(k, WAGON_X, WAGON_Y, { rolling: MOTION_OK });
+
+    // HIGH-tier temporal wrongness: the right wheel's spokes are 6-fold
+    // symmetric, so rotation *rate* is invisible from the spokes alone — a
+    // small rim rivet reveals true phase and lets one wheel run ~0.92x the
+    // other be felt over time without a still frame ever looking wrong.
+    let wheelRivet = null;
+    if (tone === "high" && MOTION_OK) {
+      const rivetPivot = k.add([k.pos(WAGON_X + 42, WAGON_Y + 26), k.rotate(-90)]);
+      rivetPivot.add([k.circle(1.6), k.pos(0, -17), k.color(...draw.PALETTE.outline), k.opacity(0.8), k.anchor("center")]);
+      wheelRivet = { pivot: rivetPivot, phase: -90 };
+    }
 
     // Drop shadow
     k.add([
@@ -86,6 +115,11 @@ export default function register(k, engine) {
       draw.drawOx(k, WAGON_X - 218, WAGON_Y + 13, { animate: MOTION_OK, phase: 1.6 }),
       draw.drawOx(k, WAGON_X - 138, WAGON_Y + 13, { animate: MOTION_OK, phase: 0 }),
     ];
+    // HIGH-tier temporal wrongness: one ox stretched ~1.18x on its long
+    // (horizontal) axis only — draw.mjs exposes no scale opt on drawOx, so
+    // this scales the returned group directly. y-scale stays 1, so the leg
+    // swap (which only moves leg.pos.y) is untouched — no shear.
+    if (tone === "high") oxen[1].use(k.scale(1.18, 1));
 
     const pioneers = [
       draw.drawPioneer(k, WAGON_X + 90, WAGON_Y + 24, { hat: "felt",   body: draw.PALETTE.vest,      legs: draw.PALETTE.trousers, animate: MOTION_OK, phase: 0.6 }),
@@ -95,6 +129,7 @@ export default function register(k, engine) {
     // ── HUDs ──
     const hudState = { top: addTopHud(k, engine), bottom: addBottomHud(k, engine) };
     detachResize = attachResizeRebuild(k, engine, hudState);
+    detachCorruption = attachStatCorruption(k, engine, hudState);
 
     // ── Tone overlay ──
     applyToneOverlay(k, tone);
@@ -110,10 +145,16 @@ export default function register(k, engine) {
       for (const h of hills.near) { h.pos.x -= 0.4;  if (h.pos.x < -60)  h.pos.x = 700; }
 
       for (const b of birds) {
+        if (b.frozenUntil && k.time() < b.frozenUntil) continue;
         b.pos.x -= b.birdSpeed;
         b.pos.y += Math.sin(k.time() * 0.7 + b.birdPhase) * 0.08;
         if (b.pos.x < -20) { b.pos.x = 680; }
         b.flap(k.time() * 7 + b.birdPhase);
+      }
+
+      if (wheelRivet) {
+        wheelRivet.phase = (wheelRivet.phase + 0.92 * k.dt() * 360) % 360;
+        wheelRivet.pivot.angle = wheelRivet.phase;
       }
     });
 
