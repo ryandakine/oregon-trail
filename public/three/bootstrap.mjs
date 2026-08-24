@@ -27,7 +27,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { toHex } from '../lib/palette.mjs';
 import * as textures from './textures.mjs';
 import { createTerrain, BIOMES } from './terrain.mjs';
-import { createSky } from './sky.mjs';
+import { createSky, HIGH_TONE_FOG } from './sky.mjs';
 import { createWagon, createOxTeam, createPioneer, createContactShadow } from './models.mjs';
 import { createGrass } from './grass.mjs';
 import { createVfx } from './vfx.mjs';
@@ -134,6 +134,17 @@ const GRADE_TIERS = {
   high:   { vignette: 0.30, grain: 0.045, lift: [0.010, 0.014, 0.028], gain: [0.90, 0.93, 0.99], gamma: [0.98, 0.98, 1.00], saturation: 0.55 },
 };
 
+// ── Horror-tier atmosphere (§C3). The shrunken draw distance IS the tension:
+// swap the linear ramp for FogExp2 that goes effectively opaque at HALF the
+// preset's far plane, so the world closes into a near-black cold-blue shell and
+// everything past it stops mattering (a perf win, not a cost — Silent Hill's
+// original reason for doing it). FOG_OPAQUE_AT is the same density→far constant
+// grass.mjs uses in fogCullDistance(), so the grass field re-seeds itself to the
+// halved radius with no plumbing at all (§C9 sparse composition).
+const FOG_OPAQUE_AT = 2.6;
+const HIGH_FOG_SHRINK = 0.5;
+const LINEAR_FOG_HEX = 0xc9ddec; // the exact fog the non-horror tiers restore to
+
 // Hermite ease in [0,1] — matches sky.mjs so the lantern ramp and the sky's own
 // night fade read off the same curve shape.
 function smoothstep01(x) {
@@ -160,7 +171,7 @@ export function initThree(engine) {
 
   const scene = new THREE.Scene();
   scene.background = null; // the sky dome paints every background pixel
-  scene.fog = new THREE.Fog(0xc9ddec, 60, 520);
+  scene.fog = new THREE.Fog(LINEAR_FOG_HEX, 60, 520);
 
   const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 950);
   camera.position.set(6.5, 3.6, 11);
@@ -186,6 +197,43 @@ export function initThree(engine) {
   sun.shadow.normalBias = HIGH ? 0.12 : 0.09;
   scene.add(sun);
   scene.add(sun.target);
+
+  // Horror tier only: a cone rigidly mounted to the camera. Once the sun is
+  // crushed to a cold, dim ceiling, this is what reaches anything out toward the
+  // fog wall — the frame stops being a landscape and becomes whatever a beam
+  // happens to find. Warm-sickly amber against cold fog: the tier's one
+  // permitted temperature break.
+  //
+  // decay 0 (NOT physical 2, and not the 1.1 this was first built with) is the
+  // load-bearing choice. Any inverse-power falloff big enough to reach the fog
+  // wall at 60-120u is enormous on the 3-8u of ground directly under the camera,
+  // and it landed as a searchlight puddle that owned the death frame — measured,
+  // then swept. Flat falloff makes the fog the only thing attenuating distance,
+  // which is what "the beam reaches as far as anything can be seen" actually
+  // means. angle 0.50 rather than the 0.35 first specced: 0.35rad ≈ 20°, well
+  // inside the camera's ~33-40° horizontal half-angle, so the cone rim landed as
+  // a visible circle in frame. 0.50 + penumbra 0.85 puts the falloff at the
+  // frame edge, where it reads as the light failing rather than as a lamp.
+  // No shadow map: it would double the shadow cost on the tier already paying
+  // for bloom + grade.
+  //
+  // DREAD_INTENSITY is the DAYLIGHT figure — pose() ramps it to zero as the sun
+  // sets, because the beam's whole point is a light that shouldn't be needed at
+  // noon. After dark the campfire is already the only light and has to stay the
+  // warm anchor the tier subverts; a second source there just bleaches it.
+  // Mounted by setGrade, posed off the camera in pose(), freed in disposeDread.
+  const DREAD_INTENSITY = 2.4;
+  const dread = new THREE.SpotLight(0xe2c98d, DREAD_INTENSITY, 0, 0.50, 0.85, 0);
+  dread.castShadow = false;
+  let dreadOn = false;
+  const _dreadFwd = new THREE.Vector3();
+
+  function setDread(on) {
+    if (on === dreadOn) return;
+    dreadOn = on;
+    if (on) { scene.add(dread); scene.add(dread.target); }
+    else { scene.remove(dread); scene.remove(dread.target); }
+  }
 
   // ── World modules ──
   const terrain = createTerrain({ textures, biome: BIOMES.prairie });
@@ -472,8 +520,28 @@ export function initThree(engine) {
   // Tone tier → grade uniforms. The storm/death overcast scalar rides on top in
   // pose(), so a dust storm or a graveside frame gets a touch more falloff and
   // grain than the same tier does in clear weather.
+  // Install the fog model the current tier wants. The horror tier's exponential
+  // wall and the other tiers' linear ramp are different THREE objects, so this
+  // swaps rather than reconfigures — three re-links fogged materials on its own
+  // (WebGLRenderer.setProgram: `material.fog === true && materialProperties.fog
+  // !== fog`), and it only fires on an actual tier flip, not per frame. pose()
+  // owns the per-frame density/near/far under whichever model is mounted.
+  function syncFog() {
+    const wantExp2 = gradeTier === 'high';
+    if (wantExp2 === !!scene.fog.isFogExp2) return;
+    scene.fog = wantExp2
+      ? new THREE.FogExp2(HIGH_TONE_FOG, FOG_OPAQUE_AT / Math.max(baseFogFar * HIGH_FOG_SHRINK, 1))
+      : new THREE.Fog(LINEAR_FOG_HEX, baseFogNear, baseFogFar);
+  }
+
   function setGrade(tier) {
     gradeTier = tier in GRADE_TIERS ? tier : 'medium';
+    // The tier is one look, not three independent knobs: the grade pass, the
+    // sky/fog palette clamp, the fog model and the camera spot all move together
+    // or the horror tier reads as "someone turned the brightness down".
+    sky.setTone(gradeTier);
+    setDread(gradeTier === 'high');
+    syncFog();
     if (!gradePass) return;
     const g = GRADE_TIERS[gradeTier];
     const u = gradePass.uniforms;
@@ -484,7 +552,6 @@ export function initThree(engine) {
     u.uVignette.value = g.vignette;
     u.uGrain.value = g.grain;
   }
-  setGrade(gradeTier);
 
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
@@ -601,6 +668,11 @@ export function initThree(engine) {
   let baseFogFar = 240;
   let lanternGain = 1;
 
+  // Deferred until now on purpose: setGrade → syncFog reads baseFogNear/Far, and
+  // those are `let`s declared above this line. Calling it up beside the composer
+  // build would hit their temporal dead zone. Nothing renders in between.
+  setGrade(gradeTier);
+
   function pose(d) {
     terrain.update(0, d);
     grass.update(d);
@@ -631,19 +703,41 @@ export function initThree(engine) {
     // Weather pulls fog in (denser air). A dust storm collapses visibility to a
     // tan murk — that loss of distance IS the storm — so it gets a hard tight
     // fog, not a proportional pull.
+    let fogNear, fogFar;
     if (weatherKind === 'dust') {
-      scene.fog.near = baseFogNear + (8 - baseFogNear) * weatherIntensity;
-      scene.fog.far = baseFogFar + (46 - baseFogFar) * weatherIntensity;
+      fogNear = baseFogNear + (8 - baseFogNear) * weatherIntensity;
+      fogFar = baseFogFar + (46 - baseFogFar) * weatherIntensity;
     } else {
       const fogPull = weatherIntensity * 0.55;
-      scene.fog.near = baseFogNear * (1 - fogPull * 0.6);
-      scene.fog.far = baseFogFar * (1 - fogPull * 0.7);
+      fogNear = baseFogNear * (1 - fogPull * 0.6);
+      fogFar = baseFogFar * (1 - fogPull * 0.7);
+    }
+    // The horror tier spends that same weather-adjusted far on an exponential
+    // wall at half the distance instead of a linear ramp — so a dust storm still
+    // collapses visibility, on top of the tier's own shrink, from one number.
+    if (scene.fog.isFogExp2) {
+      scene.fog.density = FOG_OPAQUE_AT / Math.max(fogFar * HIGH_FOG_SHRINK, 1);
+    } else {
+      scene.fog.near = fogNear;
+      scene.fog.far = fogFar;
     }
     // Re-anchor the sun close to the caravan so the ortho shadow frustum
     // (near 1 / far 120) actually contains the world — sky.applyTo parks it
     // 200u out on the sun arc, far outside the shadow camera.
     sun.position.copy(sunDir).multiplyScalar(34);
     sun.target.position.set(0, 0, 0);
+    // Rig the dread cone to the camera from the camera's own quaternion rather
+    // than parenting it: the camera is never added to the scene graph (RenderPass
+    // takes it directly), so a child light would never be collected. Pure
+    // function of the preset's framing + duskness, so freezeAt stays pixel-stable.
+    if (dreadOn) {
+      _dreadFwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
+      dread.position.copy(camera.position);
+      dread.target.position.copy(camera.position).addScaledVector(_dreadFwd, 40);
+      // Rides the same duskness ramp as the lantern, inverted — as the lantern
+      // lights, the beam goes out.
+      dread.intensity = DREAD_INTENSITY * (1 - duskness);
+    }
     if (river) {
       river.water.update(0, fxTime);
       river.water.setSun(sunDir, sun.color);
@@ -706,12 +800,21 @@ export function initThree(engine) {
     gradePass = null;
   }
 
+  // The dread spot is the only light this file mounts after init, so it needs an
+  // explicit exit alongside the post chain — unmount it AND drop its shadow
+  // resources, or a downgrade leaves a live light attached to a dead loop.
+  function disposeDread() {
+    setDread(false);
+    dread.dispose();
+  }
+
   function downgrade() {
     if (downgraded) return;
     downgraded = true;
     killed = true; // frame() early-returns AND stops re-scheduling
     if (rafId) cancelAnimationFrame(rafId);
     disposePost();
+    disposeDread();
     api.hide(); // free the GPU canvas; the 2D Kaplay layer keeps running under it
     setRenderMode('2d'); // next load won't re-init 3D (render-mode.mjs try/catches)
     console.warn(

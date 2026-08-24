@@ -24,6 +24,12 @@
 //   sicklyHorizon       [197,208,122] 0xc5d07a  (not used but noted)
 //   silhouetteFar       [32,38,62]   0x20263e
 //   silhouetteNear      [22,28,48]   0x161c30
+//
+// TONE TIER (§C2 / Phase D): setTone('high') installs a post-lerp CLAMP, not a
+// second keyframe table. The time-of-day lerp runs exactly as it always did and
+// the result is then crushed against a horror ceiling — so the sun still rises,
+// dusk still turns, the day still moves, it just can never climb out. One table
+// keeps the arc honest; a parallel table would drift from it within a week.
 
 import * as THREE from 'three';
 import { PALETTE } from '../lib/palette.mjs';
@@ -237,6 +243,41 @@ function lerpPalette(t) {
   _pal.hemiIntensity = lo.hemiIntensity + (hi.hemiIntensity - lo.hemiIntensity) * f;
   _pal.ambientBoost  = lo.ambientBoost  + (hi.ambientBoost  - lo.ambientBoost)  * f;
   return _pal;
+}
+
+// ─── Horror-tier clamp ────────────────────────────────────────────────────────
+// Anchors the lerped palette is crushed toward on the high tone tier. Every one
+// is value-compressed already, so the clamp can't be escaped by a bright hour.
+
+const HIGH_ZENITH   = rgb(58, 64, 112);   // skyTwilight — the lid the sky never lifts off
+const HIGH_HORIZON  = rgb(38, 44, 62);
+const HIGH_SICKLY   = rgb(120, 128, 74);  // sicklyHorizon, value-compressed — the ONE accent
+const HIGH_FOG      = rgb(16, 20, 34);
+const HIGH_HEMI_SKY = rgb(52, 60, 84);
+const HIGH_HEMI_GND = rgb(18, 20, 26);
+const HIGH_SUN      = rgb(138, 148, 164); // cold slate: no warm key survives the tier
+
+/** Linear fog colour the high tier settles on. Read-only — copy, never mutate. */
+export const HIGH_TONE_FOG = HIGH_FOG;
+
+// Amplitude of the sickly band mixed back into the horizon AFTER the crush, so
+// desaturation can't eat it. Restraint: this is the only chroma left in frame.
+const HIGH_SICKLY_MIX = 0.13;
+const HIGH_STAR_DIM   = 0.34;
+const HIGH_CLOUD_TINT = 0.42;
+const HIGH_CLOUD_FADE = 0.55;
+
+// Crush one colour: pull it toward the tier anchor, drain chroma, then cap
+// luminance. Order matters — desaturating after the cap would let a bright hour
+// keep its value, and capping before the mix would let the anchor raise it.
+function crush(c, anchor, mix, sat, ceil) {
+  c.lerp(anchor, mix);
+  const l = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+  c.r = l + (c.r - l) * sat;
+  c.g = l + (c.g - l) * sat;
+  c.b = l + (c.b - l) * sat;
+  if (l > ceil) c.multiplyScalar(ceil / l);
+  return c;
 }
 
 // ─── Sun/moon direction ───────────────────────────────────────────────────────
@@ -549,6 +590,7 @@ const SILHOUETTE_BOTTOM_Y = -40; // well below any terrain sample; hides the sea
  *   update:    (dt: number, t: number, cameraPos: THREE.Vector3, scrollZ?: number) => void,
  *   sunDirAt:  (t: number) => THREE.Vector3,
  *   applyTo:   (targets: { sun, hemi, scene }, t: number) => object,
+ *   setTone:   (tier: 'low'|'medium'|'high') => void,
  *   dispose:   () => void,
  * }}
  */
@@ -646,6 +688,30 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
     return pal;
   }
 
+  // Tone tier. Only 'high' does anything; low/medium are identity, so the
+  // classroom and default tiers render the exact pixels they always did.
+  let _high = false;
+  function setTone(tier) { _high = tier === 'high'; }
+
+  // Runs LAST — after the time-of-day lerp and after overcast — so a storm can
+  // darken the horror tier further but never lighten it back out.
+  function applyTone(pal) {
+    if (!_high) return pal;
+    crush(pal.zenith,     HIGH_ZENITH,   0.70, 0.55, 0.085);
+    crush(pal.horizon,    HIGH_HORIZON,  0.66, 0.50, 0.055);
+    pal.horizon.lerp(HIGH_SICKLY, HIGH_SICKLY_MIX);
+    // Fog keeps its chroma (sat 1) under a much harder value cap: the wall has
+    // to read as cold BLUE-black, and draining it leaves flat charcoal.
+    crush(pal.fogColor,   HIGH_FOG,      0.90, 1.00, 0.030);
+    crush(pal.sunColor,   HIGH_SUN,      0.72, 0.45, 0.550);
+    crush(pal.hemiSky,    HIGH_HEMI_SKY, 0.72, 0.55, 0.100);
+    crush(pal.hemiGround, HIGH_HEMI_GND, 0.72, 0.55, 0.045);
+    pal.sunIntensity  *= 0.50;
+    pal.hemiIntensity *= 0.55;
+    pal.ambientBoost  *= 0.40;
+    return pal;
+  }
+
   // ── update ────────────────────────────────────────────────────────────────
   // Pure function of t for all visual state (dt used only for cloud drift
   // which is also driven by t so remains deterministic across equal-t calls).
@@ -658,7 +724,7 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
       group.position.copy(cameraPos);
     }
 
-    const pal = applyOvercast(lerpPalette(t));
+    const pal = applyTone(applyOvercast(lerpPalette(t)));
     const sunDir = sunDirAt(t);
 
     // ── Dome uniforms ──
@@ -678,8 +744,8 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
     domeUniforms.uMoonStrength.value  = nightFade;
     domeUniforms.uNightFade.value     = nightFade;
 
-    // ── Stars opacity ──
-    stars.material.opacity = nightFade * 0.95;
+    // ── Stars opacity ── (the horror tier gets a sky that barely has any)
+    stars.material.opacity = nightFade * (_high ? HIGH_STAR_DIM : 0.95);
 
     // ── Cloud drift (deterministic: position = phase + driftSpeed * t * fullDayUnits) ──
     // We use t as the time source so the same t always gives the same cloud
@@ -690,6 +756,10 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
     let cloudOpacity = cloudOpacityDay + (cloudOpacityNight - cloudOpacityDay) * nightFade;
     // Overcast thickens the cloud deck.
     cloudOpacity = Math.max(cloudOpacity, 0.45 + 0.5 * _overcast);
+    // The horror tier thins and darkens the deck instead — §C9, the sky empties
+    // out. Applied after the overcast floor so a storm can't put the clouds back.
+    const toneMul = _high ? HIGH_CLOUD_TINT : 1;
+    if (_high) cloudOpacity *= HIGH_CLOUD_FADE;
 
     for (let i = 0; i < clouds.length; i++) {
       const c = clouds[i];
@@ -702,12 +772,12 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
       // slightly darker than the high deck (tint) at all times.
       if (_overcast > 0) {
         c.sprite.material.color.setRGB(
-          (1 - 0.35 * _overcast) * c.tint,
-          (1 - 0.33 * _overcast) * c.tint,
-          (1 - 0.3 * _overcast) * c.tint,
+          (1 - 0.35 * _overcast) * c.tint * toneMul,
+          (1 - 0.33 * _overcast) * c.tint * toneMul,
+          (1 - 0.3 * _overcast) * c.tint * toneMul,
         );
       } else {
-        c.sprite.material.color.setRGB(c.tint, c.tint, c.tint);
+        c.sprite.material.color.setRGB(c.tint * toneMul, c.tint * toneMul, c.tint * toneMul);
       }
     }
 
@@ -731,7 +801,7 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
   const SUN_DIST  = 200;
 
   function applyTo(targets, t) {
-    const pal    = applyOvercast(lerpPalette(t));
+    const pal    = applyTone(applyOvercast(lerpPalette(t)));
     const sunDir = sunDirAt(t);
 
     if (targets.sun) {
@@ -791,6 +861,7 @@ export function createSky({ cloudTexture, lowDetail = false } = {}) {
     sunDirAt,
     applyTo,
     setOvercast,
+    setTone,
     dispose,
   };
 }
