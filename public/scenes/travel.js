@@ -3,6 +3,7 @@ import { segmentBlend, segmentForMiles } from "../lib/segments.mjs";
 import { addTopHud, addBottomHud, updateHud, attachResizeRebuild, attachStatCorruption } from "../lib/hud.mjs";
 import { applyToneOverlay } from "../lib/tone.mjs";
 import { createJuice } from "../lib/juice.mjs";
+import { createHorrorFx } from "../lib/horror-fx.mjs";
 
 const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -29,6 +30,20 @@ export default function register(k, engine) {
     let detachResize = null;
     let detachCorruption = null;
     const juice = createJuice(k);
+    // Wires the horror shader's two previously-dead channels (review finding):
+    // dread scales aberration/grain with the party's actual desperation, and
+    // stingers slam CRT distortion on bad-news beats. High tier only.
+    const horrorFx = engine.tone === "high" ? createHorrorFx(k) : null;
+    function computeDread() {
+      const food = engine.supplies?.food ?? 0;
+      const members = (engine.party?.members ?? []).filter((m) => m.alive);
+      const foodFactor = food <= 25 ? (1 - food / 25) * 0.8 : 0;
+      const anyDying = members.some((m) => m.health > 0 && m.health <= 20);
+      const anyIll = members.some((m) => m.disease);
+      const healthFactor = anyDying ? 0.7 : anyIll ? 0.3 : 0;
+      return Math.min(1, Math.max(foodFactor, healthFactor));
+    }
+    if (horrorFx) horrorFx.setDread(computeDread());
     function engineOn(event, fn) { engine.on(event, fn); listeners.push({ event, fn }); }
 
     k.onSceneLeave(() => {
@@ -340,6 +355,8 @@ export default function register(k, engine) {
       }
       if (worst === 2) (tone === "high" ? juice.horror() : juice.major());
       else if (worst === 1) (tone === "high" ? juice.horror() : juice.minor());
+      if (tone === "high" && worst > 0) horrorFx?.stinger(worst === 2 ? 1 : 0.5);
+      if (tone === "high") horrorFx?.setDread(computeDread());
     });
     engineOn("error", ({ message }) => {
       // Forced renders (visual QA, smoke tests) have no game state; never

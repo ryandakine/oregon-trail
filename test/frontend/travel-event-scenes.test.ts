@@ -6,7 +6,8 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { startHarness, type Harness } from "./harness";
-import { segmentForMiles } from "../../public/lib/segments.mjs";
+import { segmentForMiles, segmentPaletteKeys } from "../../public/lib/segments.mjs";
+import { PALETTE } from "../../public/lib/palette.mjs";
 import * as eventFx from "./fixtures/event";
 import * as bpFx from "./fixtures/bitter_path";
 
@@ -63,10 +64,13 @@ describe("travel + event + bitter_path scenes", () => {
   });
 
   // Mood-arc bands (lib/segments.mjs). Travel is the only scene that paints the
-  // arc, and each band swaps both palette and dressing — a bad palette key or a
-  // missing biome row throws inside scene setup, so a clean render with zero
-  // errors is the real assertion. The segment id is pinned alongside so a later
-  // boundary edit can't silently move a band out from under these seeds.
+  // arc. NOTE (review 2026-08-24): bad palette keys and missing biome rows do
+  // NOT throw — segmentColor() and the DRESSING lookup both fall back silently —
+  // so no-throw alone proves nothing about the arc. These tests therefore also
+  // read back the drawn zenith band color and pin it to the segment's palette
+  // entry, and a separate case invokes segmentPaletteKeys() (which DOES throw
+  // on an unknown key). The segment id is pinned so a boundary edit can't
+  // silently move a band out from under these seeds.
   const bandCases: Array<{ id: string; miles: number; segment: string; label: string }> = [
     { id: "T-travel-4", miles: 1000, segment: "arc_divide", label: "snow band (South Pass divide)" },
     { id: "T-travel-5", miles: 1300, segment: "arc_snake", label: "desert band (Snake River plain)" },
@@ -91,8 +95,73 @@ describe("travel + event + bitter_path scenes", () => {
       const miles = await h.page.evaluate(() => (window.engine as { milesTraveled: number }).milesTraveled);
       expect(miles).toBe(band.miles);
       expect(segmentForMiles(miles).id).toBe(band.segment);
+
+      // Read back the actual drawn sky: the topmost 640-wide gradient band
+      // (y=0, thin, unfixed — the 640x44 HUD strip is k.fixed + z50) must be
+      // the segment's zenith color. All three seeds sit outside blend windows,
+      // so the drawn color is the pure palette entry, no lerp tolerance needed.
+      const zenith = await h.page.evaluate(() => {
+        const k = (window as unknown as { k: { get(tag: string, o?: object): unknown[] } }).k;
+        const objs = k.get("*", { recursive: true }) as Array<{
+          width?: number; height?: number; pos?: { y: number }; z?: number;
+          color?: { r: number; g: number; b: number }; is(tag: string): boolean;
+        }>;
+        const band0 = objs.find((o) =>
+          o.width === 640 && o.height !== undefined && o.height < 20 &&
+          o.pos?.y === 0 && o.color && !o.is("hud-top"));
+        return band0 ? [Math.round(band0.color!.r), Math.round(band0.color!.g), Math.round(band0.color!.b)] : null;
+      });
+      expect(zenith).toEqual(PALETTE[segmentForMiles(band.miles).palette.zenith]);
     });
   }
+
+  it("T-arc-keys: every segment palette key resolves (throws on unknown)", () => {
+    expect(() => segmentPaletteKeys()).not.toThrow();
+    expect(segmentPaletteKeys().length).toBeGreaterThan(30);
+  });
+
+  it("T-event-4: choice result beat renders outcome + deltas and Continue returns to travel", async () => {
+    await h.seedEngine({ profession: "farmer", tone: "medium" });
+    await h.page.evaluate((ev) => { (window.engine as { currentEvent: unknown }).currentEvent = ev; }, eventFx.threeChoice);
+    await h.goScene("event", eventFx.threeChoice);
+    await h.page.waitForTimeout(500);
+
+    // Drive the real result-beat path: real _statsDelta from two snapshots
+    // differing by a known amount, real _holdResultBeat arming the transition —
+    // the exact surface mutation-testing showed ships green when broken.
+    await h.page.evaluate(() => {
+      const e = window.engine as unknown as {
+        _statsSnapshot(): Record<string, unknown>;
+        _statsDelta(a: unknown, b: unknown): unknown;
+        _holdResultBeat(fn: () => void): void;
+        transition(s: string): void;
+        emit(ev: string, payload: unknown): void;
+      };
+      const before = e._statsSnapshot() as Record<string, number>;
+      const after = { ...before, food: (before.food as number) - 12 };
+      e._holdResultBeat(() => e.transition("TRAVEL"));
+      e.emit("choiceResolved", {
+        choiceIndex: 0,
+        choiceLabel: "Scavenge what you can",
+        outcome: "You found little worth taking.",
+        deltas: e._statsDelta(before, after),
+      });
+    });
+    await h.page.waitForTimeout(300);
+    let s = await h.readStats();
+    expect(s.pageErrors).toEqual([]);
+    expect(s.overlayText).toContain("You chose: Scavenge what you can");
+    expect(s.overlayText).toContain("You found little worth taking.");
+    expect(s.overlayText).toContain("Food −12 lbs");
+    expect(s.overlayText).toContain("Continue");
+
+    await h.page.click("#event-continue button");
+    await h.page.waitForTimeout(400);
+    const scene = await h.page.evaluate(() => (window as unknown as { k: { getSceneName(): string } }).k.getSceneName());
+    expect(scene).toBe("travel");
+    s = await h.readStats();
+    expect(s.pageErrors).toEqual([]);
+  });
 
   it("T-event-1: event with 3 choices renders", async () => {
     await h.seedEngine({ profession: "farmer", tone: "medium" });

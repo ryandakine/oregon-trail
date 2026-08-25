@@ -1,5 +1,6 @@
 // Error capture — must run before kaplay loads so early errors are caught.
 import { shouldInit3D, getRenderMode, isDesktopPointer } from "./render-mode.mjs";
+import { createHorrorFx } from "./lib/horror-fx.mjs";
 
 window.__ERRORS = [];
 window.addEventListener("error", (e) => window.__ERRORS.push({ msg: e.message, src: e.filename, line: e.lineno }));
@@ -137,6 +138,14 @@ engine.on("stateChange", ({ from, to, data }) => {
   if (sceneName) {
     const overlay = document.getElementById("html-overlay");
     if (overlay) overlay.classList.remove("active");
+    // The horror post shader is a global slot that deliberately follows a
+    // high-tone run across world scenes (travel applies it, event/river/death
+    // inherit it). Menu states are outside any run: without this clear, a
+    // high-tone run's VHS effect survives engine.restart() and sits over the
+    // title/setup/store screens until the next travel mount (review finding).
+    if (["TITLE", "PROFESSION", "NAMES", "TONE", "STORE", "LOADING"].includes(to)) {
+      createHorrorFx(k).setTier("medium");
+    }
     k.go(sceneName, data || {});
   }
 });

@@ -1,5 +1,6 @@
 import * as draw from "../lib/draw.mjs";
 import { addTopHud, addBottomHud } from "../lib/hud.mjs";
+import { createHorrorFx } from "../lib/horror-fx.mjs";
 
 // Hidden horror-tier scene (v3 primitive Kaplay). Fires when the server
 // returns trigger === "bitter_path" — late-stage starvation + recent death,
@@ -192,6 +193,9 @@ export default function register(k, engine) {
     }
 
     function renderScene() {
+      // The Long Night is THE horror beat — slam the CRT/aberration stinger
+      // as the scene body reveals (no-op below high tier / reduced motion).
+      createHorrorFx(k).stinger(1);
       const title = eventData.title || "The Long Night";
       const description = eventData.description || "";
       const choices = eventData.choices || [];

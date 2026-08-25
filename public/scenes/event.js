@@ -88,12 +88,19 @@ export default function register(k, engine) {
     content.innerHTML = html;
     overlay.classList.add("active", "tableau");
 
-    // Typewriter effect
+    // Typewriter effect. Reduced motion: full text immediately, matching
+    // bitter_path.js's convention (character-by-character reveal is motion).
     const typewriterEl = document.getElementById("event-typewriter");
     let charIdx = 0;
     const typeSpeed = 25;
 
     function typeNext() {
+      if (!MOTION_OK) {
+        charIdx = description.length;
+        typewriterEl.textContent = description;
+        showChoices();
+        return;
+      }
       if (charIdx < description.length) {
         typewriterEl.textContent += description[charIdx];
         charIdx++;
