@@ -90,6 +90,40 @@ describe("frontend harness — boot + primary regression pins", () => {
     expect(stats.total).toBeGreaterThanOrEqual(10);
   });
 
+  it("T-river-3: crossing result beat replaces choices and Continue returns to travel", async () => {
+    await h.seedEngine({ profession: "farmer", supplies: { money: 50000, ammo: 20 } });
+    await h.goScene("river", riverFx.edgeNumericMax);
+    await h.page.waitForTimeout(400);
+    // Drive the real riverResolved path (review 2026-08-24: this surface had
+    // zero coverage — mutation-tested regressions shipped green).
+    await h.page.evaluate(() => {
+      const e = window.engine as unknown as {
+        _statsSnapshot(): Record<string, number>;
+        _statsDelta(a: unknown, b: unknown): unknown;
+        _holdResultBeat(fn: () => void): void;
+        transition(s: string): void;
+        emit(ev: string, payload: unknown): void;
+      };
+      const before = e._statsSnapshot();
+      const after = { ...before, food: before.food - 34 };
+      e._holdResultBeat(() => e.transition("TRAVEL"));
+      e.emit("riverResolved", { narrative: "The wagon took on water.", choice: 0, deltas: e._statsDelta(before, after) });
+    });
+    await h.page.waitForTimeout(300);
+    const stats = await h.readStats();
+    expect(stats.pageErrors).toEqual([]);
+    expect(stats.kaplayErrors).toEqual([]);
+    // Choice buttons destroyed; the Continue affordance is the sole area obj.
+    const areas = await h.page.evaluate(() =>
+      (window as unknown as { k: { get(t: string, o?: object): unknown[] } }).k.get("area", { recursive: true }).length);
+    expect(areas).toBe(1);
+    await h.page.keyboard.press("Space");
+    await h.page.waitForTimeout(400);
+    const scene = await h.page.evaluate(() =>
+      (window as unknown as { k: { getSceneName(): string } }).k.getSceneName());
+    expect(scene).toBe("travel");
+  });
+
   it("T-hunt-1: renders hunting scene without styled-text errors (regression a129b31)", async () => {
     await h.seedEngine({ profession: "farmer", supplies: { ammo: 20, money: 10000 } });
     await h.goScene("hunting");

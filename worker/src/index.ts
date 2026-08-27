@@ -360,18 +360,38 @@ export default {
     }
   },
 
-  // AI-liveness canary (Cron Trigger — see wrangler.toml [triggers]).
+  // AI-liveness canary (Cron Trigger — see wrangler.toml [triggers], hourly).
   // The "dead/out-of-credit key silently serves canned fallbacks at HTTP 200"
   // failure ran for weeks undetected because nothing checked the LLM path.
   // This probes the exact failure: one trivial Anthropic call; if it throws
-  // (dead key, no credit, 4xx, sustained overload), page via Telegram. Cost is
-  // a few tokens × 4/day. Healthy → silent.
+  // (dead key, no credit, 4xx, sustained overload), page via Telegram — at
+  // most once per REALERT_INTERVAL_MS while the failure persists, plus one
+  // all-clear on recovery. Cost is a few tokens × 24/day. Healthy → silent.
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runCanary(env));
   },
 };
 
-async function runCanary(env: Env): Promise<void> {
+// Per-isolate best-effort re-alert cadence (mirrors the fallbackCursor /
+// rateLimitMap pattern above — in-memory, not persisted, resets on isolate
+// recycle). Without this an hourly cron pages every single hour for the
+// entire length of an outage; a multi-day outage means dozens of near-
+// identical pings, which is exactly the shape that gets muted/tuned out on
+// the receiving end. This caps re-pages to once per REALERT_INTERVAL_MS
+// while down, and sends one distinct all-clear on recovery so "fixed" is
+// also visible, not just "broken."
+const REALERT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h — cron is hourly, so at most 4 pages/day while down
+let canaryLastAlertAt: number | null = null;
+let canaryIsDown = false;
+
+// Test-only: reset canary alert/cadence state between tests. Mirrors
+// __resetFallbackCursor / paid-guard's __resetDayCounts.
+export function __resetCanaryAlertState(): void {
+  canaryLastAlertAt = null;
+  canaryIsDown = false;
+}
+
+export async function runCanary(env: Env): Promise<void> {
   let detail = "";
   try {
     const raw = await callAnthropic(
@@ -382,13 +402,31 @@ async function runCanary(env: Env): Promise<void> {
     );
     if (typeof raw === "string" && raw.trim().length > 0) {
       console.log("canary_ok", JSON.stringify({ ts: new Date().toISOString() }));
+      if (canaryIsDown) {
+        // Recovering from a prior alert — say so, then go back to silent.
+        canaryIsDown = false;
+        canaryLastAlertAt = null;
+        await sendTelegram(
+          env,
+          `✅ Oregon Trail AI canary recovered — trail.osi-cyber.com is serving live AI events again.`,
+        );
+      }
       return; // healthy → silent
     }
     detail = "empty response from model";
   } catch (e) {
+    // Any thrown error trips this — timeouts, 429/529, and non-retryable 4xx
+    // (dead key = 401, no credit = 400) all reach callAnthropic's throw path
+    // the same way, so a low-credit 400 alerts exactly like a dead key does.
     detail = String(e).slice(0, 160);
   }
   console.error("canary_failed", JSON.stringify({ detail }));
+
+  const now = Date.now();
+  const dueForAlert = canaryLastAlertAt === null || now - canaryLastAlertAt >= REALERT_INTERVAL_MS;
+  canaryIsDown = true;
+  if (!dueForAlert) return; // already paged within the cadence window — stay quiet
+  canaryLastAlertAt = now;
   await sendTelegram(
     env,
     `🛑 Oregon Trail AI canary FAILED — trail.osi-cyber.com is serving canned fallback events (players see no AI). callAnthropic error: ${detail}`,
@@ -404,11 +442,20 @@ async function sendTelegram(env: Env, text: string): Promise<void> {
     return;
   }
   try {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chat, text }),
     });
+    if (!response.ok) {
+      // fetch() only rejects on a network-level failure — a bad/revoked
+      // token, wrong chat_id, or a bot removed from the chat comes back as a
+      // normal HTTP 4xx response body, not a throw. Previously that was
+      // swallowed here with no log line at all, so a broken Telegram channel
+      // looked identical to a healthy one from the outside.
+      const body = await response.text().catch(() => "");
+      console.error("canary_alert_rejected", JSON.stringify({ status: response.status, body: body.slice(0, 160) }));
+    }
   } catch (e) {
     console.error("canary_alert_failed", JSON.stringify({ msg: String(e).slice(0, 120) }));
   }

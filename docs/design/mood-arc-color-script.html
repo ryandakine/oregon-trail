@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mood Arc Color Script — The Oregon Trail: AI Edition</title>
+<style>
+  :root {
+    --bg: #14161b;
+    --panel: #1b1e25;
+    --line: #2b303a;
+    --ink: #d8dae0;
+    --dim: #8b909c;
+    --mono: ui-monospace, "SFMono-Regular", "IBM Plex Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 28px 64px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.55 var(--mono);
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: 0.02em; }
+  h2 { font-size: 13px; margin: 40px 0 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; }
+  .sub { color: var(--dim); margin: 0 0 24px; }
+  .note { max-width: 96ch; color: var(--dim); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; margin: 0 0 12px; }
+  .note b { color: var(--ink); }
+  .note code { color: #e0c07a; }
+  .note ul { margin: 8px 0 0; padding-left: 20px; }
+  .note li { margin: 3px 0; }
+
+  /* ── Arc ribbon ───────────────────────────────────────────────────── */
+  .ribbon { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .ribbon-seg { flex: 1 1 0; min-width: 0; }
+  .ribbon-band { height: 26px; }
+  .ribbon-cap { height: 22px; display: flex; align-items: center; justify-content: center; }
+  .ribbon-cap i { display: block; width: 14px; height: 14px; border-radius: 50%; }
+  .ribbon-label { font-size: 10px; color: var(--dim); text-align: center; padding: 5px 2px; border-top: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── 24-cell grid ─────────────────────────────────────────────────── */
+  .grid { display: grid; grid-template-columns: 168px repeat(3, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+  .grid-head { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); padding-bottom: 2px; }
+  .rowhead { border-left: 3px solid var(--line); padding: 4px 0 4px 10px; }
+  .rowhead .name { font-weight: 700; font-size: 13px; }
+  .rowhead .miles { color: var(--dim); font-size: 11px; }
+  .rowhead .meta { color: var(--dim); font-size: 10px; margin-top: 5px; line-height: 1.5; }
+
+  .cell { border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+  .stack { display: block; }
+  .band { display: flex; align-items: center; justify-content: space-between; padding: 0 7px; font-size: 9.5px; letter-spacing: 0.02em; }
+  .band .role { opacity: 0.72; }
+  .b-zenith { height: 30px; }
+  .b-horizon { height: 22px; }
+  .b-far { height: 15px; }
+  .b-ground { height: 30px; }
+  .b-groundalt { height: 17px; }
+  .accent-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--panel); border-top: 1px solid var(--line); font-size: 9.5px; color: var(--dim); }
+  .chip { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 4px; border: 1.5px solid rgba(0,0,0,0.45); box-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+  .accent-row .grow { margin-left: auto; }
+
+  /* ── Key table ────────────────────────────────────────────────────── */
+  .keys { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .keys th { text-align: left; color: var(--dim); font-weight: 700; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  .keys td { padding: 4px 10px; border-bottom: 1px solid #23262e; }
+  .keys .sw { width: 26px; }
+  .keys .sw i { display: block; width: 18px; height: 18px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.14); }
+  .keys .hex { color: var(--dim); }
+  .keys .new { color: #7fc46a; font-size: 10px; }
+  .keys .old { color: var(--dim); font-size: 10px; }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+    .grid-head { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Mood Arc Color Script — 8 segments × 3 tone tiers</h1>
+<p class="sub">Phase D process artifact for <code>docs/design/graphics-pop-research.md</code> §3. The Firewatch method: settle the journey on one page before any shader moves.</p>
+
+<div class="note">
+  <b>Two places, and only two.</b> Every hex on this page also lives in
+  <code>public/lib/palette.mjs</code>, and nowhere else. The role each key plays
+  in each segment lives in <code>public/lib/segments.mjs</code>, which stores
+  <em>key names</em>, not colors. If you change a hex here, change it there —
+  there is no third copy and no build step to catch a drifted one.
+</div>
+
+<div class="note">
+  <b>Reading a cell.</b> Top to bottom is a landscape cross-section: zenith,
+  horizon, far band, ground, ground-alt. The chip in the footer strip is that
+  segment's single accent — the 10% of the 60/30/10 budget. Sky (zenith + horizon) is the
+  60%, terrain (ground + ground-alt) the 30%. <code>far</code> is the same
+  terrain under atmospheric perspective: always cooler and lower-chroma than its
+  own ground. The darks (<code>outline</code>, <code>silhouetteNear</code>) are
+  shared by all eight and are not on this page — that shared dark anchor is what
+  keeps this one game instead of eight.
+</div>
+
+<div class="note">
+  <b>Tier derivation.</b> Low is the authored ramp. Medium and High are computed
+  from it by the rules below, in this order per role — anchor lerp, then
+  desaturate, then compress value. Order matters: desaturating after the
+  compression would let a bright segment keep its value, and compressing before
+  the lerp would let the anchor raise it back. This mirrors <code>crush()</code> in
+  <code>public/three/sky.mjs</code>, restated in sRGB/HSL because a color script
+  has to be legible; the 3D runtime does the same three steps in linear space
+  with harder numbers because ACES tone-mapping sits downstream of it.
+  <ul>
+    <li><b>Medium</b> — 6% toward <code>#4a4436</code>, S × 0.88, L × 0.96. AESTHETIC_SPEC §5 "desat 10%".</li>
+    <li><b>High base</b> — lerp toward <code>#232838</code>, clamp saturation into a band, then compress value against a soft knee: <code>L' = L &lt;= knee ? L : knee + (L-knee)*(ceil-knee)/(1-knee)</code>. Per role — zenith mix .18 / S×.70 into 9–28% / knee .28 / ceil .56; horizon .16 / .70 / 9–28% / .26 / .50; far .20 / .62 / 7–24% / .24 / .42; ground .20 / .65 / 7–24% / .20 / .34; ground-alt .20 / .65 / 6–22% / .16 / .28. Light ceiling lands at 56% L, base saturation inside 15–25%.</li>
+    <li><b>Why a knee and not a clamp.</b> First pass hard-capped L at the ceiling. Everything bright landed on <em>exactly</em> the ceiling, all eight zeniths came out the same gray-blue, and the tier read as one segment repeated — the uniformity failure the research names. The knee leaves darks untouched and compresses only the top, so a segment that was lighter than its neighbour stays lighter. Same reason saturation is clamped into a band rather than multiplied: a plain multiplier drives an already-dull base to flat gray and takes the hue with it.</li>
+    <li><b>High accent</b> — the protected path: mix .10 only, S clamped into 55–88%, knee .30 / ceil .56. It is the one thing in a High frame allowed to be saturated, and it is what carries segment identity once the sky and ground are crushed (worst neighbouring-accent separation across the eight is ~16 ΔE OKLab, against ~2–6 for the crushed terrain bands).</li>
+    <li><b>High horizon</b> — 10% of <code>sicklyHorizon</code> mixed back in <em>after</em> the crush, so desaturation cannot eat it (<code>HIGH_SICKLY_MIX</code> in sky.mjs is 0.13). Kept low on purpose: at 13% across all eight segments the sickly band starts becoming the accent, and then every horror frame is the same frame. Under High the <em>segment</em> accent is the one saturated note; the sickly band is a thin line, not a tier-wide color.</li>
+  </ul>
+</div>
+
+<div class="note">
+  <b>Where the mile boundaries come from.</b> Not invented. The worker owns the
+  trail in <code>worker/src/historical-context.json</code> — 16 segments,
+  <code>GameState.position.current_segment_id</code> — and every boundary below
+  lands on a datum from that file. Six of the eight fall on a server segment
+  boundary; the two that don't (mile 460, mile 874) fall on a landmark
+  <code>mile_marker</code>, <code>lm_chimney_rock</code> and
+  <code>lm_south_pass</code>, because <code>seg_04</code> has to carry two looks
+  and because the white beat should start the moment you crest the pass, not
+  100 miles past it. <code>segmentForMiles()</code> uses the same
+  at-exactly-the-end-mile-you-are-still-here rule as
+  <code>getSegmentForMile()</code> in <code>worker/src/context-loader.ts</code>,
+  and neighbours cross-fade over a 40-mile window centred on each boundary, so
+  nothing pops.
+</div>
+
+<h2>The arc, at a glance (Low tier: horizon over ground, accent chip)</h2>
+<div class="ribbon" id="ribbon"></div>
+
+<h2>24 cells</h2>
+<div class="grid" id="grid"></div>
+
+<h2>Palette keys used by the arc</h2>
+<table class="keys" id="keys">
+  <thead><tr><th class="sw"></th><th>palette.mjs key</th><th>hex</th><th>used as</th><th></th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<script>
+// ── Hand-copied from public/lib/palette.mjs. Second of the two places. ──────
+const PALETTE = {
+  alkaliBone: '#c8ccc6',
+  backstopPrairie: '#b9bc96',
+  basaltDark: '#3a3430',
+  bloodRust: '#a83a1e',
+  bluffOchre: '#bc7c48',
+  cloudShadow: '#d7d7e1',
+  coniferDeep: '#2e4034',
+  coniferMid: '#485e46',
+  dirtLight: '#c49a6c',
+  dryTip: '#9a8b4a',
+  dust: '#cdb48c',
+  farBlueMtn: '#6a7a80',
+  farBluff: '#9c8a8e',
+  farDivide: '#b0bccc',
+  farSnake: '#967c7c',
+  farWillamette: '#a4b8bc',
+  flowerGold: '#eccc5c',
+  grassLight: '#a0b86a',
+  grassMid: '#7a8f3a',
+  hazeBlueMtn: '#9fa9a8',
+  hazeFoothill: '#94a2b2',
+  hazePlatte: '#d4dad2',
+  hazeWillamette: '#cfe0e6',
+  hearthAmber: '#f0b46a',
+  hillMid: '#5a783a',
+  iceBlue: '#8ab8dc',
+  lupineViolet: '#7d6fbf',
+  meadowMist: '#96ae9e',
+  mountainFar: '#828a9e',
+  mountainHaze: '#98a0bc',
+  mountainMid: '#7d849b',
+  orchardGreen: '#8cc660',
+  pricklyRose: '#b65086',
+  riverSilt: '#76ac96',
+  sageGray: '#7c8068',
+  sky: '#6d80fa',
+  skyBlueMtn: '#485460',
+  skyBluff: '#5f7ad6',
+  skyDivide: '#8292aa',
+  skyDusk: '#c87864',
+  skyFoothill: '#445d9e',
+  skyPale: '#a8c9ff',
+  skyPlatte: '#93a8c8',
+  skySnake: '#6c6f96',
+  snakeSand: '#c1966e',
+  stone: '#968e84',
+  straw: '#debe7a',
+  sicklyHorizon: '#c5d07a',
+};
+
+// Keys the arc introduced, vs. keys it borrowed from the pre-existing register.
+const NEW_KEYS = new Set([
+  'skyPlatte', 'hazePlatte', 'skyBluff', 'skyFoothill', 'hazeFoothill', 'skyDivide',
+  'skySnake', 'skyBlueMtn', 'hazeBlueMtn', 'hazeWillamette',
+  'bluffOchre', 'sageGray', 'alkaliBone', 'snakeSand', 'basaltDark', 'coniferDeep',
+  'coniferMid', 'meadowMist',
+  'farBluff', 'farDivide', 'farSnake', 'farBlueMtn', 'farWillamette',
+  'riverSilt', 'pricklyRose', 'lupineViolet', 'iceBlue', 'bloodRust', 'hearthAmber',
+  'orchardGreen',
+]);
+
+// ── Role mapping — mirrors SEGMENTS in public/lib/segments.mjs. ─────────────
+const SEGMENTS = [
+  { name: 'Tallgrass Prairie',   miles: '0–313',      biome: 'prairie',      weather: 'rain 0.35',
+    p: { zenith: 'sky', horizon: 'skyPale', far: 'backstopPrairie', ground: 'grassMid', groundAlt: 'grassLight', accent: 'flowerGold' } },
+  { name: 'Platte River Valley', miles: '313–460',    biome: 'river_valley', weather: 'rain 0.30',
+    p: { zenith: 'skyPlatte', horizon: 'hazePlatte', far: 'mountainHaze', ground: 'dryTip', groundAlt: 'straw', accent: 'riverSilt' } },
+  { name: 'Chimney Bluffs',      miles: '460–594',    biome: 'bluffs',       weather: 'dust 0.45',
+    p: { zenith: 'skyBluff', horizon: 'dust', far: 'farBluff', ground: 'bluffOchre', groundAlt: 'dirtLight', accent: 'pricklyRose' } },
+  { name: 'Sweetwater Foothills',miles: '594–874',    biome: 'foothills',    weather: 'rain 0.35',
+    p: { zenith: 'skyFoothill', horizon: 'hazeFoothill', far: 'mountainFar', ground: 'sageGray', groundAlt: 'stone', accent: 'lupineViolet' } },
+  { name: 'South Pass Divide',   miles: '874–1074',   biome: 'snow',         weather: 'snow 0.40',
+    p: { zenith: 'skyDivide', horizon: 'cloudShadow', far: 'farDivide', ground: 'alkaliBone', groundAlt: 'mountainMid', accent: 'iceBlue' } },
+  { name: 'Snake River Plain',   miles: '1074–1424',  biome: 'desert',       weather: 'dust 0.55',
+    p: { zenith: 'skySnake', horizon: 'skyDusk', far: 'farSnake', ground: 'snakeSand', groundAlt: 'basaltDark', accent: 'bloodRust' } },
+  { name: 'Blue Mountains',      miles: '1424–1674',  biome: 'forest',       weather: 'rain 0.60',
+    p: { zenith: 'skyBlueMtn', horizon: 'hazeBlueMtn', far: 'farBlueMtn', ground: 'coniferDeep', groundAlt: 'coniferMid', accent: 'hearthAmber' } },
+  { name: 'Willamette Arrival',  miles: '1674–1764',  biome: 'arrival',      weather: 'clear',
+    p: { zenith: 'skyPale', horizon: 'hazeWillamette', far: 'farWillamette', ground: 'meadowMist', groundAlt: 'hillMid', accent: 'orchardGreen' } },
+];
+
+// ── Color math ─────────────────────────────────────────────────────────────
+const hexToRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const rgbToHex = (c) => '#' + c.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+function rgbToHsl([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  if (d === 0) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h, s, l];
+}
+
+function hslToRgb([h, s, l]) {
+  if (s === 0) { const v = l * 255; return [v, v, v]; }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const f = (t) => {
+    if (t < 0) t += 1; if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
+}
+
+const mixRgb = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+
+/** Soft knee: darks pass through, only the top of the range is compressed. */
+function knee(l, k, ceil) {
+  return l <= k ? l : k + (l - k) * (ceil - k) / (1 - k);
+}
+
+/** anchor lerp → desaturate → compress value. Same three steps, same order, as crush() in sky.mjs. */
+function crush(hex, anchorHex, mix, satMul, satMin, satMax, k, ceil) {
+  const rgb = mixRgb(hexToRgb(hex), hexToRgb(anchorHex), mix);
+  const [h, s, l] = rgbToHsl(rgb);
+  return rgbToHex(hslToRgb([h, clamp01(Math.min(satMax, Math.max(satMin, s * satMul))), knee(l, k, ceil)]));
+}
+
+const MEDIUM_ANCHOR = '#4a4436';
+const HIGH_ANCHOR = '#232838';
+// [anchorMix, satMul, satMin, satMax, valueKnee, valueCeil]
+const HIGH_RULES = {
+  zenith:    [0.18, 0.70, 0.09, 0.28, 0.28, 0.56],
+  horizon:   [0.16, 0.70, 0.09, 0.28, 0.26, 0.50],
+  far:       [0.20, 0.62, 0.07, 0.24, 0.24, 0.42],
+  ground:    [0.20, 0.65, 0.07, 0.24, 0.20, 0.34],
+  groundAlt: [0.20, 0.65, 0.06, 0.22, 0.16, 0.28],
+};
+
+function tierColor(hex, role, tier) {
+  if (tier === 'low') return hex;
+  if (tier === 'medium') {
+    const rgb = mixRgb(hexToRgb(hex), hexToRgb(MEDIUM_ANCHOR), 0.06);
+    const [h, s, l] = rgbToHsl(rgb);
+    return rgbToHex(hslToRgb([h, clamp01(s * 0.88), clamp01(l * 0.96)]));
+  }
+  if (role === 'accent') {
+    const [h, s, l] = rgbToHsl(mixRgb(hexToRgb(hex), hexToRgb(HIGH_ANCHOR), 0.10));
+    return rgbToHex(hslToRgb([h, clamp01(Math.min(0.88, Math.max(0.55, s * 1.15))), knee(l, 0.30, 0.56)]));
+  }
+  const [mix, satMul, satMin, satMax, k, ceil] = HIGH_RULES[role];
+  let out = crush(hex, HIGH_ANCHOR, mix, satMul, satMin, satMax, k, ceil);
+  if (role === 'horizon') out = rgbToHex(mixRgb(hexToRgb(out), hexToRgb(PALETTE.sicklyHorizon), 0.10));
+  return out;
+}
+
+// Label ink that stays readable on whatever the band ended up being.
+const inkOn = (hex) => {
+  const [r, g, b] = hexToRgb(hex);
+  return (r * 0.2126 + g * 0.7152 + b * 0.0722) > 140 ? 'rgba(0,0,0,0.62)' : 'rgba(255,255,255,0.70)';
+};
+
+// ── Render ─────────────────────────────────────────────────────────────────
+const BANDS = [
+  ['zenith', 'b-zenith'],
+  ['horizon', 'b-horizon'],
+  ['far', 'b-far'],
+  ['ground', 'b-ground'],
+  ['groundAlt', 'b-groundalt'],
+];
+const TIERS = ['low', 'medium', 'high'];
+
+const ribbon = document.getElementById('ribbon');
+for (const seg of SEGMENTS) {
+  const horizon = PALETTE[seg.p.horizon], ground = PALETTE[seg.p.ground], accent = PALETTE[seg.p.accent];
+  const el = document.createElement('div');
+  el.className = 'ribbon-seg';
+  el.innerHTML =
+    `<div class="ribbon-band" style="background:${PALETTE[seg.p.zenith]}"></div>` +
+    `<div class="ribbon-band" style="background:${horizon}"></div>` +
+    `<div class="ribbon-band" style="background:${ground}"></div>` +
+    `<div class="ribbon-cap" style="background:${PALETTE[seg.p.groundAlt]}"><i style="background:${accent}"></i></div>` +
+    `<div class="ribbon-label">${seg.name}</div>`;
+  ribbon.appendChild(el);
+}
+
+const grid = document.getElementById('grid');
+for (const label of ['', 'Low — classroom', 'Medium — default', 'High — horror']) {
+  const h = document.createElement('div');
+  h.className = 'grid-head';
+  h.textContent = label;
+  grid.appendChild(h);
+}
+for (const seg of SEGMENTS) {
+  const head = document.createElement('div');
+  head.className = 'rowhead';
+  head.style.borderLeftColor = PALETTE[seg.p.accent];
+  head.innerHTML =
+    `<div class="name">${seg.name}</div>` +
+    `<div class="miles">mi ${seg.miles}</div>` +
+    `<div class="meta">biome <b>${seg.biome}</b><br>weather ${seg.weather}<br>accent ${seg.p.accent}</div>`;
+  grid.appendChild(head);
+
+  for (const tier of TIERS) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    let html = '<div class="stack">';
+    for (const [role, cls] of BANDS) {
+      const c = tierColor(PALETTE[seg.p[role]], role, tier);
+      html += `<div class="band ${cls}" style="background:${c};color:${inkOn(c)}">` +
+              `<span class="role">${role}</span><span>${c}</span></div>`;
+    }
+    html += '</div>';
+    const a = tierColor(PALETTE[seg.p.accent], 'accent', tier);
+    html += `<div class="accent-row"><span class="chip" style="background:${a}"></span>` +
+            `<span>accent</span><span class="grow">${a}</span></div>`;
+    cell.innerHTML = html;
+    grid.appendChild(cell);
+  }
+}
+
+const tbody = document.querySelector('#keys tbody');
+const rows = [];
+for (const seg of SEGMENTS) {
+  for (const [role, key] of Object.entries(seg.p)) rows.push([key, `${seg.name} · ${role}`]);
+}
+const byKey = new Map();
+for (const [key, use] of rows) {
+  if (!byKey.has(key)) byKey.set(key, []);
+  byKey.get(key).push(use);
+}
+for (const [key, uses] of [...byKey].sort((a, b) => a[0].localeCompare(b[0]))) {
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    `<td class="sw"><i style="background:${PALETTE[key]}"></i></td>` +
+    `<td>${key}</td>` +
+    `<td class="hex">${PALETTE[key]}</td>` +
+    `<td class="hex">${uses.join('<br>')}</td>` +
+    `<td class="${NEW_KEYS.has(key) ? 'new' : 'old'}">${NEW_KEYS.has(key) ? 'new (Phase D)' : 'existing'}</td>`;
+  tbody.appendChild(tr);
+}
+</script>
+</body>
+</html>

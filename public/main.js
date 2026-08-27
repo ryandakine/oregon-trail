@@ -1,5 +1,6 @@
 // Error capture — must run before kaplay loads so early errors are caught.
 import { shouldInit3D, getRenderMode, isDesktopPointer } from "./render-mode.mjs";
+import { createHorrorFx } from "./lib/horror-fx.mjs";
 
 window.__ERRORS = [];
 window.addEventListener("error", (e) => window.__ERRORS.push({ msg: e.message, src: e.filename, line: e.lineno }));
@@ -57,6 +58,16 @@ k.loadSprite("titleHero", "/assets/title-hero.png")
   .catch((err) => {
     console.warn("title-hero.png missing; using night fallback:", err?.message);
   });
+
+// HIGH tone tier post effect (graphics-pop-research § 3 Phase C). Only the
+// composed pass is fetched — kaplay's post-effect slot holds a single shader,
+// so the other frags in lib/shaders/ are source units, not runtime programs.
+// Failure-tolerant like the font above, and doubly so: horror-fx.mjs asks
+// getShader() before every usePostEffect call, so a 404 or a compile error
+// costs the horror tier its shader and leaves every scene otherwise intact.
+k.loadShaderURL("horror", null, "/lib/shaders/horror.frag").catch((err) => {
+  console.warn("horror post-effect shader failed to load; high tier runs without it:", err?.message);
+});
 
 window.k = k;
 
@@ -127,6 +138,14 @@ engine.on("stateChange", ({ from, to, data }) => {
   if (sceneName) {
     const overlay = document.getElementById("html-overlay");
     if (overlay) overlay.classList.remove("active");
+    // The horror post shader is a global slot that deliberately follows a
+    // high-tone run across world scenes (travel applies it, event/river/death
+    // inherit it). Menu states are outside any run: without this clear, a
+    // high-tone run's VHS effect survives engine.restart() and sits over the
+    // title/setup/store screens until the next travel mount (review finding).
+    if (["TITLE", "PROFESSION", "NAMES", "TONE", "STORE", "LOADING"].includes(to)) {
+      createHorrorFx(k).setTier("medium");
+    }
     k.go(sceneName, data || {});
   }
 });
@@ -178,9 +197,11 @@ setTimeout(() => engine.init(), 100);
 // it doubles as a manual escape hatch (?gfx=high / ?gfx=low). ──
 {
   // The load decision is the pure shouldInit3D() (see render-mode.mjs): the
-  // ?test guard wins first, then an explicit 2d/3d preference, then the
-  // "auto" device+gfx default. An unset preference reproduces the old gate
-  // exactly (?gfx || desktop), so existing behavior is unchanged.
+  // ?test guard wins first, then an explicit 2d/3d preference, then "auto",
+  // which is now 2D unless ?gfx forces 3D — the desktop-pointer heuristic was
+  // dropped because default-3D shipped a HUD-less soft-lock (the 3D canvas
+  // paints over Kaplay until the compositing rebuild lands). 3D remains
+  // opt-in via the title toggle or ?gfx.
   const params = new URLSearchParams(location.search);
   if (shouldInit3D({
     hasTest: params.has("test"),

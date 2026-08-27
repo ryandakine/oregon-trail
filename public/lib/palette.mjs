@@ -3,6 +3,9 @@
 //
 // RGB triples are sRGB 0–255 (Kaplay k.color(...)).
 // Use toHex / cssHex / toLinear01 for Three.js (apply convertSRGBToLinear on Color).
+//
+// The "Mood arc" blocks below are the miles→look ramp; which key fills which
+// role in which segment lives in lib/segments.mjs, never here.
 
 /** @type {Readonly<Record<string, readonly [number, number, number]>>} */
 export const PALETTE = {
@@ -86,6 +89,44 @@ export const PALETTE = {
   straw:        [222, 190, 122],
   silhouetteFar:  [32, 38, 62],
   silhouetteNear: [22, 28, 48],
+
+  // Mood arc — sky (zenith + horizon; horizon doubles as fog)
+  skyPlatte:      [147, 168, 200],
+  hazePlatte:     [212, 218, 210],
+  skyBluff:       [95, 122, 214],
+  skyFoothill:    [68, 93, 158],
+  hazeFoothill:   [148, 162, 178],
+  skyDivide:      [130, 146, 170],
+  skySnake:       [108, 111, 150],
+  skyBlueMtn:     [72, 84, 96],
+  hazeBlueMtn:    [159, 169, 168],
+  hazeWillamette: [207, 224, 230],
+
+  // Mood arc — terrain
+  bluffOchre:  [188, 124, 72],
+  sageGray:    [124, 128, 104],
+  alkaliBone:  [200, 204, 198],
+  snakeSand:   [193, 150, 110],
+  basaltDark:  [58, 52, 48],
+  coniferDeep: [46, 64, 52],
+  coniferMid:  [72, 94, 70],
+  meadowMist:  [150, 174, 158],
+
+  // Mood arc — far (atmospheric perspective: cooler + lower chroma)
+  farBluff:      [156, 138, 142],
+  farDivide:     [176, 188, 204],
+  farSnake:      [150, 124, 124],
+  farBlueMtn:    [106, 122, 128],
+  farWillamette: [164, 184, 188],
+
+  // Mood arc — accent (exactly one per segment, no two alike)
+  riverSilt:    [118, 172, 150],
+  pricklyRose:  [182, 80, 134],
+  lupineViolet: [125, 111, 191],
+  iceBlue:      [138, 184, 220],
+  bloodRust:    [168, 58, 30],
+  hearthAmber:  [240, 180, 106],
+  orchardGreen: [140, 198, 96],
 
   // UI / parchment (AESTHETIC_SPEC)
   parchment:   [245, 230, 200],

@@ -1,7 +1,11 @@
 import { addTopHud, addBottomHud } from "../lib/hud.mjs";
+import { createJuice } from "../lib/juice.mjs";
 
 export default function register(k, engine) {
   k.scene("landmark", (data) => {
+    // Arrival at a named landmark is a "big moment" beat — the one place the
+    // camera zoom-punch is reserved for (research § B3 restraint rules).
+    createJuice(k).zoomPunch();
     const W = 640;
     const H = 480;
     const landmark = data || {};
@@ -9,6 +13,7 @@ export default function register(k, engine) {
     const type = landmark.type || "natural";
     const desc = landmark.description || "You have reached a landmark on the trail.";
     const id = landmark.id || landmark.name || "unknown";
+    const btnY = H - 88;   // cleared bottom HUD panel at y=440
 
     // Draw background based on type
     drawBackground(k, type, W, H);
@@ -26,13 +31,19 @@ export default function register(k, engine) {
       k.anchor("center"),
       k.color(252, 227, 138),
     ]);
+    const nameBandBottom = 36 + 38;
 
     addTopHud(k, engine);
     addBottomHud(k, engine);
 
-    // Description panel at bottom
-    const panelH = 90;
-    const panelY = H - panelH - 60;
+    // Description panel — sized to the actual text so a long AI-generated
+    // description can't run under the action buttons (M-landmark-2donly).
+    // Anchored to the button row's top and grown upward as needed.
+    const descBottomLimit = btnY - 8;
+    const descTopLimit = nameBandBottom + 30;
+    const measured = k.formatText({ text: desc, size: 14, width: W - 80 });
+    const panelH = Math.min(Math.max(90, measured.height + 24), descBottomLimit - descTopLimit);
+    const panelY = descBottomLimit - panelH;
     k.add([
       k.rect(W - 40, panelH, { radius: 6 }),
       k.pos(20, panelY),
@@ -87,7 +98,6 @@ export default function register(k, engine) {
     const btnH = 32;
     const totalBtnW = actions.length * btnW + (actions.length - 1) * btnGap;
     const startX = (W - totalBtnW) / 2;
-    const btnY = H - 88;   // cleared bottom HUD panel at y=440
 
     let acted = false;
     const btnObjs = [];

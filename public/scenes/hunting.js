@@ -1,7 +1,35 @@
+import { PALETTE } from "../lib/draw.mjs";
+import { createJuice, MOTION_OK } from "../lib/juice.mjs";
+
 export default function register(k, engine) {
   k.scene("hunting", (data) => {
     const W = 640;
     const H = 480;
+    const juice = createJuice(k);
+
+    function spawnShotBurst(x, y) {
+      const burst = k.add([
+        k.pos(x, y),
+        k.particles({
+          max: 12,
+          speed: [40, 100],
+          lifeTime: [0.2, 0.4],
+          angle: [0, 0],
+          angularVelocity: [0, 0],
+          acceleration: [k.vec2(0, 200), k.vec2(0, 300)],
+          damping: [0.1, 0.3],
+          colors: [k.rgb(...PALETTE.goldBright), k.rgb(...PALETTE.dust)],
+          opacities: [0.9, 0],
+          scales: [0.5, 0.15],
+        }, {
+          direction: -90,
+          spread: 130,
+          rate: 0,
+        }),
+      ]);
+      burst.emit(k.randi(6, 10));
+      k.wait(0.5, () => burst.destroy());
+    }
 
     // Sky
     k.add([k.rect(W, 200), k.pos(0, 0), k.color(100, 160, 220)]);
@@ -109,6 +137,9 @@ export default function register(k, engine) {
         hunting = true;
         instructObj.text = "Hunting...";
 
+        juice.minor({ intensity: 2 + k.rand(0, 1) });
+        if (MOTION_OK) spawnShotBurst(bx + btnW / 2, btnY);
+
         // Hide buttons
         for (const b of btnObjs) {
           b.bg.opacity = 0.3;
@@ -142,13 +173,18 @@ export default function register(k, engine) {
       huntDone = true;
 
       const foodGained = results?.food_gained || 0;
-      const ammoUsed = results?.ammo_used || 0;
+      const shotsUsed = results?.shots || 0;
       const narrative = results?.narrative || "";
 
-      let resultText = narrative || `You used ${ammoUsed} rounds and got ${foodGained} lbs of food.`;
+      let resultText = narrative || `You used ${shotsUsed} rounds and got ${foodGained} lbs of food.`;
       resultsObj.text = resultText;
       instructObj.text = "Press ENTER or tap to continue";
       ammoText.text = `Ammunition: ${(engine.supplies?.ammo || 0)} rounds`;
+
+      for (const b of btnObjs) {
+        b.bg.opacity = 0;
+        b.txt.opacity = 0;
+      }
     };
     engine.on("huntResults", onResults);
     k.onSceneLeave(() => engine.off("huntResults", onResults));

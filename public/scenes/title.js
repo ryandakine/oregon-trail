@@ -1,6 +1,8 @@
 import * as draw from "../lib/draw.mjs";
 import { effectiveMode, setRenderMode, isDesktopPointer, isTouchOnly } from "../render-mode.mjs";
 
+const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
 // Parchment UI tokens (AESTHETIC_SPEC / design-review D-Chrome)
 const P = draw.PALETTE;
 const PANEL = P.parchmentDark; // #2a1f0e
@@ -58,9 +60,18 @@ function paintNightFallback(k) {
     }
   });
 
-  k.add([k.circle(20), k.pos(522, 74), k.color(...P.moon), k.opacity(0.1), k.anchor("center"), k.z(0)]);
+  const moonHalo = k.add([k.circle(20), k.pos(522, 74), k.color(...P.moon), k.opacity(0.1), k.anchor("center"), k.z(0)]);
   k.add([k.circle(13), k.pos(522, 74), k.color(...P.moon), k.opacity(0.85), k.anchor("center"), k.z(0)]);
   k.add([k.circle(11), k.pos(527, 71), k.color(...P.skyNight), k.opacity(0.8), k.anchor("center"), k.z(0)]);
+
+  // Very slow breathing drift on the moon's halo so the fallback poster
+  // never reads as a frozen frame.
+  if (MOTION_OK) {
+    k.onUpdate(() => {
+      moonHalo.pos.x = 522 + Math.sin(k.time() * 0.08) * 2.5;
+      moonHalo.opacity = 0.1 + 0.04 * Math.sin(k.time() * 0.15);
+    });
+  }
 
   k.add([
     k.polygon([
@@ -86,6 +97,13 @@ function paintNightFallback(k) {
     ]),
     k.pos(0, 0), k.color(...P.grassDeep), k.z(0),
   ]);
+  // Soft blend where the two flat-green silhouette bands meet — same
+  // stacked-mixColor technique as drawSky's band gradient, applied locally
+  // across the seam instead of a hard color cut.
+  for (let i = 0; i < 3; i++) {
+    const t = (i + 1) / 4;
+    k.add([k.rect(640, 6), k.pos(0, 284 + i * 6), k.color(...draw.mixColor(P.grassDeep, P.hillMid, t)), k.opacity(0.4), k.z(0)]);
+  }
   k.add([
     k.polygon([
       k.vec2(0, 320), k.vec2(0, 296), k.vec2(150, 286), k.vec2(300, 300),
@@ -111,8 +129,9 @@ function paintNightFallback(k) {
 
 /** Full-bleed cover of titleHero into 640×480 (D-Crop: south bias → wagon lower third). */
 function paintHeroCoverFixed(k) {
-  const sw = 1280;
-  const sh = 720;
+  const heroData = k.getSprite("titleHero")?.data;
+  const sw = heroData?.width || 1280;
+  const sh = heroData?.height || 720;
   const cover = Math.max(640 / sw, 480 / sh);
   k.add([
     k.sprite("titleHero"),

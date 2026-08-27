@@ -23,10 +23,12 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { toHex } from '../lib/palette.mjs';
+import { segmentBlend, segmentForMiles } from '../lib/segments.mjs';
 import * as textures from './textures.mjs';
 import { createTerrain, BIOMES } from './terrain.mjs';
-import { createSky } from './sky.mjs';
+import { createSky, HIGH_TONE_FOG } from './sky.mjs';
 import { createWagon, createOxTeam, createPioneer, createContactShadow } from './models.mjs';
 import { createGrass } from './grass.mjs';
 import { createVfx } from './vfx.mjs';
@@ -50,12 +52,26 @@ const WAGON_SPEED = 1.9; // world-units/sec — plodding ox pace, drives scroll 
 // but uses Math.random per transition — which would flicker the 3D storm on every
 // stateChange. Instead hash a stable 150-mile band to a fixed 0..99 roll, so the
 // same stretch of trail always yields the same weather. No PRNG anywhere.
+//
+// The mood arc BIASES this: each segment declares in segments.mjs how storm-prone
+// its stretch of trail is, and that lean moves both the odds a band is stormy and
+// how hard the storm lands — a dust segment storms more, and harder, than a green
+// one; a segment whose bias is 'none' (the Willamette arrival) is always clear.
+// The KIND still comes from the mile band. Swapping kind to the segment's own
+// would move miles=1300 from snow to dust and miles=750 from dust to rain, and
+// both of those are pinned by test/frontend/three-adapter.test.ts and are not
+// this change's to move — see the follow-up note.
 function weatherForMiles(miles) {
+  const bias = segmentForMiles(miles).weatherBias;
+  if (bias.kind === 'none') return { kind: 'none', intensity: 0 };
   const band = Math.floor((miles || 0) / 150);
   const roll = ((band * 2654435761) >>> 0) % 100; // stable per-band, no randomness
-  if (miles > 1200) return roll < 55 ? { kind: 'snow', intensity: 0.6 } : { kind: 'none', intensity: 0 };
-  if (miles > 600) return roll < 45 ? { kind: 'dust', intensity: 0.5 } : { kind: 'none', intensity: 0 };
-  return roll < 30 ? { kind: 'rain', intensity: 0.5 } : { kind: 'none', intensity: 0 };
+  const lean = 0.6 + bias.intensity;              // 1.0 at the arc's nominal 0.4
+  const hit = (chance) => roll < chance * lean;
+  const strength = (base) => Math.max(0, Math.min(1, base * lean));
+  if (miles > 1200) return hit(55) ? { kind: 'snow', intensity: strength(0.6) } : { kind: 'none', intensity: 0 };
+  if (miles > 600) return hit(45) ? { kind: 'dust', intensity: strength(0.5) } : { kind: 'none', intensity: 0 };
+  return hit(30) ? { kind: 'rain', intensity: strength(0.5) } : { kind: 'none', intensity: 0 };
 }
 
 function tierFromQuery() {
@@ -64,6 +80,91 @@ function tierFromQuery() {
   // Default high on desktop. A real mobile tier + device detect is the DEC-B
   // kill-gate (needs a real device), still open.
   return 'high';
+}
+
+// ── Grade pass (§A8): vignette + film grain + lift/gamma/gain + saturation in
+// ONE fullscreen pass, appended AFTER OutputPass. It therefore runs on the
+// final tone-mapped sRGB image — which is where a colourist grades, and the
+// only place a vignette can darken without ACES clawing the exposure back.
+// uTime is the render loop's own accumulated time (never wall clock), so
+// freezeAt(d) still renders identical pixels every run.
+const GRADE_SHADER = {
+  name: 'GradeShader',
+  uniforms: {
+    tDiffuse:    { value: null },
+    uResolution: { value: new THREE.Vector2(1, 1) },
+    uTime:       { value: 0 },
+    uVignette:   { value: 0.14 },
+    uGrain:      { value: 0.015 },
+    uLift:       { value: new THREE.Vector3(0, 0, 0) },
+    uGain:       { value: new THREE.Vector3(1, 1, 1) },
+    uGamma:      { value: new THREE.Vector3(1, 1, 1) },
+    uSaturation: { value: 1 },
+  },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse;
+    uniform vec2 uResolution;
+    uniform float uTime;
+    uniform float uVignette;
+    uniform float uGrain;
+    uniform vec3 uLift;
+    uniform vec3 uGain;
+    uniform vec3 uGamma;
+    uniform float uSaturation;
+    varying vec2 vUv;
+
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
+    }
+
+    void main() {
+      vec3 color = texture2D(tDiffuse, vUv).rgb;
+
+      vec2 p = vUv * 2.0 - 1.0;
+      color *= clamp(1.0 - dot(p, p) * uVignette, 0.0, 1.0);
+
+      float n = hash(vUv * uResolution + uTime);
+      color += (n - 0.5) * uGrain;
+
+      color = pow(max(color * uGain + uLift, vec3(0.0)), 1.0 / uGamma);
+      float luma = dot(color, vec3(0.299, 0.587, 0.114));
+      color = mix(vec3(luma), color, uSaturation);
+
+      gl_FragColor = vec4(color, 1.0);
+    }`,
+};
+
+// Per-tone-tier grade. Low stays honest (classroom-safe); medium warms slightly;
+// high compresses the value ceiling, pulls saturation down and lifts shadows to
+// a cold blue — the horror-tier look from the research doc's §C2 grading rule.
+const GRADE_TIERS = {
+  low:    { vignette: 0.06, grain: 0.000, lift: [0.000, 0.000, 0.000], gain: [1.00, 1.00, 1.00], gamma: [1.00, 1.00, 1.00], saturation: 1.00 },
+  medium: { vignette: 0.14, grain: 0.015, lift: [0.000, 0.000, 0.000], gain: [1.03, 1.01, 0.96], gamma: [1.00, 1.00, 1.00], saturation: 1.00 },
+  high:   { vignette: 0.30, grain: 0.045, lift: [0.010, 0.014, 0.028], gain: [0.90, 0.93, 0.99], gamma: [0.98, 0.98, 1.00], saturation: 0.55 },
+};
+
+// ── Horror-tier atmosphere (§C3). The shrunken draw distance IS the tension:
+// swap the linear ramp for FogExp2 that goes effectively opaque at HALF the
+// preset's far plane, so the world closes into a near-black cold-blue shell and
+// everything past it stops mattering (a perf win, not a cost — Silent Hill's
+// original reason for doing it). FOG_OPAQUE_AT is the same density→far constant
+// grass.mjs uses in fogCullDistance(), so the grass field re-seeds itself to the
+// halved radius with no plumbing at all (§C9 sparse composition).
+const FOG_OPAQUE_AT = 2.6;
+const HIGH_FOG_SHRINK = 0.5;
+const LINEAR_FOG_HEX = 0xc9ddec; // the exact fog the non-horror tiers restore to
+
+// Hermite ease in [0,1] — matches sky.mjs so the lantern ramp and the sky's own
+// night fade read off the same curve shape.
+function smoothstep01(x) {
+  const c = Math.max(0, Math.min(1, x));
+  return c * c * (3 - 2 * c);
 }
 
 export function initThree(engine) {
@@ -85,7 +186,7 @@ export function initThree(engine) {
 
   const scene = new THREE.Scene();
   scene.background = null; // the sky dome paints every background pixel
-  scene.fog = new THREE.Fog(0xc9ddec, 60, 520);
+  scene.fog = new THREE.Fog(LINEAR_FOG_HEX, 60, 520);
 
   const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 950);
   camera.position.set(6.5, 3.6, 11);
@@ -100,14 +201,54 @@ export function initThree(engine) {
   sun.castShadow = true;
   sun.shadow.mapSize.set(HIGH ? 2048 : 1024, HIGH ? 2048 : 1024);
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 80;
-  const S = 24;
+  sun.shadow.camera.far = 120;
+  // HIGH: wide box covers the ~90u terrain band (2048 map, verified clean by
+  // screenshot). LOW: tighter box keeps 1024-map texels dense enough that thin
+  // geometry (wheel spokes ~0.036u) still resolves.
+  const S = HIGH ? 60 : 40;
   sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
   sun.shadow.camera.top = S; sun.shadow.camera.bottom = -S;
-  sun.shadow.bias = -0.0006;
-  sun.shadow.normalBias = 0.05;
+  sun.shadow.bias = -0.0009;
+  sun.shadow.normalBias = HIGH ? 0.12 : 0.09;
   scene.add(sun);
   scene.add(sun.target);
+
+  // Horror tier only: a cone rigidly mounted to the camera. Once the sun is
+  // crushed to a cold, dim ceiling, this is what reaches anything out toward the
+  // fog wall — the frame stops being a landscape and becomes whatever a beam
+  // happens to find. Warm-sickly amber against cold fog: the tier's one
+  // permitted temperature break.
+  //
+  // decay 0 (NOT physical 2, and not the 1.1 this was first built with) is the
+  // load-bearing choice. Any inverse-power falloff big enough to reach the fog
+  // wall at 60-120u is enormous on the 3-8u of ground directly under the camera,
+  // and it landed as a searchlight puddle that owned the death frame — measured,
+  // then swept. Flat falloff makes the fog the only thing attenuating distance,
+  // which is what "the beam reaches as far as anything can be seen" actually
+  // means. angle 0.50 rather than the 0.35 first specced: 0.35rad ≈ 20°, well
+  // inside the camera's ~33-40° horizontal half-angle, so the cone rim landed as
+  // a visible circle in frame. 0.50 + penumbra 0.85 puts the falloff at the
+  // frame edge, where it reads as the light failing rather than as a lamp.
+  // No shadow map: it would double the shadow cost on the tier already paying
+  // for bloom + grade.
+  //
+  // DREAD_INTENSITY is the DAYLIGHT figure — pose() ramps it to zero as the sun
+  // sets, because the beam's whole point is a light that shouldn't be needed at
+  // noon. After dark the campfire is already the only light and has to stay the
+  // warm anchor the tier subverts; a second source there just bleaches it.
+  // Mounted by setGrade, posed off the camera in pose(), freed in disposeDread.
+  const DREAD_INTENSITY = 2.4;
+  const dread = new THREE.SpotLight(0xe2c98d, DREAD_INTENSITY, 0, 0.50, 0.85, 0);
+  dread.castShadow = false;
+  let dreadOn = false;
+  const _dreadFwd = new THREE.Vector3();
+
+  function setDread(on) {
+    if (on === dreadOn) return;
+    dreadOn = on;
+    if (on) { scene.add(dread); scene.add(dread.target); }
+    else { scene.remove(dread); scene.remove(dread.target); }
+  }
 
   // ── World modules ──
   const terrain = createTerrain({ textures, biome: BIOMES.prairie });
@@ -334,25 +475,67 @@ export function initThree(engine) {
     moving = true;
   }
 
-  const sky = createSky({ cloudTexture: textures.cloudTexture() });
+  const sky = createSky({ cloudTexture: textures.cloudTexture(), lowDetail: !HIGH });
   scene.add(sky.group);
+
+  // ── Mood arc (Phase D): miles → look ──────────────────────────────────────
+  // lib/segments.mjs owns the eight-segment ramp and the cross-fade; this is the
+  // ONLY place the 3D layer reads it, and it hands each role to whichever module
+  // renders that part of the frame:
+  //
+  //   ground / groundAlt → terrain.setBiomeBlend   (the 30%)
+  //   zenith / horizon / accent → sky.setSegmentTint (the 60% + the 10%, and
+  //                                the fog, which follows the tinted horizon)
+  //   far → the backstop disc, so rays that clear a crest land in this
+  //         segment's distance instead of prairie green
+  //
+  // Roles are key NAMES throughout — both modules resolve them against
+  // palette.mjs themselves, so no hex ever appears here.
+  let arcMiles = 0;
+  let arcSegment = segmentForMiles(0);
+  const _farA = new THREE.Color();
+  const _farB = new THREE.Color();
+  const _grassA = new THREE.Color();
+  const _grassB = new THREE.Color();
+
+  function applyArc(miles) {
+    arcMiles = Math.max(0, Number(miles) || 0);
+    const { a, b, t } = segmentBlend(arcMiles);
+    // The quantised half of the terrain blend rewrites vertex heights; grass is
+    // scattered on terrain.heightAt(), so it has to re-seed on the same step or
+    // tufts hang above (or sink into) the new ground.
+    if (terrain.setBiomeBlend(a, b, t)) grass.invalidate();
+    sky.setSegmentTint(a, b, t);
+    _farA.setHex(toHex(a.palette.far));
+    _farB.setHex(toHex(b.palette.far));
+    backstop.material.color.copy(_farA).lerp(_farB, t);
+    // Tufts follow the segment ground chromaticity (0.65 keeps some green life
+    // in every biome — full mix reads as dead AstroTurf on the alkali divide).
+    _grassA.setHex(toHex(a.palette.ground));
+    _grassB.setHex(toHex(b.palette.ground));
+    grass.setTint(_grassA.lerp(_grassB, t), a.biome === 'prairie' && a === b ? 0 : 0.65);
+    arcSegment = t < 0.5 ? a : b;
+  }
 
   // Caravan: stationary group at the trail anchor; forward = -Z.
   const caravan = new THREE.Group();
   scene.add(caravan);
 
-  const wagon = createWagon({ textures });
+  // Inverted-hull outlines (§A10) are a HIGH-tier line item: ~50 extra meshes
+  // across the caravan, ~13% of the travel frame's draw calls. The low tier
+  // exists for GPUs that already can't hold 30fps — it does not pay for ink.
+  const wagon = createWagon({ textures, outline: HIGH });
   wagon.group.rotation.y = -Math.PI / 2; // model forward (-X, tongue) → world -Z
   caravan.add(wagon.group);
 
   // Yoked pair + pole reaching back toward the wagon tongue.
-  const team = createOxTeam();
+  const team = createOxTeam({ outline: HIGH });
   team.group.position.set(0, 0, -3.0);
   caravan.add(team.group);
 
   const walkers = [
-    createPioneer({ hat: 'felt' }),
-    createPioneer({ hat: 'bonnet', dress: true }),
+    createPioneer({ hat: 'felt', outline: HIGH }),
+    createPioneer({ hat: 'bonnet', dress: true, outline: HIGH }),
   ];
   walkers[0].group.position.set(2.0, 0, 1.2);
   walkers[1].group.position.set(-2.4, 0, 3.2);
@@ -371,8 +554,11 @@ export function initThree(engine) {
     caravan.add(s);
   }
 
-  // ── Post: RenderPass → UnrealBloom → OutputPass(ACES). No pmndrs. ──
+  // ── Post: RenderPass → UnrealBloom → OutputPass(ACES) → grade. No pmndrs. ──
   let composer = null;
+  let gradePass = null;
+  let gradeTier = 'medium'; // tone tiers arrive with the run; harness paths get the default
+  const _bufSize = new THREE.Vector2();
   if (HIGH) {
     composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
@@ -380,7 +566,45 @@ export function initThree(engine) {
       new THREE.Vector2(window.innerWidth, window.innerHeight), 0.35, 0.55, 0.85,
     ));
     composer.addPass(new OutputPass());
+    gradePass = new ShaderPass(GRADE_SHADER);
+    composer.addPass(gradePass);
     composer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  // Tone tier → grade uniforms. The storm/death overcast scalar rides on top in
+  // pose(), so a dust storm or a graveside frame gets a touch more falloff and
+  // grain than the same tier does in clear weather.
+  // Install the fog model the current tier wants. The horror tier's exponential
+  // wall and the other tiers' linear ramp are different THREE objects, so this
+  // swaps rather than reconfigures — three re-links fogged materials on its own
+  // (WebGLRenderer.setProgram: `material.fog === true && materialProperties.fog
+  // !== fog`), and it only fires on an actual tier flip, not per frame. pose()
+  // owns the per-frame density/near/far under whichever model is mounted.
+  function syncFog() {
+    const wantExp2 = gradeTier === 'high';
+    if (wantExp2 === !!scene.fog.isFogExp2) return;
+    scene.fog = wantExp2
+      ? new THREE.FogExp2(HIGH_TONE_FOG, FOG_OPAQUE_AT / Math.max(baseFogFar * HIGH_FOG_SHRINK, 1))
+      : new THREE.Fog(LINEAR_FOG_HEX, baseFogNear, baseFogFar);
+  }
+
+  function setGrade(tier) {
+    gradeTier = tier in GRADE_TIERS ? tier : 'medium';
+    // The tier is one look, not three independent knobs: the grade pass, the
+    // sky/fog palette clamp, the fog model and the camera spot all move together
+    // or the horror tier reads as "someone turned the brightness down".
+    sky.setTone(gradeTier);
+    setDread(gradeTier === 'high');
+    syncFog();
+    if (!gradePass) return;
+    const g = GRADE_TIERS[gradeTier];
+    const u = gradePass.uniforms;
+    u.uLift.value.set(...g.lift);
+    u.uGain.value.set(...g.gain);
+    u.uGamma.value.set(...g.gamma);
+    u.uSaturation.value = g.saturation;
+    u.uVignette.value = g.vignette;
+    u.uGrain.value = g.grain;
   }
 
   function resize() {
@@ -388,8 +612,12 @@ export function initThree(engine) {
     camera.aspect = w / h; camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     if (composer) composer.setSize(w, h);
+    // Grain is hashed per DEVICE pixel, so the grade pass wants the drawing
+    // buffer size, not the CSS size (pixelRatio is up to 1.75 on this tier).
+    if (gradePass) gradePass.uniforms.uResolution.value.copy(renderer.getDrawingBufferSize(_bufSize));
     vfx.setViewport(h, camera.fov);
   }
+  if (gradePass) gradePass.uniforms.uResolution.value.copy(renderer.getDrawingBufferSize(_bufSize));
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', resize);
 
@@ -476,7 +704,10 @@ export function initThree(engine) {
     camera.updateProjectionMatrix();
     baseFogNear = p.fog[0];
     baseFogFar = p.fog[1];
-    wagon.lantern.material.emissiveIntensity = p.lantern;
+    // The preset's lantern value is the scene's LIT intensity (the camp wants a
+    // hotter lamp than a dusk trail); pose() decides how lit it actually is from
+    // the sun's elevation, then scales by this gain.
+    lanternGain = p.lantern / (PRESETS.travel.lantern || 1);
     audio.setScene(AUDIO_SCENE[name] || 'travel');
     audio.setMoving(moving);
     pose(scrollZ); // re-light + re-pose under the new preset immediately
@@ -489,6 +720,16 @@ export function initThree(engine) {
   let visible = false;
   let baseFogNear = 50;
   let baseFogFar = 240;
+  let lanternGain = 1;
+
+  // Deferred until now on purpose: setGrade → syncFog reads baseFogNear/Far, and
+  // those are `let`s declared above this line. Calling it up beside the composer
+  // build would hit their temporal dead zone. Nothing renders in between.
+  setGrade(gradeTier);
+  // Seat the arc at mile 0 before the first pose. arc_prairie is the identity
+  // segment in both modules (terrain tintMix 0, sky strength 0), so the boot
+  // frame is the exact pre-arc frame — the regression baseline.
+  applyArc(0);
 
   function pose(d) {
     terrain.update(0, d);
@@ -506,31 +747,72 @@ export function initThree(engine) {
     let ovTint = OVERCAST_TINT[weatherKind];
     if (death) { ov = Math.max(ov, 0.6); ovTint = DEATH_GREY; }
     sky.setOvercast(ov, ovTint);
-    sky.update(0, todT, camera.position);
+    // scrollZ drives the ridge/hill silhouette rings' parallax drift, so the
+    // horizon slides at a fraction of the foreground's speed instead of being
+    // painted on. Same d as setPhase — one motion clock for the whole world.
+    sky.update(0, todT, camera.position, d);
     sky.applyTo({ sun, hemi, scene }, todT);
+    const sunDir = sky.sunDirAt(todT);
+    // Lantern rides the sun (§A7): dead glass while the sun is up, burning from
+    // dusk through night. Ramps in as the sun drops through ~16° of elevation.
+    const duskness = 1 - smoothstep01((sunDir.y - 0.02) / 0.26);
+    wagon.setLantern(duskness);
+    wagon.lantern.material.emissiveIntensity *= lanternGain;
     // Weather pulls fog in (denser air). A dust storm collapses visibility to a
     // tan murk — that loss of distance IS the storm — so it gets a hard tight
     // fog, not a proportional pull.
+    let fogNear, fogFar;
     if (weatherKind === 'dust') {
-      scene.fog.near = baseFogNear + (8 - baseFogNear) * weatherIntensity;
-      scene.fog.far = baseFogFar + (46 - baseFogFar) * weatherIntensity;
+      fogNear = baseFogNear + (8 - baseFogNear) * weatherIntensity;
+      fogFar = baseFogFar + (46 - baseFogFar) * weatherIntensity;
     } else {
       const fogPull = weatherIntensity * 0.55;
-      scene.fog.near = baseFogNear * (1 - fogPull * 0.6);
-      scene.fog.far = baseFogFar * (1 - fogPull * 0.7);
+      fogNear = baseFogNear * (1 - fogPull * 0.6);
+      fogFar = baseFogFar * (1 - fogPull * 0.7);
+    }
+    // The horror tier spends that same weather-adjusted far on an exponential
+    // wall at half the distance instead of a linear ramp — so a dust storm still
+    // collapses visibility, on top of the tier's own shrink, from one number.
+    if (scene.fog.isFogExp2) {
+      scene.fog.density = FOG_OPAQUE_AT / Math.max(fogFar * HIGH_FOG_SHRINK, 1);
+    } else {
+      scene.fog.near = fogNear;
+      scene.fog.far = fogFar;
     }
     // Re-anchor the sun close to the caravan so the ortho shadow frustum
-    // (near 1 / far 80) actually contains the world — sky.applyTo parks it
+    // (near 1 / far 120) actually contains the world — sky.applyTo parks it
     // 200u out on the sun arc, far outside the shadow camera.
-    sun.position.copy(sky.sunDirAt(todT)).multiplyScalar(34);
+    sun.position.copy(sunDir).multiplyScalar(34);
     sun.target.position.set(0, 0, 0);
+    // Rig the dread cone to the camera from the camera's own quaternion rather
+    // than parenting it: the camera is never added to the scene graph (RenderPass
+    // takes it directly), so a child light would never be collected. Pure
+    // function of the preset's framing + duskness, so freezeAt stays pixel-stable.
+    if (dreadOn) {
+      _dreadFwd.set(0, 0, -1).applyQuaternion(camera.quaternion);
+      dread.position.copy(camera.position);
+      dread.target.position.copy(camera.position).addScaledVector(_dreadFwd, 40);
+      // Rides the same duskness ramp as the lantern, inverted — as the lantern
+      // lights, the beam goes out.
+      dread.intensity = DREAD_INTENSITY * (1 - duskness);
+    }
     if (river) {
       river.water.update(0, fxTime);
-      river.water.setSun(sky.sunDirAt(todT), sun.color);
+      river.water.setSun(sunDir, sun.color);
       river.water.setSky(scene.fog.color);
     }
     if (camp) camp.fire.setPhase(fxTime);
     if (hunting) for (const { a, phase } of hunting.animals) a.setPhase(fxTime * 0.4 + phase);
+    if (gradePass) {
+      const g = GRADE_TIERS[gradeTier];
+      const u = gradePass.uniforms;
+      // The loop's own clock, never wall clock — freezeAt pins it to d. Wrapped
+      // so a long session can't grow the hash input past float precision and
+      // freeze the grain into a static pattern.
+      u.uTime.value = fxTime % 100;
+      u.uVignette.value = g.vignette + 0.10 * ov;
+      u.uGrain.value = g.grain + 0.02 * ov;
+    }
   }
 
   // renderer.info auto-resets on every internal render() call, and the composer
@@ -565,11 +847,32 @@ export function initThree(engine) {
   let rafId = 0; // last requestAnimationFrame handle (for cancelAnimationFrame)
   let downgraded = false; // one-shot guard on downgrade()
 
+  // Frees only what the post chain owns (the grade pass material + quad).
+  // Scene geometry/materials/renderer survive downgrade() — accepted: the
+  // hidden canvas stops rendering, and a full renderer teardown here risks
+  // more than the memory it returns.
+  function disposePost() {
+    if (!gradePass) return;
+    if (composer) composer.removePass(gradePass);
+    gradePass.dispose();
+    gradePass = null;
+  }
+
+  // The dread spot is the only light this file mounts after init, so it needs an
+  // explicit exit alongside the post chain — unmount it AND drop its shadow
+  // resources, or a downgrade leaves a live light attached to a dead loop.
+  function disposeDread() {
+    setDread(false);
+    dread.dispose();
+  }
+
   function downgrade() {
     if (downgraded) return;
     downgraded = true;
     killed = true; // frame() early-returns AND stops re-scheduling
     if (rafId) cancelAnimationFrame(rafId);
+    disposePost();
+    disposeDread();
     api.hide(); // free the GPU canvas; the 2D Kaplay layer keeps running under it
     setRenderMode('2d'); // next load won't re-init 3D (render-mode.mjs try/catches)
     console.warn(
@@ -636,6 +939,15 @@ export function initThree(engine) {
     hide() { visible = false; canvas.style.display = 'none'; frozen = false; },
     setMoving(m) { moving = !!m; audio.setMoving(moving); },
     setWeather,
+    setGrade,
+    get grade() { return gradeTier; },
+    // Drive the mood arc directly, for the screenshot harness and for probes
+    // that want a mile marker without forging a signed GameState. Pure: same
+    // miles + same preset → same pixels.
+    setMiles(m) { applyArc(m); pose(scrollZ); },
+    get segment() {
+      return { id: arcSegment.id, biome: arcSegment.biome, name: arcSegment.name, miles: arcMiles };
+    },
     // Read-only view of the active weather so tests (Builder D) can observe what
     // the state→3D bridge set. Mirrors the closure vars setWeather writes.
     get weather() { return { kind: weatherKind, intensity: weatherIntensity }; },
@@ -679,8 +991,23 @@ export function initThree(engine) {
   // state, never calls the API. Non-world states hide the canvas (the 2D event/
   // menu UI shows over the body background) — overlay cohesion is a later pass.
   if (engine && engine.on) {
+    // The run's tone tier lives at GameState.settings.tone_tier (worker/src/
+    // types.ts Settings). engine.tone is the accessor the 2D scenes read, kept
+    // last in the chain as the fallback; medium when there is no run at all
+    // (harness and test paths mount the world with no signed state).
+    const toneTier = () => {
+      const gs = engine.gameState;
+      return (gs && gs.settings && gs.settings.tone_tier)
+        || (gs && gs.simulation && gs.simulation.tone_tier)
+        || engine.tone
+        || 'medium';
+    };
     const applyState = (to, data) => {
       if (!WORLD_STATES.has(to)) { api.hide(); return; }
+      setGrade(toneTier());
+      // Before the preset: preset() poses immediately, and pose() reads the
+      // terrain biome and sky tint this call installs.
+      applyArc(engine.milesTraveled);
       switch (to) {
         case 'TRAVEL':
           api.setMoving(true);
@@ -731,6 +1058,15 @@ export function initThree(engine) {
       api.show();
     };
     engine.on('stateChange', ({ to, data }) => applyState(to, data));
+    // stateChange is NOT enough for the mood arc. engine.transition() only fires
+    // when a day's advance produced a trigger; the routine case (`default:` in
+    // the advance handler) just schedules the next advance, so a party can cover
+    // hundreds of miles without one — and the arc would sit frozen on whichever
+    // segment the last landmark happened to be in. `daysAdvanced` fires on every
+    // advance, triggered or not, which is the clock miles actually move on.
+    // No pose() here: the render loop already poses every visible frame, and a
+    // hidden or frozen world re-poses on its next preset().
+    engine.on('daysAdvanced', () => applyArc(engine.milesTraveled));
   }
 
   window.__three = api;
