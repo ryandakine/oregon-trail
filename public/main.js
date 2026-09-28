@@ -1,6 +1,7 @@
 // Error capture — must run before kaplay loads so early errors are caught.
 import { shouldInit3D, getRenderMode, isDesktopPointer } from "./render-mode.mjs";
 import { createHorrorFx } from "./lib/horror-fx.mjs";
+import { createTrailAudio } from "./lib/audio.mjs";
 
 window.__ERRORS = [];
 window.addEventListener("error", (e) => window.__ERRORS.push({ msg: e.message, src: e.filename, line: e.lineno }));
@@ -81,6 +82,28 @@ if (canvas) {
 
 const engine = window.engine;
 
+// ── Procedural WebAudio Layer (Phase 1) ───────────────────────────────────
+// Liberated from the 3D-only desktop silo so ambient soundscapes play across
+// 100% of platforms (mobile + 2D + 3D). Lazy AudioContext starts on first gesture.
+const audio = createTrailAudio();
+window.audio = audio;
+
+for (const ev of ["pointerdown", "keydown", "touchstart"]) {
+  window.addEventListener(ev, () => audio.start(), { once: true });
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) audio.suspend();
+  else audio.resume();
+});
+
+// Global keyboard shortcut: M to toggle mute (ignoring focused text inputs)
+window.addEventListener("keydown", (e) => {
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+  if (e.key === "m" || e.key === "M") {
+    audio.toggleMute();
+  }
+});
+
 // ── "Written live by Claude" loading overlay (IMPROVEMENT_ROADMAP §1.5) ──
 // engine.emit('loading', true|false) fires around every ~8s LLM call. Without
 // a subscriber the wait reads as a hang on the exact feature being demoed.
@@ -115,6 +138,24 @@ engine.on("error", () => { aiLoadingEl.style.display = "none"; });
 // Register stateChange bridge BEFORE engine.init() — critical:
 // init() fires transition('TITLE') synchronously, so bridge must exist first
 engine.on("stateChange", ({ from, to, data }) => {
+  // Drive procedural audio scene and movement
+  audio.setMoving(to === "TRAVEL");
+  switch (to) {
+    case "TRAVEL": audio.setScene("travel"); break;
+    case "RIVER": audio.setScene("river"); break;
+    case "LANDMARK": {
+      const lmType = data?.type || engine.currentLandmark?.type;
+      audio.setScene(lmType === "fort" ? "fort" : "camp");
+      break;
+    }
+    case "HUNTING": audio.setScene("hunting"); break;
+    case "ARRIVAL": audio.setScene("arrival"); break;
+    case "EVENT":
+    case "BITTER_PATH": audio.sting("event"); break;
+    case "DEATH":
+    case "WIPE": audio.sting("death"); break;
+  }
+
   const sceneMap = {
     TITLE: "title",
     PROFESSION: "profession",

@@ -176,4 +176,27 @@ describe("sendTelegram — delivery failures are no longer swallowed silently", 
     expect(telegramCalls()).toHaveLength(0);
     expect(errorSpy).toHaveBeenCalledWith("canary_alert_unsent", expect.any(String));
   });
+
+  it("failed Telegram delivery does not silence the canary on subsequent runs", async () => {
+    let callCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        callCount++;
+        if (callCount === 1) {
+          return new Response('{"ok":false,"description":"Unauthorized"}', { status: 401 });
+        }
+        return new Response('{"ok":true,"result":{}}', { status: 200 });
+      }),
+    );
+    mockedCallAnthropic.mockRejectedValue(LOW_CREDIT_ERROR);
+
+    // Run 1: Telegram rejected
+    await runCanary(env);
+    expect(callCount).toBe(1);
+
+    // Run 2: Retries without waiting 6 hours
+    await runCanary(env);
+    expect(callCount).toBe(2);
+  });
 });

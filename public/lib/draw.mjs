@@ -107,6 +107,12 @@ export function addHighlights(k, cx, cy, w, h, count, color, seed) {
   }
 }
 
+export function getDayPhase(dateStr) {
+  if (!dateStr) return "day";
+  const d = new Date(dateStr + "T00:00:00");
+  return ["dawn", "day", "day", "dusk"][d.getDate() % 4];
+}
+
 export function drawSky(k, tone, dayPhase, opts = {}) {
   const phaseMap = {
     dawn:  { top: PALETTE.skyDawn,  horizon: PALETTE.skyPale,        cloudOp: 0.9, celestial: "sun",  cx: 130, cy: 150, r: 14 },
@@ -117,34 +123,39 @@ export function drawSky(k, tone, dayPhase, opts = {}) {
   // Segment ramp first, high-tier crush on top of it. The day phase keeps the
   // light (sun/moon position, cloud opacity); the segment owns the dome, and
   // horizon stays the pure segment color so it still matches the 3D fog.
-  const seg = opts.segment;
-  const segTop = segmentColor(seg, "zenith");
-  const segHorizon = segmentColor(seg, "horizon");
-  const base = phaseMap[dayPhase] ?? phaseMap.day;
-  const phase = (tone === "high")
-    ? {
-        top: segTop ? mixColor(segTop, PALETTE.skyTwilight, HIGH_CRUSH) : PALETTE.skyTwilight,
-        horizon: segHorizon ? mixColor(segHorizon, PALETTE.skyTwilightHorizon, HIGH_CRUSH) : PALETTE.skyTwilightHorizon,
-        cloudOp: 0.5,
-        celestial: null,
-      }
-    : { ...base, top: segTop ?? base.top, horizon: segHorizon ?? base.horizon };
+  const computePhase = (curDayPhase, curSeg) => {
+    const segTop = segmentColor(curSeg, "zenith");
+    const segHorizon = segmentColor(curSeg, "horizon");
+    const base = phaseMap[curDayPhase] ?? phaseMap.day;
+    return (tone === "high")
+      ? {
+          top: segTop ? mixColor(segTop, PALETTE.skyTwilight, HIGH_CRUSH) : PALETTE.skyTwilight,
+          horizon: segHorizon ? mixColor(segHorizon, PALETTE.skyTwilightHorizon, HIGH_CRUSH) : PALETTE.skyTwilightHorizon,
+          cloudOp: 0.5,
+          celestial: null,
+        }
+      : { ...base, top: segTop ?? base.top, horizon: segHorizon ?? base.horizon };
+  };
+
+  let phase = computePhase(dayPhase, opts.segment);
 
   // Stepped gradient: 16 horizontal bands top→horizon, then a soft blend
   // strip. (Was 4×45px bands with visible seams — mixColor lerp is near-free.)
   const BANDS = 16;
   const bandH = 180 / BANDS;
+  const bandObjs = [];
   for (let i = 0; i < BANDS; i++) {
     const col = mixColor(phase.top, phase.horizon, i / (BANDS - 1));
-    k.add([k.rect(640, bandH + 0.5), k.pos(0, i * bandH), k.color(...col)]);
+    bandObjs.push(k.add([k.rect(640, bandH + 0.5), k.pos(0, i * bandH), k.color(...col)]));
   }
-  k.add([k.rect(640, 40), k.pos(0, 180), k.color(...phase.horizon), k.opacity(0.7)]);
+  const horizonRect = k.add([k.rect(640, 40), k.pos(0, 180), k.color(...phase.horizon), k.opacity(0.7)]);
+  let horrorAccentRect = null;
   if (tone === "high") {
     // Sickly green-yellow horizon accent (AESTHETIC_SPEC § 3 horror shift) —
     // or, under a segment, that segment's single accent, which is the one
     // saturated hue the crush is allowed to leave standing.
-    const accent = segmentColor(seg, "accent");
-    k.add([k.rect(640, 18), k.pos(0, 196), k.color(...(accent ?? PALETTE.sicklyHorizon)), k.opacity(accent ? 0.2 : 0.14)]);
+    const accent = segmentColor(opts.segment, "accent");
+    horrorAccentRect = k.add([k.rect(640, 18), k.pos(0, 196), k.color(...(accent ?? PALETTE.sicklyHorizon)), k.opacity(accent ? 0.2 : 0.14)]);
   }
 
   // Sun disc with concentric glow rings, or moon at night. None for high (bleak).
@@ -164,7 +175,29 @@ export function drawSky(k, tone, dayPhase, opts = {}) {
   for (const [cx, cy, s] of [[80, 62, 1.0], [280, 48, 0.8], [460, 72, 1.1], [580, 38, 0.7]]) {
     clouds.push(drawCloud(k, cx, cy, s, phase.cloudOp));
   }
-  return { clouds, celestial };
+
+  const update = (newDayPhase, newOpts = {}) => {
+    const curSeg = newOpts.segment ?? opts.segment;
+    phase = computePhase(newDayPhase ?? dayPhase, curSeg);
+    for (let i = 0; i < BANDS; i++) {
+      const col = mixColor(phase.top, phase.horizon, i / (BANDS - 1));
+      bandObjs[i].color = k.rgb(...col);
+    }
+    horizonRect.color = k.rgb(...phase.horizon);
+    if (horrorAccentRect) {
+      const accent = segmentColor(curSeg, "accent");
+      horrorAccentRect.color = k.rgb(...(accent ?? PALETTE.sicklyHorizon));
+    }
+    if (celestial && phase.celestial) {
+      celestial.pos.x = phase.cx;
+      celestial.pos.y = phase.cy;
+    }
+    for (const c of clouds) {
+      c.opacity = phase.cloudOp;
+    }
+  };
+
+  return { clouds, celestial, update };
 }
 
 export function drawCloud(k, cx, cy, scale = 1, opacity = 0.9, opts = {}) {
@@ -195,85 +228,177 @@ export function drawMountains(k, opts = {}) {
   // lean into the horizon (atmospheric perspective), the near ones step down
   // toward the shared warm dark, and the caps lean back toward `far` so they
   // read as sunlit rock on the desert and as snow on the divide.
-  const far = segmentColor(opts.segment, "far");
-  const horizon = segmentColor(opts.segment, "horizon");
-  const hazeCol  = far ? mixColor(far, horizon ?? far, 0.45)   : PALETTE.mountainHaze;
-  const peakFar  = far ?? PALETTE.mountainFar;
-  const peakMid  = far ? mixColor(far, PALETTE.outline, 0.12)  : PALETTE.mountainMid;
-  const peakDk   = far ? mixColor(far, PALETTE.outline, 0.30)  : PALETTE.mountainDk;
-  const shadeCol = far ? mixColor(far, PALETTE.outline, 0.45)  : PALETTE.mountainShade;
-  const capCol   = far ? mixColor(PALETTE.snow, far, 0.45)     : PALETTE.snow;
+  const calcCols = (seg) => {
+    const far = segmentColor(seg, "far");
+    const horizon = segmentColor(seg, "horizon");
+    return {
+      hazeCol:  far ? mixColor(far, horizon ?? far, 0.45)   : PALETTE.mountainHaze,
+      peakFar:  far ?? PALETTE.mountainFar,
+      peakMid:  far ? mixColor(far, PALETTE.outline, 0.12)  : PALETTE.mountainMid,
+      peakDk:   far ? mixColor(far, PALETTE.outline, 0.30)  : PALETTE.mountainDk,
+      shadeCol: far ? mixColor(far, PALETTE.outline, 0.45)  : PALETTE.mountainShade,
+      capCol:   far ? mixColor(PALETTE.snow, far, 0.45)     : PALETTE.snow,
+    };
+  };
+
+  let cols = calcCols(opts.segment);
+  const farPeakObjs = [];
+  const nearMtnObjs = [];
 
   // Far range — hazy, no outline, lighter (atmospheric perspective).
-  const farPeak = (cx, w, h) => k.add([
-    k.polygon([
-      k.vec2(-w/2, 0), k.vec2(-w/5, -h), k.vec2(-w/16, -h*0.6),
-      k.vec2(w/6, -h*0.85), k.vec2(w/3, -h*0.45), k.vec2(w/2, 0),
-    ]),
-    k.pos(cx, 228), k.color(...hazeCol), k.opacity(0.8),
-  ]);
+  const farPeak = (cx, w, h) => {
+    const obj = k.add([
+      k.polygon([
+        k.vec2(-w/2, 0), k.vec2(-w/5, -h), k.vec2(-w/16, -h*0.6),
+        k.vec2(w/6, -h*0.85), k.vec2(w/3, -h*0.45), k.vec2(w/2, 0),
+      ]),
+      k.pos(cx, 228), k.color(...cols.hazeCol), k.opacity(0.8),
+    ]);
+    farPeakObjs.push(obj);
+    return obj;
+  };
   farPeak(80, 300, 52);
   farPeak(310, 340, 64);
   farPeak(540, 300, 46);
 
   // Near range — darker, ridge-shade facets on the right (shadow) side,
   // snow caps on the tallest peaks.
-  const mtn = (cx, cy, w, h, col, snow) => {
-    k.add([
+  const mtn = (cx, cy, w, h, colKey, snow) => {
+    const body = k.add([
       k.polygon([
         k.vec2(-w/2, 0), k.vec2(-w/4, -h*0.8), k.vec2(-w/8, -h*0.6),
         k.vec2(0, -h),   k.vec2(w/6, -h*0.7),  k.vec2(w/3, -h*0.4),
         k.vec2(w/2, 0),
       ]),
-      k.pos(cx, cy), k.color(...col), k.outline(2, k.rgb(...PALETTE.outline)),
+      k.pos(cx, cy), k.color(...cols[colKey]), k.outline(2, k.rgb(...PALETTE.outline)),
     ]);
     // Shadow facet hugging the right profile from summit to base.
-    k.add([
+    const facet1 = k.add([
       k.polygon([
         k.vec2(0, -h), k.vec2(w/6, -h*0.7), k.vec2(w/3, -h*0.4),
         k.vec2(w/2, 0), k.vec2(w/7, 0),
       ]),
-      k.pos(cx, cy), k.color(...shadeCol), k.opacity(0.5),
+      k.pos(cx, cy), k.color(...cols.shadeCol), k.opacity(0.5),
     ]);
     // Small secondary facet under the left shoulder.
-    k.add([
+    const facet2 = k.add([
       k.polygon([
         k.vec2(-w/4, -h*0.8), k.vec2(-w/8, -h*0.6), k.vec2(-w/9, -h*0.3), k.vec2(-w/4, -h*0.35),
       ]),
-      k.pos(cx, cy), k.color(...shadeCol), k.opacity(0.28),
+      k.pos(cx, cy), k.color(...cols.shadeCol), k.opacity(0.28),
     ]);
+    let cap = null;
     if (snow) {
-      k.add([
+      cap = k.add([
         k.polygon([
           k.vec2(-w/12, -h*0.76), k.vec2(-w/24, -h*0.82), k.vec2(0, -h),
           k.vec2(w/14, -h*0.78), k.vec2(w/24, -h*0.72), k.vec2(-w/28, -h*0.74),
         ]),
-        k.pos(cx, cy), k.color(...capCol), k.opacity(0.95),
+        k.pos(cx, cy), k.color(...cols.capCol), k.opacity(0.95),
       ]);
     }
+    nearMtnObjs.push({ body, colKey, facet1, facet2, cap });
   };
-  mtn(150, 230, 280, 70, peakFar, true);
-  mtn(420, 230, 320, 55, peakMid, false);
-  mtn(320, 230, 180, 90, peakDk, true);
+  mtn(150, 230, 280, 70, "peakFar", true);
+  mtn(420, 230, 320, 55, "peakMid", false);
+  mtn(320, 230, 180, 90, "peakDk", true);
+
+  const update = (newOpts = {}) => {
+    cols = calcCols(newOpts.segment ?? opts.segment);
+    for (const obj of farPeakObjs) {
+      obj.color = k.rgb(...cols.hazeCol);
+    }
+    for (const item of nearMtnObjs) {
+      item.body.color = k.rgb(...cols[item.colKey]);
+      item.facet1.color = k.rgb(...cols.shadeCol);
+      item.facet2.color = k.rgb(...cols.shadeCol);
+      if (item.cap) item.cap.color = k.rgb(...cols.capCol);
+    }
+  };
+
+  return { update };
+}
+
+export function drawGodRays(k, dayPhase, tone, opts = {}) {
+  if (tone === "high") return null;
+  if (dayPhase !== "dawn" && dayPhase !== "dusk") return null;
+
+  const color = dayPhase === "dawn" ? PALETTE.sunGlow : PALETTE.skyDusk;
+  const target = opts.parent ?? k;
+  const rays = [];
+
+  // Three angled polygon beams cascading down from the sky toward the prairie.
+  // Polygons originate at y=0..40 and fan out down to y=260..300.
+  // Subtle opacities (0.04..0.06) provide an ink-and-paint crepuscular ray feel.
+  const beamCoords = [
+    [
+      k.vec2(60, 0),
+      k.vec2(150, 0),
+      k.vec2(280, 270),
+      k.vec2(180, 270),
+    ],
+    [
+      k.vec2(210, 0),
+      k.vec2(330, 0),
+      k.vec2(490, 270),
+      k.vec2(360, 270),
+    ],
+    [
+      k.vec2(380, 0),
+      k.vec2(480, 0),
+      k.vec2(630, 270),
+      k.vec2(520, 270),
+    ],
+  ];
+
+  const opacities = [0.045, 0.055, 0.040];
+
+  beamCoords.forEach((pts, i) => {
+    const baseOp = opacities[i];
+    const ray = target.add([
+      k.polygon(pts),
+      k.pos(0, 0),
+      k.color(...color),
+      k.opacity(baseOp),
+      ...(opts.z != null ? [k.z(opts.z)] : []),
+      "vfx-ambient",
+      "vfx-god-ray",
+    ]);
+
+    if ((opts.animate ?? true) && (opts.motionOk ?? true)) {
+      const phase = i * 1.5;
+      ray.onUpdate(() => {
+        if (opts.isPaused?.()) return;
+        ray.opacity = baseOp * (0.82 + 0.18 * Math.sin(k.time() * 0.8 + phase));
+      });
+    }
+
+    rays.push(ray);
+  });
+
+  return rays;
 }
 
 export function drawHills(k, opts = {}) {
   // Hills sit between the mountains and the meadow, so they interpolate the
   // segment the same way: backing ridge on `far`, mid ridges halfway to
   // `ground`, front ridges on `groundAlt`.
-  const far = segmentColor(opts.segment, "far");
-  const ground = segmentColor(opts.segment, "ground");
-  const groundAlt = segmentColor(opts.segment, "groundAlt");
-  const backingCol  = far ?? PALETTE.hillMid;
-  const ridgeFarCol = far && ground ? mixColor(far, ground, 0.45) : PALETTE.grassDeep;
-  // Pulled a third of the way back to `ground`: on segments where groundAlt is
-  // the dark mass (basalt, conifer) an untempered ridge reads as a black bar
-  // laid across the horizon rather than as rimrock.
-  const ridgeNearCol = groundAlt && ground ? mixColor(groundAlt, ground, 0.3) : PALETTE.grassLight;
+  const calcCols = (seg) => {
+    const far = segmentColor(seg, "far");
+    const ground = segmentColor(seg, "ground");
+    const groundAlt = segmentColor(seg, "groundAlt");
+    return {
+      backingCol:  far ?? PALETTE.hillMid,
+      ridgeFarCol: far && ground ? mixColor(far, ground, 0.45) : PALETTE.grassDeep,
+      ridgeNearCol: groundAlt && ground ? mixColor(groundAlt, ground, 0.3) : PALETTE.grassLight,
+    };
+  };
+
+  let cols = calcCols(opts.segment);
 
   // Continuous backing ridge so gaps between drifting hills never leak the
   // page background (visible as dark notches in the v2 renderer).
-  k.add([k.rect(640, 40), k.pos(0, 222), k.color(...backingCol)]);
+  const backing = k.add([k.rect(640, 40), k.pos(0, 222), k.color(...cols.backingCol)]);
 
   // Soft rounded ridges, no hard outline (atmospheric, golf-course register).
   // Rolling tonal variation: three greens across the two parallax bands.
@@ -283,15 +408,23 @@ export function drawHills(k, opts = {}) {
     k.color(...col),
   ]);
   const farRidges = [
-    roundedHill(120, 261, 240, 34, ridgeFarCol),
-    roundedHill(380, 261, 280, 40, ridgeFarCol),
-    roundedHill(620, 262, 200, 26, ridgeFarCol),
+    roundedHill(120, 261, 240, 34, cols.ridgeFarCol),
+    roundedHill(380, 261, 280, 40, cols.ridgeFarCol),
+    roundedHill(620, 262, 200, 26, cols.ridgeFarCol),
   ];
   const near = [
-    roundedHill(240, 263, 190, 18, ridgeNearCol),
-    roundedHill(580, 262, 220, 26, ridgeNearCol),
+    roundedHill(240, 263, 190, 18, cols.ridgeNearCol),
+    roundedHill(580, 262, 220, 26, cols.ridgeNearCol),
   ];
-  return { far: farRidges, near };
+
+  const update = (newOpts = {}) => {
+    cols = calcCols(newOpts.segment ?? opts.segment);
+    backing.color = k.rgb(...cols.backingCol);
+    for (const r of farRidges) r.color = k.rgb(...cols.ridgeFarCol);
+    for (const r of near) r.color = k.rgb(...cols.ridgeNearCol);
+  };
+
+  return { far: farRidges, near, update };
 }
 
 // Trail trapezoid geometry (shared by drawGround scatter + drawTrail).
@@ -307,23 +440,29 @@ export function drawGround(k, opts = {}) {
   // The 30% of the budget. Patch darks and tuft blades are pulled off `ground`
   // toward the shared warm dark rather than given hues of their own, so the
   // only saturated color down here is the segment's one accent on the flowers.
-  const ground = segmentColor(opts.segment, "ground");
-  const groundAlt = segmentColor(opts.segment, "groundAlt");
-  const accent = segmentColor(opts.segment, "accent");
-  const baseCol   = ground ?? PALETTE.grassMid;
-  const seamFar   = segmentColor(opts.segment, "far") ?? PALETTE.hillMid;
-  const seamNear  = groundAlt ?? PALETTE.grassLight;
-  const patchLite = groundAlt ?? PALETTE.grassLight;
-  const patchDark = ground ? mixColor(ground, PALETTE.outline, 0.28) : PALETTE.grassDeep;
-  const tuftCol   = ground ? mixColor(ground, PALETTE.outline, 0.4)  : PALETTE.grassBorder;
-  const dotWarm   = accent ?? PALETTE.flowerGold;
-  const dotPale   = accent ? mixColor(accent, PALETTE.cloud, 0.55)   : PALETTE.flowerCream;
+  const calcCols = (seg) => {
+    const ground = segmentColor(seg, "ground");
+    const groundAlt = segmentColor(seg, "groundAlt");
+    const accent = segmentColor(seg, "accent");
+    return {
+      baseCol:   ground ?? PALETTE.grassMid,
+      seamFar:   segmentColor(seg, "far") ?? PALETTE.hillMid,
+      seamNear:  groundAlt ?? PALETTE.grassLight,
+      patchLite: groundAlt ?? PALETTE.grassLight,
+      patchDark: ground ? mixColor(ground, PALETTE.outline, 0.28) : PALETTE.grassDeep,
+      tuftCol:   ground ? mixColor(ground, PALETTE.outline, 0.4)  : PALETTE.grassBorder,
+      dotWarm:   accent ?? PALETTE.flowerGold,
+      dotPale:   accent ? mixColor(accent, PALETTE.cloud, 0.55)   : PALETTE.flowerCream,
+    };
+  };
 
-  k.add([k.rect(640, 220), k.pos(0, 260), k.color(...baseCol)]);
+  let cols = calcCols(opts.segment);
+
+  const baseRect = k.add([k.rect(640, 220), k.pos(0, 260), k.color(...cols.baseCol)]);
 
   // Soft horizon blend — kills the hard hills/ground seam.
-  k.add([k.rect(640, 8), k.pos(0, 256), k.color(...seamFar),  k.opacity(0.55)]);
-  k.add([k.rect(640, 5), k.pos(0, 262), k.color(...seamNear), k.opacity(0.3)]);
+  const seamFarRect = k.add([k.rect(640, 8), k.pos(0, 256), k.color(...cols.seamFar),  k.opacity(0.55)]);
+  const seamNearRect = k.add([k.rect(640, 5), k.pos(0, 262), k.color(...cols.seamNear), k.opacity(0.3)]);
 
   const rng = mulberry32(seedFrom(640, 260));
   const onTrail = (x, y, pad) => {
@@ -332,29 +471,35 @@ export function drawGround(k, opts = {}) {
   };
 
   // Subtle 2-tone meadow texture: irregular seeded patches, low contrast.
+  const patchObjs = [];
   let placed = 0;
   while (placed < 16) {
     const x = rng() * 640, y = 268 + rng() * 205;
     const w = 36 + rng() * 70, h = 9 + rng() * 13;
-    const col = rng() < 0.5 ? patchLite : patchDark;
+    const isLite = rng() < 0.5;
+    const col = isLite ? cols.patchLite : cols.patchDark;
     const op = 0.22 + rng() * 0.16;
     placed++;
     if (onTrail(x, y, 24)) continue;
-    k.add([ellipseRect(k, w, h), k.pos(x, y), k.color(...col), k.opacity(op), k.anchor("center")]);
+    const obj = k.add([ellipseRect(k, w, h), k.pos(x, y), k.color(...col), k.opacity(op), k.anchor("center")]);
+    patchObjs.push({ obj, isLite });
   }
 
   // Seeded grass tufts (parented: 1 root each).
+  const tuftBlades = [];
   for (let i = 0; i < 12; i++) {
     const x = rng() * 640, y = 282 + rng() * 190;
     if (onTrail(x, y, 16)) continue;
     const tuft = k.add([k.pos(x, y)]);
     const blades = 2 + Math.floor(rng() * 2);
     for (let b = 0; b < blades; b++) {
-      tuft.add([k.rect(2, 5 + rng() * 4), k.pos(-3 + b * 3, -(4 + rng() * 3)), k.color(...tuftCol), k.opacity(0.7)]);
+      const blade = tuft.add([k.rect(2, 5 + rng() * 4), k.pos(-3 + b * 3, -(4 + rng() * 3)), k.color(...cols.tuftCol), k.opacity(0.7)]);
+      tuftBlades.push(blade);
     }
   }
 
   // Wildflower dots — or sparse dead scrub when tone is high (bleak, no color pops).
+  const dotObjs = [];
   if (tone === "high") {
     for (let i = 0; i < 6; i++) {
       const x = rng() * 640, y = 290 + rng() * 180;
@@ -367,10 +512,24 @@ export function drawGround(k, opts = {}) {
     for (let i = 0; i < 11; i++) {
       const x = rng() * 640, y = 286 + rng() * 186;
       if (onTrail(x, y, 16)) continue;
-      const col = rng() < 0.6 ? dotWarm : dotPale;
-      k.add([k.circle(1.5 + rng()), k.pos(x, y), k.color(...col), k.opacity(0.85), k.anchor("center")]);
+      const isWarm = rng() < 0.6;
+      const col = isWarm ? cols.dotWarm : cols.dotPale;
+      const dot = k.add([k.circle(1.5 + rng()), k.pos(x, y), k.color(...col), k.opacity(0.85), k.anchor("center")]);
+      dotObjs.push({ obj: dot, isWarm });
     }
   }
+
+  const update = (newOpts = {}) => {
+    cols = calcCols(newOpts.segment ?? opts.segment);
+    baseRect.color = k.rgb(...cols.baseCol);
+    seamFarRect.color = k.rgb(...cols.seamFar);
+    seamNearRect.color = k.rgb(...cols.seamNear);
+    for (const p of patchObjs) p.obj.color = k.rgb(...(p.isLite ? cols.patchLite : cols.patchDark));
+    for (const t of tuftBlades) t.color = k.rgb(...cols.tuftCol);
+    for (const d of dotObjs) d.obj.color = k.rgb(...(d.isWarm ? cols.dotWarm : cols.dotPale));
+  };
+
+  return { update };
 }
 
 export function drawTrail(k, opts = {}) {
@@ -582,6 +741,325 @@ export function drawOx(k, cx, cy, opts = {}) {
   return p;
 }
 
+export function drawBison(k, x, y, opts = {}) {
+  // Low-poly/silhouette prairie bison with prominent shoulder hump,
+  // curved horns (PALETTE.bone / outline), dark shaggy coat (PALETTE.oxDark).
+  // CRITICAL: DO NOT add k.area() here.
+  const scale = opts.scale ?? 1;
+  const flip = opts.flipX ? -1 : 1;
+  const p = k.add([
+    k.pos(x, y),
+    k.scale(scale * flip, scale),
+    ...(opts.z != null ? [k.z(opts.z)] : []),
+  ]);
+
+  const seed = seedFrom(x, y);
+  const rng = seededRng(seed);
+
+  // Legs — sturdy prairie draft proportions
+  const LEG_Y = 12;
+  const legs = [-14, -6, 12, 20].map((lx, idx) => {
+    const leg = p.add([k.pos(lx, LEG_Y)]);
+    const isBack = idx >= 2;
+    const col = isBack ? PALETTE.oxDark : PALETTE.outline;
+    leg.add([k.rect(6, 14), k.pos(0, 0), k.color(...col), k.outline(1.5, k.rgb(...PALETTE.outline))]);
+    leg.add([k.rect(6, 4), k.pos(0, 11), k.color(...PALETTE.outline)]);
+    return leg;
+  });
+
+  // Tail with dark tuft
+  p.add([k.rect(2, 14), k.pos(27, -4), k.color(...PALETTE.oxDark), k.rotate(12)]);
+  p.add([k.circle(3.5), k.pos(31, 10), k.color(...PALETTE.outline), k.anchor("center")]);
+
+  // Hindquarters & barrel
+  p.add([k.rect(34, 24, { radius: 5 }), k.pos(-4, -12), k.color(...PALETTE.outline)]);
+  p.add([k.rect(32, 22, { radius: 4 }), k.pos(-3, -11), k.color(...PALETTE.oxDark)]);
+
+  // Massive shaggy chest / forequarters
+  p.add([k.rect(36, 28, { radius: 7 }), k.pos(-26, -15), k.color(...PALETTE.outline)]);
+  p.add([k.rect(34, 26, { radius: 6 }), k.pos(-25, -14), k.color(...PALETTE.oxDark)]);
+
+  // Prominent shoulder hump
+  inkOutline(k, p, { kind: "oval", x: -8, y: -20, w: 26, h: 22, extra: 2 });
+  p.add([ellipseRect(k, 26, 22), k.pos(-8, -20), k.color(...PALETTE.oxDark), k.anchor("center")]);
+
+  // Shaggy beard / throat fringe
+  p.add([
+    k.polygon([k.vec2(-28, 4), k.vec2(-14, 15), k.vec2(-8, 3)]),
+    k.color(...PALETTE.outline),
+  ]);
+
+  // Shadow hatch on flank / hump
+  hatchShade(k, p, 10, -3, 20, 14, { seed: seed + 3, angle: -30, opacity: 0.25, count: 3 });
+  hatchShade(k, p, -10, -16, 22, 16, { seed: seed + 7, angle: -45, opacity: 0.28, count: 3 });
+
+  // Head — lowered shaggy head with horns
+  const HEAD_Y = -4;
+  const hd = p.add([k.pos(-32, HEAD_Y)]);
+
+  // Curved horns (PALETTE.bone / outline tips)
+  hd.add([
+    k.polygon([k.vec2(3, -6), k.vec2(8, -16), k.vec2(12, -14), k.vec2(6, -6)]),
+    k.color(...PALETTE.bone),
+    k.outline(1.2, k.rgb(...PALETTE.outline)),
+  ]);
+  hd.add([
+    k.polygon([k.vec2(-3, -6), k.vec2(-9, -15), k.vec2(-5, -17), k.vec2(2, -7)]),
+    k.color(...PALETTE.bone),
+    k.outline(1.2, k.rgb(...PALETTE.outline)),
+  ]);
+
+  // Head mass
+  inkOutline(k, hd, { kind: "circle", x: 0, y: 0, r: 11, extra: 2 });
+  hd.add([k.circle(11), k.pos(0, 0), k.color(...PALETTE.oxDark), k.anchor("center")]);
+
+  // Snout / muzzle
+  hd.add([ellipseRect(k, 11, 8), k.pos(-6, 4), k.color(...PALETTE.outline), k.anchor("center")]);
+
+  // Eye
+  hd.add([k.circle(1.5), k.pos(-1, -2), k.color(...PALETTE.outline), k.anchor("center")]);
+
+  // Chin beard
+  hd.add([
+    k.polygon([k.vec2(-9, 5), k.vec2(-4, 14), k.vec2(1, 5)]),
+    k.color(...PALETTE.oxDark),
+  ]);
+
+  p.fleeing = false;
+  p.flee = (dir) => {
+    if (p.fleeing) return;
+    p.fleeing = true;
+    const fleeDir = dir != null ? dir : (p.pos.x < 320 ? -1 : 1);
+    const speed = 160;
+    p.onUpdate(() => {
+      p.pos.x += fleeDir * speed * k.dt();
+      p.pos.y += Math.sin(k.time() * 12) * 1.5;
+      if (p.pos.x < -120 || p.pos.x > 760) {
+        p.destroy();
+      }
+    });
+  };
+  p.scatter = p.flee;
+
+  if (opts.animate) {
+    const phase = opts.phase ?? (rng() * Math.PI * 2);
+    p.onUpdate(() => {
+      if (p.fleeing) return;
+      const t = k.time() * 2.5 + phase;
+      hd.pos.y = HEAD_Y + Math.sin(t) * 1.4;
+      legs[0].pos.y = LEG_Y + (Math.sin(t) > 0.3 ? -1.5 : 0);
+      legs[1].pos.y = LEG_Y + (Math.sin(t) < -0.3 ? -1.5 : 0);
+    });
+  }
+
+  return p;
+}
+
+export function drawDeer(k, x, y, opts = {}) {
+  // Prairie deer/elk with alert head, slender legs, branching antlers if buck,
+  // and gentle grazing animation.
+  // CRITICAL: DO NOT add k.area() here.
+  const scale = opts.scale ?? 1;
+  const flip = opts.flipX ? -1 : 1;
+  const isBuck = opts.buck ?? true;
+  const p = k.add([
+    k.pos(x, y),
+    k.scale(scale * flip, scale),
+    ...(opts.z != null ? [k.z(opts.z)] : []),
+  ]);
+
+  const seed = seedFrom(x, y);
+  const rng = seededRng(seed);
+
+  // Slender legs
+  const LEG_Y = 12;
+  const legs = [-8, -3, 10, 16].map((lx, idx) => {
+    const leg = p.add([k.pos(lx, LEG_Y)]);
+    const isBack = idx >= 2;
+    const col = isBack ? PALETTE.woodLight : PALETTE.dirtLight;
+    leg.add([k.rect(3.5, 18), k.pos(0, 0), k.color(...col), k.outline(1, k.rgb(...PALETTE.outline))]);
+    leg.add([k.rect(3.5, 3), k.pos(0, 16), k.color(...PALETTE.outline)]);
+    return leg;
+  });
+
+  // Upturned white tail
+  p.add([
+    k.polygon([k.vec2(18, -10), k.vec2(25, -14), k.vec2(23, -6)]),
+    k.color(...PALETTE.cloud),
+    k.outline(1.2, k.rgb(...PALETTE.outline)),
+  ]);
+
+  // Torso / body
+  inkOutline(k, p, { kind: "oval", x: 4, y: -4, w: 34, h: 18, extra: 2 });
+  p.add([ellipseRect(k, 34, 18), k.pos(4, -4), k.color(...PALETTE.woodLight), k.anchor("center")]);
+
+  // Pale / cream belly
+  p.add([ellipseRect(k, 22, 9), k.pos(4, 0), k.color(...PALETTE.oxCream), k.anchor("center"), k.opacity(0.85)]);
+
+  // Flank hatching
+  hatchShade(k, p, 10, -5, 18, 12, { seed: seed + 5, angle: -30, opacity: 0.22, count: 2 });
+
+  // Neck and head
+  const neck = p.add([k.pos(-9, -8)]);
+  neck.add([
+    k.polygon([k.vec2(1, 4), k.vec2(-7, -15), k.vec2(-1, -16), k.vec2(6, 2)]),
+    k.color(...PALETTE.woodLight),
+    k.outline(1.2, k.rgb(...PALETTE.outline)),
+  ]);
+
+  const hd = neck.add([k.pos(-5, -16)]);
+  inkOutline(k, hd, { kind: "oval", x: 0, y: 0, w: 13, h: 9, extra: 1.5 });
+  hd.add([ellipseRect(k, 13, 9), k.pos(0, 0), k.color(...PALETTE.woodLight), k.anchor("center")]);
+
+  // Muzzle & nose
+  hd.add([ellipseRect(k, 6, 5), k.pos(-6, 2), k.color(...PALETTE.oxCream), k.anchor("center")]);
+  hd.add([k.circle(1.2), k.pos(-8, 1), k.color(...PALETTE.outline), k.anchor("center")]);
+
+  // Eye
+  hd.add([k.circle(1.4), k.pos(-2, -2), k.color(...PALETTE.outline), k.anchor("center")]);
+
+  // Alert ears
+  hd.add([k.polygon([k.vec2(1, -3), k.vec2(6, -11), k.vec2(1, -9)]), k.color(...PALETTE.woodLight), k.outline(1, k.rgb(...PALETTE.outline))]);
+  hd.add([k.polygon([k.vec2(3, -2), k.vec2(8, -8), k.vec2(3, -6)]), k.color(...PALETTE.woodLight), k.outline(1, k.rgb(...PALETTE.outline))]);
+
+  // Branching antlers if buck
+  if (isBuck) {
+    // Left antler with branches
+    hd.add([k.rect(2, 14), k.pos(0, -4), k.color(...PALETTE.bone), k.outline(1, k.rgb(...PALETTE.outline)), k.rotate(-22), k.anchor("bot")]);
+    hd.add([k.rect(1.5, 6), k.pos(-2, -10), k.color(...PALETTE.bone), k.outline(1, k.rgb(...PALETTE.outline)), k.rotate(-55), k.anchor("bot")]);
+    hd.add([k.rect(1.5, 5), k.pos(-3, -15), k.color(...PALETTE.bone), k.outline(1, k.rgb(...PALETTE.outline)), k.rotate(20), k.anchor("bot")]);
+
+    // Right antler with branch
+    hd.add([k.rect(2, 13), k.pos(3, -3), k.color(...PALETTE.bone), k.outline(1, k.rgb(...PALETTE.outline)), k.rotate(16), k.anchor("bot")]);
+    hd.add([k.rect(1.5, 5), k.pos(6, -9), k.color(...PALETTE.bone), k.outline(1, k.rgb(...PALETTE.outline)), k.rotate(55), k.anchor("bot")]);
+  }
+
+  p.fleeing = false;
+  p.flee = (dir) => {
+    if (p.fleeing) return;
+    p.fleeing = true;
+    const fleeDir = dir != null ? dir : (p.pos.x < 320 ? -1 : 1);
+    const fleeSpeed = 190;
+    const baseY = p.pos.y;
+    let runT = 0;
+    p.onUpdate(() => {
+      runT += k.dt() * 10;
+      p.pos.x += fleeDir * fleeSpeed * k.dt();
+      p.pos.y = baseY - Math.abs(Math.sin(runT)) * 12;
+      neck.pos.y = -8;
+      hd.angle = -10;
+      if (p.pos.x < -120 || p.pos.x > 760) {
+        p.destroy();
+      }
+    });
+  };
+  p.scatter = p.flee;
+
+  if (opts.animate) {
+    const phase = opts.phase ?? (rng() * Math.PI * 2);
+    p.onUpdate(() => {
+      if (p.fleeing) return;
+      const t = (k.time() * 1.6 + phase) % (Math.PI * 2);
+      const dip = Math.max(0, Math.sin(t));
+      neck.pos.y = -8 + dip * 11;
+      neck.pos.x = -9 - dip * 3;
+      hd.angle = dip * 25;
+    });
+  }
+
+  return p;
+}
+
+export function drawRabbit(k, x, y, opts = {}) {
+  // Small jackrabbit with tall ears, crouching/hopping animation.
+  // CRITICAL: DO NOT add k.area() here.
+  const scale = opts.scale ?? 1;
+  const flip = opts.flipX ? -1 : 1;
+  const p = k.add([
+    k.pos(x, y),
+    k.scale(scale * flip, scale),
+    ...(opts.z != null ? [k.z(opts.z)] : []),
+  ]);
+
+  const seed = seedFrom(x, y);
+  const rng = seededRng(seed);
+
+  // Large hind haunch (jackrabbit trait)
+  inkOutline(k, p, { kind: "oval", x: 4, y: -4, w: 12, h: 10, extra: 1.5 });
+  p.add([ellipseRect(k, 12, 10), k.pos(4, -4), k.color(...PALETTE.dirtLight), k.anchor("center")]);
+
+  // Main body
+  p.add([ellipseRect(k, 12, 8), k.pos(-2, -3), k.color(...PALETTE.dirtLight), k.outline(1, k.rgb(...PALETTE.outline)), k.anchor("center")]);
+
+  // Pale belly
+  p.add([ellipseRect(k, 7, 4), k.pos(-1, -1), k.color(...PALETTE.cloud), k.anchor("center"), k.opacity(0.9)]);
+
+  // Paws
+  p.add([ellipseRect(k, 7, 3), k.pos(3, 2), k.color(...PALETTE.dirtLight), k.outline(1, k.rgb(...PALETTE.outline)), k.anchor("center")]);
+  p.add([ellipseRect(k, 4, 3), k.pos(-5, 2), k.color(...PALETTE.dirtLight), k.outline(1, k.rgb(...PALETTE.outline)), k.anchor("center")]);
+
+  // Fluffy white cotton tail
+  p.add([k.circle(3), k.pos(9, -6), k.color(...PALETTE.cloud), k.outline(1, k.rgb(...PALETTE.outline)), k.anchor("center")]);
+
+  // Flank hatch
+  hatchShade(k, p, 3, -4, 8, 6, { seed: seed + 2, angle: -35, opacity: 0.2, count: 2 });
+
+  // Head
+  const hd = p.add([k.pos(-6, -7)]);
+  inkOutline(k, hd, { kind: "oval", x: 0, y: 0, w: 8, h: 7, extra: 1.2 });
+  hd.add([ellipseRect(k, 8, 7), k.pos(0, 0), k.color(...PALETTE.dirtLight), k.anchor("center")]);
+
+  // Eye
+  hd.add([k.circle(1.2), k.pos(-1, -1.5), k.color(...PALETTE.outline), k.anchor("center")]);
+  // Nose twitch dot
+  hd.add([k.circle(0.8), k.pos(-4, 1), k.color(...PALETTE.outline), k.anchor("center")]);
+
+  // Tall jackrabbit ears!
+  const ear1 = hd.add([ellipseRect(k, 3.5, 13), k.pos(1, -7), k.color(...PALETTE.dirtLight), k.outline(1, k.rgb(...PALETTE.outline)), k.rotate(10), k.anchor("bot")]);
+  ear1.add([ellipseRect(k, 1.8, 9), k.pos(0, -6), k.color(...PALETTE.bone), k.anchor("center")]);
+
+  const ear2 = hd.add([ellipseRect(k, 3, 11), k.pos(-2, -6), k.color(...PALETTE.dirtLight), k.outline(1, k.rgb(...PALETTE.outline)), k.rotate(-10), k.anchor("bot")]);
+  ear2.add([ellipseRect(k, 1.5, 7), k.pos(0, -5), k.color(...PALETTE.bone), k.anchor("center")]);
+
+  p.fleeing = false;
+  p.flee = (dir) => {
+    if (p.fleeing) return;
+    p.fleeing = true;
+    const fleeDir = dir != null ? dir : (p.pos.x < 320 ? -1 : 1);
+    const fleeSpeed = 220;
+    const baseY = p.pos.y;
+    let hopT = 0;
+    p.onUpdate(() => {
+      hopT += k.dt() * 16;
+      p.pos.x += fleeDir * fleeSpeed * k.dt();
+      p.pos.y = baseY - Math.abs(Math.sin(hopT)) * 9;
+      if (p.pos.x < -120 || p.pos.x > 760) {
+        p.destroy();
+      }
+    });
+  };
+  p.scatter = p.flee;
+
+  if (opts.animate) {
+    const phase = opts.phase ?? (rng() * Math.PI * 2);
+    const baseY = y;
+    p.onUpdate(() => {
+      if (p.fleeing) return;
+      const t = (k.time() * 2 + phase);
+      const hopCycle = t % 4;
+      if (hopCycle < 0.6) {
+        const hopProg = hopCycle / 0.6;
+        p.pos.y = baseY - Math.sin(hopProg * Math.PI) * 7;
+      } else {
+        p.pos.y = baseY;
+        ear1.angle = 10 + Math.sin(t * 8) * 3;
+      }
+    });
+  }
+
+  return p;
+}
+
 export function drawPioneer(k, cx, cy, opts = {}) {
   const hat     = opts.hat  ?? "felt";
   const bodyCol = opts.body ?? PALETTE.vest;
@@ -728,25 +1206,26 @@ export function spawnDustPuff(k, x, y, opts = {}) {
 }
 
 let _hpIconCounter = 0;
-export function drawHealthIcon(k, cx, cy, state) {
+export function drawHealthIcon(k, cx, cy, state, extraTag = "hud-bottom") {
   const r = 12;
   const fills = { well: PALETTE.hpGreen, poor: PALETTE.hpYellow, ill: PALETTE.hpOrange, dying: PALETTE.hpRed, dead: PALETTE.hpDead };
   const tag = `hpicon-${++_hpIconCounter}`;
   const dark = PALETTE.outline;
+  const tags = extraTag ? [tag, extraTag] : [tag];
 
-  k.add([k.circle(r + 1), k.pos(cx, cy), k.color(...dark), k.anchor("center"), k.fixed(), k.z(52), tag]);
-  k.add([k.circle(r),     k.pos(cx, cy), k.color(...(fills[state] ?? fills.poor)), k.anchor("center"), k.fixed(), k.z(52), tag]);
+  k.add([k.circle(r + 1), k.pos(cx, cy), k.color(...dark), k.anchor("center"), k.fixed(), k.z(52), ...tags]);
+  k.add([k.circle(r),     k.pos(cx, cy), k.color(...(fills[state] ?? fills.poor)), k.anchor("center"), k.fixed(), k.z(52), ...tags]);
 
   if (state === "poor") {
-    k.add([k.rect(2, r * 1.6), k.pos(cx, cy), k.color(...dark), k.anchor("center"), k.fixed(), k.z(53), tag]);
+    k.add([k.rect(2, r * 1.6), k.pos(cx, cy), k.color(...dark), k.anchor("center"), k.fixed(), k.z(53), ...tags]);
   } else if (state === "ill") {
-    k.add([k.rect(r * 1.6, 2), k.pos(cx, cy), k.color(...dark), k.rotate(45), k.anchor("center"), k.fixed(), k.z(53), tag]);
+    k.add([k.rect(r * 1.6, 2), k.pos(cx, cy), k.color(...dark), k.rotate(45), k.anchor("center"), k.fixed(), k.z(53), ...tags]);
   } else if (state === "dying") {
-    k.add([k.rect(r * 1.2, 2), k.pos(cx, cy), k.color(...dark), k.rotate( 45), k.anchor("center"), k.fixed(), k.z(53), tag]);
-    k.add([k.rect(r * 1.2, 2), k.pos(cx, cy), k.color(...dark), k.rotate(-45), k.anchor("center"), k.fixed(), k.z(53), tag]);
+    k.add([k.rect(r * 1.2, 2), k.pos(cx, cy), k.color(...dark), k.rotate( 45), k.anchor("center"), k.fixed(), k.z(53), ...tags]);
+    k.add([k.rect(r * 1.2, 2), k.pos(cx, cy), k.color(...dark), k.rotate(-45), k.anchor("center"), k.fixed(), k.z(53), ...tags]);
   } else if (state === "dead") {
-    k.add([k.rect(r * 1.8, 3), k.pos(cx, cy), k.color(...dark), k.rotate( 45), k.anchor("center"), k.fixed(), k.z(53), tag]);
-    k.add([k.rect(r * 1.8, 3), k.pos(cx, cy), k.color(...dark), k.rotate(-45), k.anchor("center"), k.fixed(), k.z(53), tag]);
+    k.add([k.rect(r * 1.8, 3), k.pos(cx, cy), k.color(...dark), k.rotate( 45), k.anchor("center"), k.fixed(), k.z(53), ...tags]);
+    k.add([k.rect(r * 1.8, 3), k.pos(cx, cy), k.color(...dark), k.rotate(-45), k.anchor("center"), k.fixed(), k.z(53), ...tags]);
   }
   return tag;
 }

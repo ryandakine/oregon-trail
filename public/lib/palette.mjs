@@ -106,6 +106,7 @@ export const PALETTE = {
   bluffOchre:  [188, 124, 72],
   sageGray:    [124, 128, 104],
   alkaliBone:  [200, 204, 198],
+  bone:        [200, 204, 198],
   snakeSand:   [193, 150, 110],
   basaltDark:  [58, 52, 48],
   coniferDeep: [46, 64, 52],

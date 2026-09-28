@@ -426,20 +426,22 @@ export async function runCanary(env: Env): Promise<void> {
   const dueForAlert = canaryLastAlertAt === null || now - canaryLastAlertAt >= REALERT_INTERVAL_MS;
   canaryIsDown = true;
   if (!dueForAlert) return; // already paged within the cadence window — stay quiet
-  canaryLastAlertAt = now;
-  await sendTelegram(
+  const sent = await sendTelegram(
     env,
     `🛑 Oregon Trail AI canary FAILED — trail.osi-cyber.com is serving canned fallback events (players see no AI). callAnthropic error: ${detail}`,
   );
+  if (sent) {
+    canaryLastAlertAt = now;
+  }
 }
 
-async function sendTelegram(env: Env, text: string): Promise<void> {
+async function sendTelegram(env: Env, text: string): Promise<boolean> {
   const token = env.TELEGRAM_BOT_TOKEN;
   const chat = env.TELEGRAM_CHAT_ID;
   if (!token || !chat) {
     // No channel configured — at least leave a loud log line for tail/Logpush.
     console.error("canary_alert_unsent", JSON.stringify({ text }));
-    return;
+    return false;
   }
   try {
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -455,9 +457,12 @@ async function sendTelegram(env: Env, text: string): Promise<void> {
       // looked identical to a healthy one from the outside.
       const body = await response.text().catch(() => "");
       console.error("canary_alert_rejected", JSON.stringify({ status: response.status, body: body.slice(0, 160) }));
+      return false;
     }
+    return true;
   } catch (e) {
     console.error("canary_alert_failed", JSON.stringify({ msg: String(e).slice(0, 120) }));
+    return false;
   }
 }
 

@@ -1,11 +1,12 @@
 import * as draw from "../lib/draw.mjs";
 import { segmentBlend, segmentForMiles } from "../lib/segments.mjs";
-import { addTopHud, addBottomHud, updateHud, attachResizeRebuild, attachStatCorruption } from "../lib/hud.mjs";
+import { addTopHud, addBottomHud, updateHud, attachResizeRebuild, attachStatCorruption, attachZenFade } from "../lib/hud.mjs";
 import { applyToneOverlay } from "../lib/tone.mjs";
 import { createJuice } from "../lib/juice.mjs";
 import { createHorrorFx } from "../lib/horror-fx.mjs";
 
 const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const isMotionOk = () => (window.__VFX_OPTS?.motionOk !== undefined ? Boolean(window.__VFX_OPTS.motionOk) : MOTION_OK);
 
 // Mood-arc dressing: which of the existing draw helpers the biome puts on
 // screen, keyed off the segment's dressing[] hints. Prairie is the historical
@@ -29,6 +30,7 @@ export default function register(k, engine) {
     const loops = [];
     let detachResize = null;
     let detachCorruption = null;
+    let detachZenFade = null;
     const juice = createJuice(k);
     // Wires the horror shader's two previously-dead channels (review finding):
     // dread scales aberration/grain with the party's actual desperation, and
@@ -49,8 +51,10 @@ export default function register(k, engine) {
     k.onSceneLeave(() => {
       for (const { event, fn } of listeners) engine.off(event, fn);
       for (const l of loops) l?.cancel?.();
+      k.destroyAll("vfx-ambient");
       detachResize?.();
       detachCorruption?.();
+      detachZenFade?.();
       // A dwell queued by this scene must not outlive it — every route back to
       // travel re-queues on mount.
       engine.cancelQueuedAdvance();
@@ -69,9 +73,10 @@ export default function register(k, engine) {
     const here = segmentForMiles(miles);
 
     const sky = draw.drawSky(k, tone, dayPhase, { segment });
+    const mountains = draw.drawMountains(k, { segment });
+    draw.drawGodRays(k, dayPhase, tone, { animate: true, isPaused: () => paused, motionOk: isMotionOk() });
     const hills = draw.drawHills(k, { segment });
-    draw.drawMountains(k, { segment });
-    draw.drawGround(k, { tone, segment });
+    const ground = draw.drawGround(k, { tone, segment });
     // The trail itself stays churned earth in every biome — like the shared
     // darks in segments.mjs, it's the through-line that keeps this one game.
     draw.drawTrail(k);
@@ -182,6 +187,7 @@ export default function register(k, engine) {
     const hudState = { top: addTopHud(k, engine), bottom: addBottomHud(k, engine) };
     detachResize = attachResizeRebuild(k, engine, hudState);
     detachCorruption = attachStatCorruption(k, engine, hudState);
+    detachZenFade = attachZenFade(k, engine, hudState);
 
     // ── Tone overlay ──
     applyToneOverlay(k, tone);
@@ -288,6 +294,95 @@ export default function register(k, engine) {
       }));
     }
 
+    // ── Ambient Prairie VFX (Phase 3) ──
+    // When weather is clear and motion is enabled, spawn a lightweight, fixed
+    // pool of floating prairie particles (dandelion fluff on day/dawn, fireflies
+    // at dusk/night, drifting ash on high horror tier).
+    if (weather === "clear" && isMotionOk()) {
+      const isNightOrDusk = dayPhase === "dusk" || dayPhase === "night";
+      const isHighTone = tone === "high";
+      const count = isHighTone ? 8 : (isNightOrDusk ? 7 : 9);
+
+      for (let i = 0; i < count; i++) {
+        const seed = draw.seedFrom(miles * 7 + i * 31, i * 47);
+        const rng = draw.seededRng(seed);
+
+        let color, radius, baseOp, startX, startY;
+
+        if (isHighTone) {
+          // Horror tier: descending charcoal soot / ash flakes
+          color = draw.PALETTE.outline;
+          radius = 1.2;
+          baseOp = 0.45;
+          startX = rng() * 640;
+          startY = 180 + rng() * 260;
+        } else if (isNightOrDusk) {
+          // Dusk / Night: gentle golden twilight fireflies
+          color = draw.PALETTE.goldBright;
+          radius = 1.6;
+          baseOp = 0.65;
+          startX = 40 + rng() * 560;
+          startY = 260 + rng() * 160;
+        } else {
+          // Day / Dawn: floating prairie dandelion seeds / dry straw fluff
+          color = i % 2 === 0 ? draw.PALETTE.straw : draw.PALETTE.flowerCream;
+          radius = 1.3;
+          baseOp = 0.40;
+          startX = rng() * 640;
+          startY = 260 + rng() * 170;
+        }
+
+        const p = k.add([
+          k.circle(radius),
+          k.pos(startX, startY),
+          k.color(...color),
+          k.opacity(baseOp),
+          k.z(42),
+          "vfx-ambient",
+          "vfx-particle",
+        ]);
+
+        const speedX = 0.35 + rng() * 0.35;
+        const speedY = isHighTone ? (0.45 + rng() * 0.35) : (isNightOrDusk ? -(0.18 + rng() * 0.15) : 0);
+        const swayAmp = 0.3 + rng() * 0.3;
+        const swayFreq = 1.5 + rng() * 1.5;
+        const swayPhase = rng() * Math.PI * 2;
+        const pulsePhase = rng() * Math.PI * 2;
+
+        p.onUpdate(() => {
+          if (paused) return;
+          const t = k.time();
+
+          if (isHighTone) {
+            // Ash drifts down, swaying slightly sideways
+            p.pos.y += speedY;
+            p.pos.x += Math.sin(t * swayFreq + swayPhase) * swayAmp;
+            if (p.pos.y > 470) {
+              p.pos.y = 180;
+              p.pos.x = Math.random() * 640;
+            }
+          } else if (isNightOrDusk) {
+            // Fireflies wander upwards, breathing light
+            p.pos.y += speedY;
+            p.pos.x += Math.sin(t * swayFreq + swayPhase) * 0.4;
+            p.opacity = baseOp * (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 2.2 + pulsePhase)));
+            if (p.pos.y < 230) {
+              p.pos.y = 420;
+              p.pos.x = 40 + Math.random() * 560;
+            }
+          } else {
+            // Dandelion seeds drift left with the prairie breeze, bobbing gently
+            p.pos.x -= speedX;
+            p.pos.y += Math.sin(t * swayFreq + swayPhase) * 0.25;
+            if (p.pos.x < -20) {
+              p.pos.x = 660;
+              p.pos.y = 260 + Math.random() * 170;
+            }
+          }
+        });
+      }
+    }
+
     // ── Floating text ──
     // Deaths and illnesses arrive in batches, and at the old 0.008/frame fade
     // they overwrote each other at a single position and were gone in ~2s.
@@ -311,6 +406,7 @@ export default function register(k, engine) {
     }
 
     function showFloatingText(msg) {
+      window.__zenHud?.notifyActivity?.();
       const ft = k.add([k.text(msg, { size: 12, width: 400 }), k.pos(320, FLOAT_BASE_Y), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.opacity(1), k.z(60)]);
       ft.age = 0;
       ft.slotY = FLOAT_BASE_Y;
@@ -329,7 +425,16 @@ export default function register(k, engine) {
 
     // ── Engine handlers ──
     engineOn("daysAdvanced", ({ summaries }) => {
+      const curMiles = engine.milesTraveled ?? 0;
+      const curSegment = segmentBlend(curMiles);
+      const curDayPhase = getDayPhase(engine.currentDate);
+      sky?.update?.(curDayPhase, { segment: curSegment });
+      mountains?.update?.({ segment: curSegment });
+      hills?.update?.({ segment: curSegment });
+      ground?.update?.({ segment: curSegment });
+
       updateHud(k, engine, hudState);
+      window.__zenHud?.notifyActivity?.();
       // One juice call per advance, escalated to the worst outcome in the
       // batch — firing per event stacks flashes/shake queues (4 illnesses in
       // one 5-day advance = 4 overlapping horror() flashes).
@@ -372,21 +477,32 @@ export default function register(k, engine) {
     // (x<100,y<60) and the bottom party panel (y=440).
     const huntBtnW = 92, huntBtnH = 26, huntBtnX = 8, huntBtnY = 404;
     const huntBtn = k.add([
-      k.rect(huntBtnW, huntBtnH, { radius: 4 }),
+      k.rect(huntBtnW, huntBtnH, { radius: 13 }),
       k.pos(huntBtnX, huntBtnY),
-      k.color(46, 139, 87),
-      k.opacity(0.85),
+      k.color(...draw.PALETTE.outline),
+      k.opacity(0.65),
       k.area(),
       k.fixed(),
       k.z(60),
+      "hud-travel-actions",
+    ]);
+    k.add([
+      k.rect(huntBtnW - 8, 1),
+      k.pos(huntBtnX + 4, huntBtnY + 2),
+      k.color(...draw.PALETTE.parchment),
+      k.opacity(0.25),
+      k.fixed(),
+      k.z(61),
+      "hud-travel-actions",
     ]);
     k.add([
       k.text("(H) Hunt", { size: 13 }),
       k.pos(huntBtnX + huntBtnW / 2, huntBtnY + huntBtnH / 2),
       k.anchor("center"),
-      k.color(255, 255, 255),
+      k.color(...draw.PALETTE.goldBright),
       k.fixed(),
-      k.z(61),
+      k.z(62),
+      "hud-travel-actions",
     ]);
     const goHunt = () => { engine.track('hunt_started'); engine.startHunt(); };
     huntBtn.onClick(goHunt);
@@ -395,6 +511,7 @@ export default function register(k, engine) {
     // ── Pause ──
     let pauseOverlay = null;
     function togglePause() {
+      window.__zenHud?.notifyActivity?.();
       paused = !paused;
       for (const p of pioneers) p.walking = !paused;
       for (const o of oxen) o.walking = !paused;

@@ -37,7 +37,7 @@ import { createCampfire, createCampDressing } from './camp.mjs';
 import { createLandmark } from './landmarks.mjs';
 import { createDeer, createBison } from './fauna.mjs';
 import { createTombstone } from './markers.mjs';
-import { createTrailAudio } from './audio.mjs';
+import { createTrailAudio } from '../lib/audio.mjs';
 import { setRenderMode } from '../render-mode.mjs';
 import { makeFpsGate } from './fps-gate.mjs';
 
@@ -283,12 +283,14 @@ export function initThree(engine) {
   // ── Procedural audio (M6). Gated on first user gesture (autoplay policy);
   // never throws if WebAudio is unavailable. Scene/weather/moving are wired
   // through the same calls that drive the visuals.
-  const audio = createTrailAudio();
+  const audio = window.audio || createTrailAudio();
   const AUDIO_SCENE = { travel: 'travel', river: 'river', fort: 'fort', night: 'camp', hunting: 'hunting', death: 'travel', arrival: 'arrival' };
-  for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
-    window.addEventListener(ev, () => audio.start(), { once: true });
+  if (!window.audio) {
+    for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
+      window.addEventListener(ev, () => audio.start(), { once: true });
+    }
+    document.addEventListener('visibilitychange', () => (document.hidden ? audio.suspend() : audio.resume()));
   }
-  document.addEventListener('visibilitychange', () => (document.hidden ? audio.suspend() : audio.resume()));
 
   // ── River crossing (M3): carve the terrain channel + mount the water sheet.
   // Mounted on demand (RIVER scene / river preset), torn down on exit.
