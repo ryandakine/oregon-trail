@@ -445,6 +445,8 @@ export interface AdvanceResponse {
   // event was served (rate-blocked, or Anthropic errored/dead key). Undefined
   // for non-event triggers. Used for fallback-rate observability.
   event_source?: "llm" | "fallback";
+  // The active provider that served the live model event ("workers-ai" | "custom" | "anthropic").
+  llm_provider?: "workers-ai" | "custom" | "anthropic";
   // Present ONLY when this advance produced the run's terminal transition
   // (trigger "arrival" | "wipe") — server-detected on the state it just
   // simulated, never client-claimed.

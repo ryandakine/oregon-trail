@@ -146,8 +146,11 @@ export function sanitizeDelayedEffects(raw: unknown): PendingEffectSpec[] | unde
 }
 
 export function parseEventResponse(raw: string): EventResponse {
+  // Strip <think>...</think> blocks from reasoning/thinking models
+  let stripped = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
   // Strip markdown fences if present
-  let stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
+  stripped = stripped.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
 
   // If model added text before/after JSON, extract the JSON object
   if (!stripped.startsWith("{")) {
@@ -158,6 +161,9 @@ export function parseEventResponse(raw: string): EventResponse {
     const lastBrace = stripped.lastIndexOf("}");
     if (lastBrace >= 0) stripped = stripped.slice(0, lastBrace + 1);
   }
+
+  // Remove trailing commas before object or array closers
+  stripped = stripped.replace(/,\s*([}\]])/g, "$1");
 
   const parsed = JSON.parse(stripped);
 
@@ -755,7 +761,7 @@ export async function generateLongNight(
   deceasedCause: string,
   daysSinceDeath: number,
   survivorName: string,
-  apiKey: string,
+  apiKeyOrCaller: string | ((system: string, user: string) => Promise<string>),
 ): Promise<EventResponse> {
   const user = `Context:
 - deceased_member: {"name": "${deceasedName}", "cause": "${deceasedCause}", "days_ago": ${daysSinceDeath}}
@@ -764,10 +770,13 @@ export async function generateLongNight(
 Write The Long Night scene. Follow all voice constraints. Return JSON.`;
 
   try {
-    const raw = await callAnthropic(LONG_NIGHT_SYSTEM_PROMPT, user, apiKey, {
-      maxTokens: 500,
-      timeout: 8000,
-    });
+    const raw =
+      typeof apiKeyOrCaller === "function"
+        ? await apiKeyOrCaller(LONG_NIGHT_SYSTEM_PROMPT, user)
+        : await callAnthropic(LONG_NIGHT_SYSTEM_PROMPT, user, apiKeyOrCaller, {
+            maxTokens: 500,
+            timeout: 8000,
+          });
     const parsed = parseEventResponse(raw);
     // Post-parse guard: reject any output that trips the forbidden-category
     // regexes (slurs, sexual, modern-era breaks, children-as-butchers,

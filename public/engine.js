@@ -227,6 +227,8 @@ class GameEngine {
     this.dailyMode = false;
     this.dailyTrailNumber = 0;
     this.dailyRng = null;
+    this.llmProvider = null;
+    this.lastLlmProvider = null;
   }
 
   // ── Challenge ───────────────────────────────
@@ -459,16 +461,32 @@ class GameEngine {
   // ── API Helpers ──────────────────────────────
 
   async api(endpoint, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    const llmChoice =
+      this.llmProvider ||
+      (typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('llm') ||
+          localStorage.getItem('oregon_llm_provider')
+        : null);
+    if (llmChoice) {
+      headers['X-LLM-Provider'] = llmChoice;
+    }
+
     const res = await fetch(this.apiBase + endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'unknown' }));
       throw new Error(err.error || `api_error_${res.status}`);
     }
-    return res.json();
+    const data = await res.json();
+    if (data && data.llm_provider) {
+      this.lastLlmProvider = data.llm_provider;
+      console.log(`[OregonTrail AI] Event powered by: ${data.llm_provider}`);
+    }
+    return data;
   }
 
   // ── Game State Accessors ─────────────────────
