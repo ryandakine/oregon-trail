@@ -402,7 +402,9 @@ class GameEngine {
   }
 
   _clearSavedRun() {
-    localStorage.removeItem('ot_saved_run');
+    try {
+      localStorage.removeItem('ot_saved_run');
+    } catch (_) {}
   }
 
   _loadSavedRun() {
@@ -462,12 +464,19 @@ class GameEngine {
 
   async api(endpoint, body) {
     const headers = { 'Content-Type': 'application/json' };
-    const llmChoice =
-      this.llmProvider ||
-      (typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search).get('llm') ||
-          localStorage.getItem('oregon_llm_provider')
-        : null);
+    let storedProvider = null;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        storedProvider = window.localStorage.getItem('oregon_llm_provider');
+      }
+    } catch (_) {
+      // Storage access blocked or denied (e.g. privacy sandbox, private browsing)
+    }
+    const queryProvider =
+      typeof window !== 'undefined' && window.location
+        ? new URLSearchParams(window.location.search).get('llm')
+        : null;
+    const llmChoice = this.llmProvider || queryProvider || storedProvider;
     if (llmChoice) {
       headers['X-LLM-Provider'] = llmChoice;
     }
@@ -577,7 +586,9 @@ class GameEngine {
       this.signedState = res.signed_state;
       this.rumor = res.rumor || null;
       this.fullJournal = [];
-      localStorage.removeItem('ot_journal');
+      try {
+        localStorage.removeItem('ot_journal');
+      } catch (_) {}
       this._saveRun();
       this.track('run_started', { tone: tier, profession: this.profession, daily: this.dailyMode });
       this.emit('loading', false);
@@ -646,7 +657,9 @@ class GameEngine {
             this.fullJournal.push(evt);
           }
         }
-        localStorage.setItem('ot_journal', JSON.stringify(this.fullJournal));
+        try {
+          localStorage.setItem('ot_journal', JSON.stringify(this.fullJournal));
+        } catch (_) {}
       }
 
       this.emit('loading', false);
@@ -1183,7 +1196,9 @@ class GameEngine {
     this.cancelQueuedAdvance();
     this.clearResultBeat();
     this.activeChallenge = null;
-    localStorage.removeItem('ot_journal');
+    try {
+      localStorage.removeItem('ot_journal');
+    } catch (_) {}
     this._clearSavedRun();
     this.transition('TITLE');
   }

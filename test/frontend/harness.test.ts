@@ -132,4 +132,26 @@ describe("frontend harness — boot + primary regression pins", () => {
     expect(stats.kaplayErrors).toEqual([]);
     expect(stats.total).toBeGreaterThanOrEqual(10);
   });
+
+  it("T-storage-resilience-1: engine.api handles localStorage SecurityError without crashing before fetch", async () => {
+    const ok = await h.page.evaluate(async () => {
+      const origGetItem = Storage.prototype.getItem;
+      const origFetch = window.fetch;
+      Storage.prototype.getItem = () => { throw new DOMException("The operation is insecure.", "SecurityError"); };
+      let fetchCalled = false;
+      window.fetch = (async (_url: string, _opts: RequestInit) => {
+        fetchCalled = true;
+        return { ok: true, json: async () => ({}) };
+      }) as typeof window.fetch;
+      try {
+        const e = (window as unknown as { engine: { api: (ep: string, b: unknown) => Promise<unknown> } }).engine;
+        await e.api("/api/mock", {});
+        return fetchCalled;
+      } finally {
+        Storage.prototype.getItem = origGetItem;
+        window.fetch = origFetch;
+      }
+    });
+    expect(ok).toBe(true);
+  });
 });

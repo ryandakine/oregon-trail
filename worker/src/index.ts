@@ -630,10 +630,7 @@ async function handleAdvance(
     const tier = result.state.settings.tone_tier;
     const pickFallback = () => nextFallbackEvent(tier);
     const provider = resolveProvider(request, env);
-    const isPaid = provider === "anthropic";
-    // Per-IP paid-call guard only checks volume limits on paid (Anthropic) routes.
-    // Zero-cost providers (workers-ai, custom rig) skip paid-budget shedding.
-    const guard = isPaid ? await guardPaidCall(env, request) : { allowed: true, reason: "ok" as const };
+    const guard = await guardPaidCall(env, request);
     if (!guard.allowed) {
       console.warn("spend_rate_block", JSON.stringify({ route: "advance", reason: guard.reason }));
       eventData = pickFallback();
@@ -666,8 +663,7 @@ async function handleAdvance(
     const firstAlive = result.state.party.members.find((m) => m.alive);
     const survivorName = firstAlive ? firstAlive.name : "someone";
     const provider = resolveProvider(request, env);
-    const isPaid = provider === "anthropic";
-    const guard = isPaid ? await guardPaidCall(env, request) : { allowed: true, reason: "ok" as const };
+    const guard = await guardPaidCall(env, request);
     if (!guard.allowed) {
       console.warn("spend_rate_block", JSON.stringify({ route: "advance", reason: guard.reason, kind: "bitter_path" }));
       eventData = buildLongNightFallback(
@@ -1059,8 +1055,7 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
   const share = await buildShareInfo(state, env, request);
 
   const provider = resolveProvider(request, env);
-  const isPaid = provider === "anthropic";
-  const guard = isPaid ? await guardPaidCall(env, request) : { allowed: true, reason: "ok" as const };
+  const guard = await guardPaidCall(env, request);
   if (guard.allowed) {
     try {
       const res = await callLLM(
@@ -1140,8 +1135,7 @@ async function handleEpitaph(
   }
 
   const provider = resolveProvider(request, env);
-  const isPaid = provider === "anthropic";
-  const guard = isPaid ? await guardPaidCall(env, request) : { allowed: true, reason: "ok" as const };
+  const guard = await guardPaidCall(env, request);
   if (guard.allowed) {
     try {
       const res = await callLLM(

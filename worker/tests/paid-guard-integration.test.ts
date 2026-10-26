@@ -21,17 +21,18 @@ const MEMBERS: [string, string, string, string] = ["Beth", "Carl", "Dana", "Earl
 
 // Env whose native limiter always denies → forces guardPaidCall to block,
 // so the handler must serve its fallback WITHOUT touching Anthropic.
-const denyingEnv = () => ({
+const denyingEnv = (extra: Record<string, unknown> = {}) => ({
   HMAC_SECRET: SECRET,
   ANTHROPIC_API_KEY: "test-key",
   ALLOWED_ORIGIN: "*",
   PAID_LIMITER: { limit: async () => ({ success: false }) },
+  ...extra,
 });
 
-const post = (path: string, body: unknown) =>
+const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
   new Request(`https://test.local${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "CF-Connecting-IP": "9.9.9.9" },
+    headers: { "Content-Type": "application/json", "CF-Connecting-IP": "9.9.9.9", ...headers },
     body: JSON.stringify(body),
   });
 
@@ -74,5 +75,50 @@ describe("paid-route guard — handler fallback when blocked", () => {
       denyingEnv() as any,
     );
     expect(res.status).toBe(200);
+  });
+
+  it("newspaper with Workers AI: blocked guard → 200 fallback, AI.run NOT called", async () => {
+    const { state } = await createInitialState("Smith", MEMBERS, "farmer", "medium", SECRET);
+    for (const m of state.party.members) m.alive = false;
+    const signature = await signState(state, SECRET);
+
+    const mockRun = vi.fn(async () => { throw new Error("AI.run should not be called when guard blocks"); });
+    const env = denyingEnv({ AI: { run: mockRun } });
+
+    const res = await worker.fetch(
+      post("/api/newspaper", { signed_state: { state, signature } }, { "X-LLM-Provider": "workers-ai" }) as any,
+      env as any,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(typeof body.headline).toBe("string");
+    expect(body.headline.length).toBeGreaterThan(0);
+    expect(mockRun).not.toHaveBeenCalled();
+    expect(callAnthropic).not.toHaveBeenCalled();
+  });
+
+  it("epitaph with custom provider: blocked guard → 200 fallback inscription, fetch NOT called", async () => {
+    const { state } = await createInitialState("Smith", MEMBERS, "farmer", "medium", SECRET);
+    state.deaths.push({ name: "Carl", cause: "cholera", date: "1848-06-01", epitaph: null });
+    const signature = await signState(state, SECRET);
+
+    const originalFetch = globalThis.fetch;
+    const fetchSpy = vi.fn(async () => { throw new Error("fetch should not be called when guard blocks"); });
+    globalThis.fetch = fetchSpy as any;
+
+    try {
+      const env = denyingEnv({ CUSTOM_LLM_URL: "http://test-rig:11434/v1" });
+      const res = await worker.fetch(
+        post("/api/epitaph", { signed_state: { state, signature }, name: "Carl" }, { "X-LLM-Provider": "custom" }) as any,
+        env as any,
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.epitaph).toContain("Carl");
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(callAnthropic).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
