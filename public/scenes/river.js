@@ -2,6 +2,7 @@ import * as draw from "../lib/draw.mjs";
 import { PALETTE, mixColor, segmentColor } from "../lib/draw.mjs";
 import { segmentForMiles, segmentBlend } from "../lib/segments.mjs";
 import { createJuice, MOTION_OK } from "../lib/juice.mjs";
+import { isAssetReady } from "../lib/assets.mjs";
 
 export default function register(k, engine) {
   k.scene("river", (data) => {
@@ -82,6 +83,15 @@ export default function register(k, engine) {
 
     k.add([k.rect(W, waterH), k.pos(0, waterY), k.color(...waterDeep)]);
     k.add([k.rect(W, waterH * 0.65), k.pos(0, waterY), k.color(...waterColor), k.opacity(0.85)]);
+
+    if (river.ferry_available !== false && isAssetReady("river_ferry")) {
+      k.add([
+        k.sprite("river_ferry"),
+        k.pos(530, 235),
+        k.anchor("center"),
+        k.scale(0.8),
+      ]);
+    }
 
     // ── Submerged Wagon & Oxen Convoy ──
     const wagonX = 350;

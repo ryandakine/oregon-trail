@@ -2,6 +2,7 @@ import { addTopHud, addBottomHud } from "../lib/hud.mjs";
 import { createJuice } from "../lib/juice.mjs";
 import { drawSky, drawGround, drawMountains, drawHills, PALETTE, drawGlow, segmentColor } from "../lib/draw.mjs";
 import { segmentForMiles } from "../lib/segments.mjs";
+import { isAssetReady } from "../lib/assets.mjs";
 
 export default function register(k, engine) {
   k.scene("landmark", (data) => {
@@ -307,6 +308,18 @@ function drawFort(k, W, H, env) {
   drawHills(k, { segment });
   drawGround(k, { tone, segment });
 
+  if (isAssetReady("landmark_fort_laramie")) {
+    k.add([
+      k.sprite("landmark_fort_laramie"),
+      k.pos(W / 2, 165),
+      k.anchor("center"),
+    ]);
+    for (let i = 0; i < 15; i++) {
+      k.add([k.pos(W / 2 + (i - 7) * 20, 240)]);
+    }
+    return;
+  }
+
   // Center visual mass in y = 80..250 (visible above UI panels)
   const baseY = 250;
 
@@ -527,6 +540,30 @@ function drawNatural(k, W, H, env) {
   const isIndependence = name.includes("independence");
   // Center visual mass in y = 80..250
   const baseY = 250;
+
+  if (isIndependence && isAssetReady("landmark_independence_rock")) {
+    k.add([
+      k.sprite("landmark_independence_rock"),
+      k.pos(W / 2, 175),
+      k.anchor("center"),
+    ]);
+    for (let i = 0; i < 15; i++) {
+      k.add([k.pos(W / 2 + (i - 7) * 20, 240)]);
+    }
+    return;
+  }
+
+  if (!isIndependence && isAssetReady("landmark_chimney_rock")) {
+    k.add([
+      k.sprite("landmark_chimney_rock"),
+      k.pos(W / 2, 165),
+      k.anchor("center"),
+    ]);
+    for (let i = 0; i < 15; i++) {
+      k.add([k.pos(W / 2 + (i - 7) * 20, 240)]);
+    }
+    return;
+  }
 
   if (isIndependence) {
     // Independence Rock: massive rounded granite monolith
@@ -864,6 +901,18 @@ function drawDestination(k, W, H, env) {
   k.add([k.rect(W, 85), k.pos(0, 180), k.color(...horizonCol)]);
 
   drawMountains(k, { segment });
+
+  if (isAssetReady("landmark_willamette")) {
+    k.add([
+      k.sprite("landmark_willamette"),
+      k.pos(W / 2, 165),
+      k.anchor("center"),
+    ]);
+    for (let i = 0; i < 15; i++) {
+      k.add([k.pos(W / 2 + (i - 7) * 20, 240)]);
+    }
+    return;
+  }
 
   // Center visual mass in y = 80..250: Grand centerpiece snow-capped peak (Mount Hood vista)
   const cx = W / 2;

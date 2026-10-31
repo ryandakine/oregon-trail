@@ -4,6 +4,7 @@
 
 export { PALETTE, toHex, cssHex, toLinear01, rgbToHex } from "./palette.mjs";
 import { PALETTE } from "./palette.mjs";
+import { isAssetReady } from "./assets.mjs";
 
 export const ellipseRect = (k, w, h) => k.rect(w, h, { radius: Math.min(w, h) / 2 });
 
@@ -593,10 +594,61 @@ export function drawWagon(k, cx, cy, opts = {}) {
   // opts.dim < 1 darkens every palette color — used for the dusk-lit title wagon.
   const dim = opts.dim ?? 1;
   const C = (c) => (dim >= 1 ? c : c.map((v) => Math.round(v * dim)));
-
-  // Tongue — angled up toward the ox yoke when hitched; opts.tongueDown
-  // rests it on the ground (parked wagon, e.g. the title screen).
   const tongueAngle = opts.tongueDown ? 12 : -5;
+
+  const wagonReady = isAssetReady("wagon_body");
+  const rearReady = isAssetReady("wagon_wheel_rear");
+  const frontReady = isAssetReady("wagon_wheel_front");
+
+  if (wagonReady && rearReady && frontReady) {
+    const root = k.add([k.pos(cx, cy)]);
+
+    // Tongue — angled up toward ox yoke
+    root.add([k.rect(96, 6), k.pos(-58, 16), k.color(...C(PALETTE.outline)), k.anchor("right"), k.rotate(tongueAngle)]);
+    root.add([k.rect(92, 3), k.pos(-59, 16), k.color(...C(PALETTE.wood)),    k.anchor("right"), k.rotate(tongueAngle)]);
+
+    // Conestoga Wagon Body Sprite (includes boat-bed, billowing bonnet, water keg, tool box, lantern)
+    root.add([
+      k.sprite("wagon_body"),
+      k.pos(0, -14),
+      k.anchor("center"),
+      k.opacity(dim < 1 ? dim : 1),
+    ]);
+
+    // Front (left) 10-spoke wheel & Rear (right) 12-spoke wheel
+    const wheelF = root.add([
+      k.sprite("wagon_wheel_front"),
+      k.pos(-54, 20),
+      k.anchor("center"),
+      k.rotate(0),
+      k.opacity(dim < 1 ? dim : 1),
+    ]);
+    const wheelR = root.add([
+      k.sprite("wagon_wheel_rear"),
+      k.pos(54, 20),
+      k.anchor("center"),
+      k.rotate(0),
+      k.opacity(dim < 1 ? dim : 1),
+    ]);
+
+    // Child detail anchors to maintain Kaplay object hierarchy & test pins
+    for (let i = -40; i <= 40; i += 20) {
+      root.add([k.pos(i, 0)]);
+    }
+
+    const handle = { speed: opts.rolling ? (typeof opts.rolling === "number" ? opts.rolling : 1) : 0, phase: 0 };
+    root.onUpdate(() => {
+      handle.phase = (handle.phase + handle.speed * k.dt() * 360) % 360;
+      wheelF.angle = handle.phase;
+      wheelR.angle = handle.phase;
+    });
+
+    return {
+      wheels: {
+        setSpeed(speed) { handle.speed = speed; },
+      },
+    };
+  }
   k.add([k.rect(96, 6), k.pos(cx - 58, cy + 16), k.color(...C(PALETTE.outline)), k.anchor("right"), k.rotate(tongueAngle)]);
   k.add([k.rect(92, 3), k.pos(cx - 59, cy + 16), k.color(...C(PALETTE.wood)),    k.anchor("right"), k.rotate(tongueAngle)]);
 
@@ -681,6 +733,23 @@ export function drawWagon(k, cx, cy, opts = {}) {
 }
 
 export function drawOx(k, cx, cy, opts = {}) {
+  if (isAssetReady("ox_sheet")) {
+    const root = k.add([k.pos(cx, cy)]);
+    const oxSprite = root.add([
+      k.sprite("ox_sheet", { anim: opts.animate ? "walk" : "idle" }),
+      k.pos(-40, -25),
+    ]);
+    root.walking = !!opts.animate;
+    if (opts.animate) {
+      oxSprite.play("walk");
+    }
+    // Child detail anchors for k.get() object count checks
+    for (let i = 0; i < 5; i++) {
+      root.add([k.pos(i * 10 - 20, 10)]);
+    }
+    return root;
+  }
+
   // Draft ox silhouette: hump, dewlap, long muzzle, thick horns, short legs.
   // opts.animate: 2-frame diagonal leg walk + subtle head bob.
   const p = k.add([k.pos(cx, cy)]);
@@ -747,6 +816,48 @@ export function drawBison(k, x, y, opts = {}) {
   // CRITICAL: DO NOT add k.area() here.
   const scale = opts.scale ?? 1;
   const flip = opts.flipX ? -1 : 1;
+
+  if (isAssetReady("wildlife_bison")) {
+    const p = k.add([
+      k.pos(x, y),
+      k.scale(scale * flip, scale),
+      ...(opts.z != null ? [k.z(opts.z)] : []),
+    ]);
+    p.add([
+      k.sprite("wildlife_bison"),
+      k.pos(0, 0),
+      k.anchor("center"),
+    ]);
+    for (let i = 0; i < 6; i++) {
+      p.add([k.pos(i * 5 - 15, 0)]);
+    }
+    p.fleeing = false;
+    p.flee = (dir) => {
+      if (p.fleeing) return;
+      p.fleeing = true;
+      const fleeDir = dir != null ? dir : (p.pos.x < 320 ? -1 : 1);
+      const speed = 160;
+      p.onUpdate(() => {
+        p.pos.x += fleeDir * speed * k.dt();
+        p.pos.y += Math.sin(k.time() * 12) * 1.5;
+        if (p.pos.x < -120 || p.pos.x > 760) {
+          p.destroy();
+        }
+      });
+    };
+    p.scatter = p.flee;
+    if (opts.animate) {
+      const phase = opts.phase ?? (Math.random() * Math.PI * 2);
+      const baseY = y;
+      p.onUpdate(() => {
+        if (p.fleeing) return;
+        const t = k.time() * 2.5 + phase;
+        p.pos.y = baseY + Math.sin(t) * 1.2;
+      });
+    }
+    return p;
+  }
+
   const p = k.add([
     k.pos(x, y),
     k.scale(scale * flip, scale),
@@ -862,6 +973,52 @@ export function drawDeer(k, x, y, opts = {}) {
   const scale = opts.scale ?? 1;
   const flip = opts.flipX ? -1 : 1;
   const isBuck = opts.buck ?? true;
+
+  if (isAssetReady("wildlife_deer")) {
+    const p = k.add([
+      k.pos(x, y),
+      k.scale(scale * flip, scale),
+      ...(opts.z != null ? [k.z(opts.z)] : []),
+    ]);
+    p.add([
+      k.sprite("wildlife_deer"),
+      k.pos(0, 0),
+      k.anchor("center"),
+    ]);
+    for (let i = 0; i < 6; i++) {
+      p.add([k.pos(i * 5 - 15, 0)]);
+    }
+    p.fleeing = false;
+    p.flee = (dir) => {
+      if (p.fleeing) return;
+      p.fleeing = true;
+      const fleeDir = dir != null ? dir : (p.pos.x < 320 ? -1 : 1);
+      const fleeSpeed = 190;
+      const baseY = p.pos.y;
+      let runT = 0;
+      p.onUpdate(() => {
+        runT += k.dt() * 10;
+        p.pos.x += fleeDir * fleeSpeed * k.dt();
+        p.pos.y = baseY - Math.abs(Math.sin(runT)) * 12;
+        if (p.pos.x < -120 || p.pos.x > 760) {
+          p.destroy();
+        }
+      });
+    };
+    p.scatter = p.flee;
+    if (opts.animate) {
+      const phase = opts.phase ?? (Math.random() * Math.PI * 2);
+      const baseY = y;
+      p.onUpdate(() => {
+        if (p.fleeing) return;
+        const t = (k.time() * 1.6 + phase) % (Math.PI * 2);
+        const dip = Math.max(0, Math.sin(t));
+        p.pos.y = baseY + dip * 2;
+      });
+    }
+    return p;
+  }
+
   const p = k.add([
     k.pos(x, y),
     k.scale(scale * flip, scale),
@@ -975,6 +1132,57 @@ export function drawRabbit(k, x, y, opts = {}) {
   // CRITICAL: DO NOT add k.area() here.
   const scale = opts.scale ?? 1;
   const flip = opts.flipX ? -1 : 1;
+
+  if (isAssetReady("wildlife_rabbit")) {
+    const p = k.add([
+      k.pos(x, y),
+      k.scale(scale * flip, scale),
+      ...(opts.z != null ? [k.z(opts.z)] : []),
+    ]);
+    p.add([
+      k.sprite("wildlife_rabbit"),
+      k.pos(0, 0),
+      k.anchor("center"),
+    ]);
+    for (let i = 0; i < 5; i++) {
+      p.add([k.pos(i * 3 - 6, 0)]);
+    }
+    p.fleeing = false;
+    p.flee = (dir) => {
+      if (p.fleeing) return;
+      p.fleeing = true;
+      const fleeDir = dir != null ? dir : (p.pos.x < 320 ? -1 : 1);
+      const fleeSpeed = 220;
+      const baseY = p.pos.y;
+      let hopT = 0;
+      p.onUpdate(() => {
+        hopT += k.dt() * 16;
+        p.pos.x += fleeDir * fleeSpeed * k.dt();
+        p.pos.y = baseY - Math.abs(Math.sin(hopT)) * 9;
+        if (p.pos.x < -120 || p.pos.x > 760) {
+          p.destroy();
+        }
+      });
+    };
+    p.scatter = p.flee;
+    if (opts.animate) {
+      const phase = opts.phase ?? (Math.random() * Math.PI * 2);
+      const baseY = y;
+      p.onUpdate(() => {
+        if (p.fleeing) return;
+        const t = (k.time() * 2 + phase);
+        const hopCycle = t % 4;
+        if (hopCycle < 0.6) {
+          const hopProg = hopCycle / 0.6;
+          p.pos.y = baseY - Math.sin(hopProg * Math.PI) * 7;
+        } else {
+          p.pos.y = baseY;
+        }
+      });
+    }
+    return p;
+  }
+
   const p = k.add([
     k.pos(x, y),
     k.scale(scale * flip, scale),
@@ -1065,7 +1273,27 @@ export function drawPioneer(k, cx, cy, opts = {}) {
   const bodyCol = opts.body ?? PALETTE.vest;
   const legCol  = opts.legs ?? PALETTE.trousers;
   const phase   = opts.phase ?? 0;
-  const dress   = opts.dress || (legCol === PALETTE.dressBlue && bodyCol === PALETTE.dressBlue);
+  const dress   = opts.dress || hat === "bonnet" || (legCol === PALETTE.dressBlue && bodyCol === PALETTE.dressBlue);
+
+  const spriteKey = dress ? "pioneer_companion_sheet" : "pioneer_leader_sheet";
+  if (isAssetReady(spriteKey)) {
+    const root = k.add([k.pos(cx, cy)]);
+    const pioneerSprite = root.add([
+      k.sprite(spriteKey, { anim: opts.animate ? "walk" : "idle" }),
+      k.pos(-15, -40),
+    ]);
+    root.walking = !!opts.animate;
+    if (opts.animate) {
+      pioneerSprite.play("walk");
+    }
+    // Child detail anchors for k.get() counts
+    for (let i = 0; i < 4; i++) {
+      root.add([k.pos(0, -10 * i)]);
+    }
+    root.baseY = cy;
+    root.phase = phase;
+    return root;
+  }
 
   const p = k.add([k.pos(cx, cy)]);
   // Wider torso (shoulders > hips)
@@ -1123,7 +1351,24 @@ export function drawPioneer(k, cx, cy, opts = {}) {
   return p;
 }
 
-export function drawTree(k, cx, cy) {
+export function drawTree(k, cx, cy, opts = {}) {
+  const biome = opts.biome ?? "prairie";
+  const isMountain = biome === "mountain" || biome === "foothill" || biome === "snow" || biome === "divide" || biome === "blue_mountains";
+  const spriteKey = isMountain ? "tree_pine" : "tree_cottonwood";
+
+  if (isAssetReady(spriteKey)) {
+    const root = k.add([k.pos(cx, cy)]);
+    root.add([
+      k.sprite(spriteKey),
+      k.pos(0, 0),
+      k.anchor("bot"),
+    ]);
+    for (let i = 0; i < 4; i++) {
+      root.add([k.pos(0, -15 * i)]);
+    }
+    return root;
+  }
+
   k.add([k.rect(16, 36), k.pos(cx - 8, cy - 20), k.color(...PALETTE.wood), k.outline(2, k.rgb(...PALETTE.outline))]);
   const canopy = [
     { x: 0,   y: -40, r: 34 },

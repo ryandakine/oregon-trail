@@ -200,6 +200,17 @@ async function main() {
       await page.waitForFunction(() => window.engine.state === 'TRAVEL', { timeout: 10000 });
       await page.evaluate(() => window.engine.pauseAdvance());
       await page.waitForTimeout(1000);
+    } else if (currentState === 'RIVER') {
+      console.log('Advanced directly to river crossing! Handling river crossing before hunting...');
+      await page.waitForTimeout(1500);
+      await snap('12_river_crossing.png');
+      await pressCanvasKey('2'); // (2) Caulk and float
+      await page.waitForTimeout(2000);
+      await snap('13_river_result_beat.png');
+      await pressCanvasKey('c'); // Continue back to TRAVEL
+      await page.waitForFunction(() => window.engine.state === 'TRAVEL', { timeout: 10000 });
+      await page.evaluate(() => window.engine.pauseAdvance());
+      await page.waitForTimeout(1000);
     }
 
     // ── STEP 10: Test Hunting Scene ──

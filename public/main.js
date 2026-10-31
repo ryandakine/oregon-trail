@@ -2,6 +2,7 @@
 import { shouldInit3D, getRenderMode, isDesktopPointer } from "./render-mode.mjs";
 import { createHorrorFx } from "./lib/horror-fx.mjs";
 import { createTrailAudio } from "./lib/audio.mjs";
+import { preloadGameAssets } from "./lib/assets.mjs";
 
 window.__ERRORS = [];
 window.addEventListener("error", (e) => window.__ERRORS.push({ msg: e.message, src: e.filename, line: e.lineno }));
@@ -59,6 +60,13 @@ k.loadSprite("titleHero", "/assets/title-hero.png")
   .catch((err) => {
     console.warn("title-hero.png missing; using night fallback:", err?.message);
   });
+
+// Preload 19th-century frontier lithograph engraving assets (convoy, wildlife, scenery)
+try {
+  await preloadGameAssets(k);
+} catch (err) {
+  console.warn("game assets preload error; using procedural fallbacks:", err?.message || err);
+}
 
 // HIGH tone tier post effect (graphics-pop-research § 3 Phase C). Only the
 // composed pass is fetched — kaplay's post-effect slot holds a single shader,

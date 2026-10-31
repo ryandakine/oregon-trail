@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="70" viewBox="0 0 160 70">
+  <defs>
+    <filter id="ferry-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1" flood-color="#1f1a16" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <g id="river-ferry" filter="url(#ferry-shadow)">
+    <!-- Ferry Timber Hull (Flat-bottomed barge) -->
+    <polygon points="10,35 150,35 140,55 20,55" fill="#523620" stroke="#1f1a16" stroke-width="1.8" stroke-linejoin="round"/>
+
+    <!-- Horizontal Hull Planks & Iron Fasteners -->
+    <path d="M 13 41 L 147 41 M 17 48 L 143 48" stroke="#362112" stroke-width="1.4"/>
+    <circle cx="25" cy="41" r="1" fill="#111111"/>
+    <circle cx="80" cy="41" r="1" fill="#111111"/>
+    <circle cx="135" cy="41" r="1" fill="#111111"/>
+    <circle cx="28" cy="48" r="1" fill="#111111"/>
+    <circle cx="80" cy="48" r="1" fill="#111111"/>
+    <circle cx="132" cy="48" r="1" fill="#111111"/>
+
+    <!-- Timber Deck & Safety Railing / Chocks -->
+    <rect x="18" y="24" width="6" height="12" fill="#694627" stroke="#1f1a16" stroke-width="1"/>
+    <rect x="77" y="24" width="6" height="12" fill="#694627" stroke="#1f1a16" stroke-width="1"/>
+    <rect x="136" y="24" width="6" height="12" fill="#694627" stroke="#1f1a16" stroke-width="1"/>
+    <line x1="16" y1="26" x2="144" y2="26" stroke="#4a2e16" stroke-width="2.5"/>
+    <line x1="16" y1="26" x2="144" y2="26" stroke="#1f1a16" stroke-width="0.8"/>
+
+    <!-- Heavy Cable / Haul Rope guiding the ferry across river -->
+    <line x1="0" y1="18" x2="160" y2="18" stroke="#876f58" stroke-width="2"/>
+    <line x1="0" y1="18" x2="160" y2="18" stroke="#1f1a16" stroke-width="0.6"/>
+    <!-- Ferryman's Cable Pulley Block -->
+    <circle cx="80" cy="18" r="3.5" fill="#3b2b1d" stroke="#1f1a16" stroke-width="1"/>
+    <circle cx="80" cy="18" r="1.5" fill="#d9aa55"/>
+
+    <!-- Waterline foam ripple -->
+    <path d="M 12 55 C 40 57, 120 57, 148 55" stroke="#e8f4f8" stroke-width="1.8" fill="none" opacity="0.8"/>
+  </g>
+</svg>

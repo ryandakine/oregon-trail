@@ -1,5 +1,6 @@
 import { drawSky, drawMountains, drawHills, drawGround, PALETTE, segmentColor, drawGlow, getDayPhase } from "../lib/draw.mjs";
 import { segmentForMiles } from "../lib/segments.mjs";
+import { isAssetReady } from "../lib/assets.mjs";
 
 export default function register(k, engine) {
   k.scene("arrival", (data) => {
@@ -40,6 +41,17 @@ export default function register(k, engine) {
     }
 
     // 5. Homestead cabin silhouettes with rising chimney smoke (x = 300..640)
+    if (isAssetReady("landmark_willamette")) {
+      k.add([
+        k.sprite("landmark_willamette"),
+        k.pos(470, 180),
+        k.scale(0.85),
+        k.anchor("center"),
+      ]);
+      for (let i = 0; i < 20; i++) {
+        k.add([k.pos(350 + i * 14, 245)]);
+      }
+    } else {
     const cabins = [
       { x: 330, w: 60, h: 46, roofH: 15, chimOnLeft: false },
       { x: 425, w: 80, h: 58, roofH: 18, chimOnLeft: true },
@@ -119,6 +131,7 @@ export default function register(k, engine) {
       k.add([k.rect(2, 12), k.pos(fx, cabinBaseY - 12), k.color(...PALETTE.woodDark)]);
       k.add([k.rect(20, 2), k.pos(fx, cabinBaseY - 10), k.color(...PALETTE.wood)]);
       k.add([k.rect(20, 2), k.pos(fx, cabinBaseY - 4), k.color(...PALETTE.wood)]);
+    }
     }
 
     // 6. Title Header

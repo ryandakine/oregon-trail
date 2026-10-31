@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="0.8" flood-color="#1f1a16" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <g id="rear-wheel" filter="url(#shadow)">
+    <!-- Outer Iron Tire (stout hammered wrought iron band) -->
+    <circle cx="26" cy="26" r="25" fill="#1f1a16" stroke="#2d2621" stroke-width="1"/>
+    <!-- Iron Tire inner lip -->
+    <circle cx="26" cy="26" r="23" fill="#8b5a2b" stroke="#1f1a16" stroke-width="1.2"/>
+    <!-- Wooden Felloe Rim (curved ash/oak segments) -->
+    <circle cx="26" cy="26" r="20" fill="#633e1a" stroke="#1f1a16" stroke-width="1"/>
+    <!-- Tire Rivets around circumference -->
+    <circle cx="26" cy="2" r="0.8" fill="#e2d7c3"/>
+    <circle cx="38" cy="5" r="0.8" fill="#e2d7c3"/>
+    <circle cx="47" cy="14" r="0.8" fill="#e2d7c3"/>
+    <circle cx="50" cy="26" r="0.8" fill="#e2d7c3"/>
+    <circle cx="47" cy="38" r="0.8" fill="#e2d7c3"/>
+    <circle cx="38" cy="47" r="0.8" fill="#e2d7c3"/>
+    <circle cx="26" cy="50" r="0.8" fill="#e2d7c3"/>
+    <circle cx="14" cy="47" r="0.8" fill="#e2d7c3"/>
+    <circle cx="5" cy="38" r="0.8" fill="#e2d7c3"/>
+    <circle cx="2" cy="26" r="0.8" fill="#e2d7c3"/>
+    <circle cx="5" cy="14" r="0.8" fill="#e2d7c3"/>
+    <circle cx="14" cy="5" r="0.8" fill="#e2d7c3"/>
+
+    <!-- 12 Tapered Wooden Spokes with Engraving Hatching -->
+    <!-- 0 deg -->
+    <polygon points="25,26 27,26 27.5,6 24.5,6" fill="#a4723e" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 30 deg -->
+    <polygon points="26,26 26,26 36,8.7 33.5,7.3" fill="#8b5a2b" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 60 deg -->
+    <polygon points="26,26 26,26 43.3,16 41.8,13.5" fill="#8b5a2b" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 90 deg -->
+    <polygon points="26,25 26,27 46,27.5 46,24.5" fill="#633e1a" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 120 deg -->
+    <polygon points="26,26 26,26 43.3,36 44.8,33.5" fill="#633e1a" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 150 deg -->
+    <polygon points="26,26 26,26 36,43.3 38.5,41.8" fill="#633e1a" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 180 deg -->
+    <polygon points="25,26 27,26 27.5,46 24.5,46" fill="#4a2c0f" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 210 deg -->
+    <polygon points="26,26 26,26 16,43.3 18.5,44.8" fill="#4a2c0f" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 240 deg -->
+    <polygon points="26,26 26,26 8.7,36 7.3,33.5" fill="#633e1a" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 270 deg -->
+    <polygon points="26,25 26,27 6,27.5 6,24.5" fill="#8b5a2b" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 300 deg -->
+    <polygon points="26,26 26,26 8.7,16 7.3,18.5" fill="#8b5a2b" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- 330 deg -->
+    <polygon points="26,26 26,26 16,8.7 13.5,10.2" fill="#a4723e" stroke="#1f1a16" stroke-width="0.8"/>
+
+    <!-- Heavy Cast-Iron Hub Box with Linchpin -->
+    <circle cx="26" cy="26" r="7.5" fill="#1f1a16" stroke="#2d2621" stroke-width="1.2"/>
+    <circle cx="26" cy="26" r="5.5" fill="#633e1a" stroke="#1f1a16" stroke-width="1"/>
+    <circle cx="26" cy="26" r="3.5" fill="#1f1a16"/>
+    <!-- Iron Linchpin key -->
+    <rect x="25" y="21" width="2" height="10" rx="0.5" fill="#e2d7c3" stroke="#1f1a16" stroke-width="0.6"/>
+  </g>
+</svg>

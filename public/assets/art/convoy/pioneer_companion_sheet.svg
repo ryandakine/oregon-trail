@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="45" viewBox="0 0 120 45">
+  <!-- Frame 0: Step forward (30x45) -->
+  <g id="companion-0" transform="translate(0, 0)">
+    <!-- Skirt hem & boots -->
+    <!-- Far boot pushing back -->
+    <rect x="9" y="41" width="4.5" height="2.5" rx="0.5" fill="#1f1a16"/>
+    <!-- Near boot stepping forward -->
+    <rect x="18" y="41" width="4.5" height="2.5" rx="0.5" fill="#1f1a16"/>
+    <!-- Pleated Calico Prairie Dress (long flared skirt swaying forward) -->
+    <path d="M 12 24 L 18 24 L 22 41 C 18 42, 12 42, 8 41 Z" fill="#3a5a78" stroke="#1f1a16" stroke-width="1.2"/>
+    <!-- Skirt pleat lines / folds -->
+    <path d="M 14 24 L 11 41 M 16 24 L 16 41 M 17 24 L 20 41" stroke="#253a4e" stroke-width="0.8"/>
+    <!-- Woolen Shawl over shoulders and torso -->
+    <path d="M 10 15 L 20 15 L 18 24 L 12 24 Z" fill="#786c5e" stroke="#1f1a16" stroke-width="1.2"/>
+    <path d="M 11 16 L 15 23 L 19 16" fill="none" stroke="#524a40" stroke-width="1"/> <!-- Shawl drape -->
+    <!-- Hands tucked in shawl -->
+    <ellipse cx="15" cy="22" rx="2.5" ry="1.5" fill="#786c5e" stroke="#1f1a16" stroke-width="0.8"/>
+    <!-- Head & Face -->
+    <circle cx="15" cy="12" r="3.2" fill="#e8c4a0"/>
+    <!-- Prairie Bonnet with ruffle brim -->
+    <path d="M 12 8 C 11 13, 14 16, 17 15 C 19 14, 18 9, 15 7 Z" fill="#d8cca8" stroke="#1f1a16" stroke-width="1"/>
+    <path d="M 16 8 C 19 8, 20 13, 18 16" fill="none" stroke="#1f1a16" stroke-width="1"/> <!-- Ruffle front -->
+    <path d="M 14 14 C 13 17, 12 20, 11 21" fill="none" stroke="#d8cca8" stroke-width="1.2"/> <!-- Ribbon tie -->
+  </g>
+
+  <!-- Frame 1: Mid-step pass (30x45) -->
+  <g id="companion-1" transform="translate(30, 0)">
+    <rect x="12" y="41" width="4.5" height="2.5" rx="0.5" fill="#1f1a16"/>
+    <rect x="16" y="41" width="4.5" height="2.5" rx="0.5" fill="#1f1a16"/>
+    <path d="M 12 24.5 L 18 24.5 L 21 41 C 17 42, 13 42, 9 41 Z" fill="#3a5a78" stroke="#1f1a16" stroke-width="1.2"/>
+    <path d="M 14 24.5 L 12 41 M 16 24.5 L 16 41 M 17 24.5 L 19 41" stroke="#253a4e" stroke-width="0.8"/>
+    <path d="M 10 15.5 L 20 15.5 L 18 24.5 L 12 24.5 Z" fill="#786c5e" stroke="#1f1a16" stroke-width="1.2"/>
+    <path d="M 11 16.5 L 15 23.5 L 19 16.5" fill="none" stroke="#524a40" stroke-width="1"/>
+    <ellipse cx="15" cy="22.5" rx="2.5" ry="1.5" fill="#786c5e" stroke="#1f1a16" stroke-width="0.8"/>
+    <circle cx="15" cy="12.5" r="3.2" fill="#e8c4a0"/>
+    <path d="M 12 8.5 C 11 13.5, 14 16.5, 17 15.5 C 19 14.5, 18 9.5, 15 7.5 Z" fill="#d8cca8" stroke="#1f1a16" stroke-width="1"/>
+    <path d="M 16 8.5 C 19 8.5, 20 13.5, 18 16.5" fill="none" stroke="#1f1a16" stroke-width="1"/>
+    <path d="M 14 14.5 C 13 17.5, 12 20.5, 11 21.5" fill="none" stroke="#d8cca8" stroke-width="1.2"/>
+  </g>
+
+  <!-- Frame 2: Opposite step (30x45) -->
+  <g id="companion-2" transform="translate(60, 0)">
+    <rect x="17" y="41" width="4.5" height="2.5" rx="0.5" fill="#1f1a16"/>
+    <rect x="10" y="41" width="4.5" height="2.5" rx="0.5" fill="#1f1a16"/>
+    <path d="M 12 24 L 18 24 L 20 41 C 16 42, 11 42, 8 41 Z" fill="#3a5a78" stroke="#1f1a16" stroke-width="1.2"/>
+    <path d="M 13 24 L 10 41 M 15 24 L 15 41 M 17 24 L 18 41" stroke="#253a4e" stroke-width="0.8"/>
+    <path d="M 10 15 L 20 15 L 18 24 L 12 24 Z" fill="#786c5e" stroke="#1f1a16" stroke-width="1.2"/>
+    <path d="M 11 16 L 15 23 L 19 16" fill="none" stroke="#524a40" stroke-width="1"/>
+    <ellipse cx="15" cy="22" rx="2.5" ry="1.5" fill="#786c5e" stroke="#1f1a16" stroke-width="0.8"/>
+    <circle cx="15" cy="12" r="3.2" fill="#e8c4a0"/>
+    <path d="M 12 8 C 11 13, 14 16, 17 15 C 19 14, 18 9, 15 7 Z" fill="#d8cca8" stroke="#1f1a16" stroke-width="1"/>
+    <path d="M 16 8 C 19 8, 20 13, 18 16" fill="none" stroke="#1f1a16" stroke-width="1"/>
+    <path d="M 14 14 C 13 17, 12 20, 11 21" fill="none" stroke="#d8cca8" stroke-width="1.2"/>
+  </g>
+
+  <!-- Frame 3: Mid-step pass opposite (30x45) -->
+  <g id="companion-3" transform="translate(90, 0)">
+    <rect x="14" y="41" width="4.5" height="2.5" rx="0.5" fill="#1f1a16"/>
+    <rect x="14" y="41" width="4.5" height="2.5" rx="0.5" fill="#1f1a16"/>
+    <path d="M 12 24.5 L 18 24.5 L 21 41 C 17 42, 13 42, 9 41 Z" fill="#3a5a78" stroke="#1f1a16" stroke-width="1.2"/>
+    <path d="M 14 24.5 L 12 41 M 16 24.5 L 16 41 M 17 24.5 L 19 41" stroke="#253a4e" stroke-width="0.8"/>
+    <path d="M 10 15.5 L 20 15.5 L 18 24.5 L 12 24.5 Z" fill="#786c5e" stroke="#1f1a16" stroke-width="1.2"/>
+    <path d="M 11 16.5 L 15 23.5 L 19 16.5" fill="none" stroke="#524a40" stroke-width="1"/>
+    <ellipse cx="15" cy="22.5" rx="2.5" ry="1.5" fill="#786c5e" stroke="#1f1a16" stroke-width="0.8"/>
+    <circle cx="15" cy="12.5" r="3.2" fill="#e8c4a0"/>
+    <path d="M 12 8.5 C 11 13.5, 14 16.5, 17 15.5 C 19 14.5, 18 9.5, 15 7.5 Z" fill="#d8cca8" stroke="#1f1a16" stroke-width="1"/>
+    <path d="M 16 8.5 C 19 8.5, 20 13.5, 18 16.5" fill="none" stroke="#1f1a16" stroke-width="1"/>
+    <path d="M 14 14.5 C 13 17.5, 12 20.5, 11 21.5" fill="none" stroke="#d8cca8" stroke-width="1.2"/>
+  </g>
+</svg>

@@ -83,7 +83,7 @@ export default function register(k, engine) {
 
     // Environment
     const dressing = DRESSING[here.biome] ?? DRESSING.prairie;
-    for (const [tx, ty] of dressing.trees) draw.drawTree(k, tx, ty);
+    for (const [tx, ty] of dressing.trees) draw.drawTree(k, tx, ty, { biome: here.biome });
     for (const [rx, ry, rw, rh] of dressing.rocks) draw.drawRock(k, rx, ry, rw, rh);
     for (const [gx, gy] of dressing.tufts) draw.drawGrassTuft(k, gx, gy);
 
