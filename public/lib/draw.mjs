@@ -608,33 +608,29 @@ export function drawWagon(k, cx, cy, opts = {}) {
     root.add([k.rect(92, 3), k.pos(-59, 16), k.color(...C(PALETTE.wood)),    k.anchor("right"), k.rotate(tongueAngle)]);
 
     // Conestoga Wagon Body Sprite (includes boat-bed, billowing bonnet, water keg, tool box, lantern)
+    const tint = C([255, 255, 255]);
     root.add([
       k.sprite("wagon_body"),
-      k.pos(0, -14),
+      k.pos(0, -8),
       k.anchor("center"),
-      k.opacity(dim < 1 ? dim : 1),
+      k.color(...tint),
     ]);
 
     // Front (left) 10-spoke wheel & Rear (right) 12-spoke wheel
     const wheelF = root.add([
       k.sprite("wagon_wheel_front"),
-      k.pos(-54, 20),
+      k.pos(-42, 26),
       k.anchor("center"),
       k.rotate(0),
-      k.opacity(dim < 1 ? dim : 1),
+      k.color(...tint),
     ]);
     const wheelR = root.add([
       k.sprite("wagon_wheel_rear"),
-      k.pos(54, 20),
+      k.pos(42, 24),
       k.anchor("center"),
       k.rotate(0),
-      k.opacity(dim < 1 ? dim : 1),
+      k.color(...tint),
     ]);
-
-    // Child detail anchors to maintain Kaplay object hierarchy & test pins
-    for (let i = -40; i <= 40; i += 20) {
-      root.add([k.pos(i, 0)]);
-    }
 
     const handle = { speed: opts.rolling ? (typeof opts.rolling === "number" ? opts.rolling : 1) : 0, phase: 0 };
     root.onUpdate(() => {
@@ -735,18 +731,19 @@ export function drawWagon(k, cx, cy, opts = {}) {
 export function drawOx(k, cx, cy, opts = {}) {
   if (isAssetReady("ox_sheet")) {
     const root = k.add([k.pos(cx, cy)]);
+    const phase = opts.phase ?? 0;
     const oxSprite = root.add([
-      k.sprite("ox_sheet", { anim: opts.animate ? "walk" : "idle" }),
+      k.sprite("ox_sheet", { frame: 0 }),
       k.pos(-40, -25),
     ]);
     root.walking = !!opts.animate;
-    if (opts.animate) {
-      oxSprite.play("walk");
-    }
-    // Child detail anchors for k.get() object count checks
-    for (let i = 0; i < 5; i++) {
-      root.add([k.pos(i * 10 - 20, 10)]);
-    }
+    root.onUpdate(() => {
+      if (!root.walking) {
+        oxSprite.frame = 0;
+        return;
+      }
+      oxSprite.frame = Math.floor(k.time() * 3.5 + phase) % 4;
+    });
     return root;
   }
 
@@ -828,9 +825,6 @@ export function drawBison(k, x, y, opts = {}) {
       k.pos(0, 0),
       k.anchor("center"),
     ]);
-    for (let i = 0; i < 6; i++) {
-      p.add([k.pos(i * 5 - 15, 0)]);
-    }
     p.fleeing = false;
     p.flee = (dir) => {
       if (p.fleeing) return;
@@ -847,7 +841,8 @@ export function drawBison(k, x, y, opts = {}) {
     };
     p.scatter = p.flee;
     if (opts.animate) {
-      const phase = opts.phase ?? (Math.random() * Math.PI * 2);
+      const rng = seededRng(seedFrom(x, y));
+      const phase = opts.phase ?? (rng() * Math.PI * 2);
       const baseY = y;
       p.onUpdate(() => {
         if (p.fleeing) return;
@@ -974,20 +969,18 @@ export function drawDeer(k, x, y, opts = {}) {
   const flip = opts.flipX ? -1 : 1;
   const isBuck = opts.buck ?? true;
 
-  if (isAssetReady("wildlife_deer")) {
+  const deerKey = isBuck ? "wildlife_deer" : "wildlife_deer_doe";
+  if (isAssetReady(deerKey)) {
     const p = k.add([
       k.pos(x, y),
       k.scale(scale * flip, scale),
       ...(opts.z != null ? [k.z(opts.z)] : []),
     ]);
     p.add([
-      k.sprite("wildlife_deer"),
+      k.sprite(deerKey),
       k.pos(0, 0),
       k.anchor("center"),
     ]);
-    for (let i = 0; i < 6; i++) {
-      p.add([k.pos(i * 5 - 15, 0)]);
-    }
     p.fleeing = false;
     p.flee = (dir) => {
       if (p.fleeing) return;
@@ -1007,7 +1000,8 @@ export function drawDeer(k, x, y, opts = {}) {
     };
     p.scatter = p.flee;
     if (opts.animate) {
-      const phase = opts.phase ?? (Math.random() * Math.PI * 2);
+      const rng = seededRng(seedFrom(x, y));
+      const phase = opts.phase ?? (rng() * Math.PI * 2);
       const baseY = y;
       p.onUpdate(() => {
         if (p.fleeing) return;
@@ -1144,9 +1138,6 @@ export function drawRabbit(k, x, y, opts = {}) {
       k.pos(0, 0),
       k.anchor("center"),
     ]);
-    for (let i = 0; i < 5; i++) {
-      p.add([k.pos(i * 3 - 6, 0)]);
-    }
     p.fleeing = false;
     p.flee = (dir) => {
       if (p.fleeing) return;
@@ -1166,7 +1157,8 @@ export function drawRabbit(k, x, y, opts = {}) {
     };
     p.scatter = p.flee;
     if (opts.animate) {
-      const phase = opts.phase ?? (Math.random() * Math.PI * 2);
+      const rng = seededRng(seedFrom(x, y));
+      const phase = opts.phase ?? (rng() * Math.PI * 2);
       const baseY = y;
       p.onUpdate(() => {
         if (p.fleeing) return;
@@ -1279,19 +1271,19 @@ export function drawPioneer(k, cx, cy, opts = {}) {
   if (isAssetReady(spriteKey)) {
     const root = k.add([k.pos(cx, cy)]);
     const pioneerSprite = root.add([
-      k.sprite(spriteKey, { anim: opts.animate ? "walk" : "idle" }),
+      k.sprite(spriteKey, { frame: 0 }),
       k.pos(-15, -40),
     ]);
     root.walking = !!opts.animate;
-    if (opts.animate) {
-      pioneerSprite.play("walk");
-    }
-    // Child detail anchors for k.get() counts
-    for (let i = 0; i < 4; i++) {
-      root.add([k.pos(0, -10 * i)]);
-    }
     root.baseY = cy;
     root.phase = phase;
+    root.onUpdate(() => {
+      if (!root.walking) {
+        pioneerSprite.frame = 0;
+        return;
+      }
+      pioneerSprite.frame = Math.floor(k.time() * 5 + root.phase) % 4;
+    });
     return root;
   }
 
@@ -1353,7 +1345,7 @@ export function drawPioneer(k, cx, cy, opts = {}) {
 
 export function drawTree(k, cx, cy, opts = {}) {
   const biome = opts.biome ?? "prairie";
-  const isMountain = biome === "mountain" || biome === "foothill" || biome === "snow" || biome === "divide" || biome === "blue_mountains";
+  const isMountain = biome === "forest" || biome === "foothills" || biome === "mountain" || biome === "snow" || biome === "divide" || biome === "blue_mountains";
   const spriteKey = isMountain ? "tree_pine" : "tree_cottonwood";
 
   if (isAssetReady(spriteKey)) {
@@ -1363,9 +1355,6 @@ export function drawTree(k, cx, cy, opts = {}) {
       k.pos(0, 0),
       k.anchor("bot"),
     ]);
-    for (let i = 0; i < 4; i++) {
-      root.add([k.pos(0, -15 * i)]);
-    }
     return root;
   }
 

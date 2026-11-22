@@ -48,9 +48,6 @@ export default function register(k, engine) {
         k.scale(0.85),
         k.anchor("center"),
       ]);
-      for (let i = 0; i < 20; i++) {
-        k.add([k.pos(350 + i * 14, 245)]);
-      }
     } else {
     const cabins = [
       { x: 330, w: 60, h: 46, roofH: 15, chimOnLeft: false },

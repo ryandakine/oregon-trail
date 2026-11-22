@@ -314,9 +314,6 @@ function drawFort(k, W, H, env) {
       k.pos(W / 2, 165),
       k.anchor("center"),
     ]);
-    for (let i = 0; i < 15; i++) {
-      k.add([k.pos(W / 2 + (i - 7) * 20, 240)]);
-    }
     return;
   }
 
@@ -547,9 +544,6 @@ function drawNatural(k, W, H, env) {
       k.pos(W / 2, 175),
       k.anchor("center"),
     ]);
-    for (let i = 0; i < 15; i++) {
-      k.add([k.pos(W / 2 + (i - 7) * 20, 240)]);
-    }
     return;
   }
 
@@ -559,9 +553,6 @@ function drawNatural(k, W, H, env) {
       k.pos(W / 2, 165),
       k.anchor("center"),
     ]);
-    for (let i = 0; i < 15; i++) {
-      k.add([k.pos(W / 2 + (i - 7) * 20, 240)]);
-    }
     return;
   }
 
@@ -903,13 +894,16 @@ function drawDestination(k, W, H, env) {
   drawMountains(k, { segment });
 
   if (isAssetReady("landmark_willamette")) {
+    drawHills(k, { segment });
+    drawGround(k, { tone, segment });
     k.add([
       k.sprite("landmark_willamette"),
       k.pos(W / 2, 165),
       k.anchor("center"),
     ]);
-    for (let i = 0; i < 15; i++) {
-      k.add([k.pos(W / 2 + (i - 7) * 20, 240)]);
+    const mist = PALETTE.hazeWillamette;
+    for (const [my, mh, mop] of [[245, 8, 0.3], [270, 6, 0.22], [305, 5, 0.16]]) {
+      k.add([k.rect(W, mh), k.pos(0, my), k.color(...mist), k.opacity(mop)]);
     }
     return;
   }

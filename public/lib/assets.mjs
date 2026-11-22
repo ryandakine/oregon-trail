@@ -59,6 +59,9 @@ export const ASSET_MANIFEST = {
   wildlife_deer: {
     src: "/assets/art/wildlife/deer.svg",
   },
+  wildlife_deer_doe: {
+    src: "/assets/art/wildlife/deer_doe.svg",
+  },
   wildlife_rabbit: {
     src: "/assets/art/wildlife/rabbit.svg",
   },
@@ -90,7 +93,7 @@ export function isAssetReady(key) {
  * Preloads all registered art assets asynchronously using Kaplay's loadSprite.
  * Wraps custom Kaplay Asset lifecycle in native Promises with error tolerance.
  */
-export function preloadGameAssets(k) {
+export function preloadGameAssets(k, { timeoutMs = 2500 } = {}) {
   if (preloadPromise) return preloadPromise;
 
   const entries = Object.entries(ASSET_MANIFEST);
@@ -132,12 +135,24 @@ export function preloadGameAssets(k) {
     });
   });
 
-  preloadPromise = Promise.all(promises).then((loaded) => {
+  const allDone = Promise.all(promises).then((loaded) => {
     const successCount = loaded.filter(Boolean).length;
     if (typeof window !== "undefined") {
       window.__gameAssetsLoaded = true;
     }
-    return { successCount, total: entries.length };
+    return { successCount, total: entries.length, timedOut: false };
+  });
+
+  let timerId = null;
+  const timeoutGuard = new Promise((resolve) => {
+    timerId = setTimeout(() => {
+      console.warn(`[Assets] Preload timed out after ${timeoutMs}ms (${READY_ASSETS.size}/${entries.length} ready); continuing with procedural fallback.`);
+      resolve({ successCount: READY_ASSETS.size, total: entries.length, timedOut: true });
+    }, timeoutMs);
+  });
+
+  preloadPromise = Promise.race([allDone, timeoutGuard]).finally(() => {
+    if (timerId != null) clearTimeout(timerId);
   });
 
   return preloadPromise;

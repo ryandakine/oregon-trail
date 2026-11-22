@@ -14,13 +14,11 @@
     <!-- Reach pole -->
     <path d="M 22 72 L 158 72 L 158 76 L 22 76 Z" fill="#4a2c0f" stroke="#1f1a16" stroke-width="1.5"/>
     <!-- Front bolster and axle cap -->
-    <rect x="30" y="68" width="12" height="10" rx="1.5" fill="#38220f" stroke="#1f1a16" stroke-width="1.5"/>
-    <circle cx="36" cy="73" r="2.5" fill="#1f1a16"/>
+    <rect x="42" y="68" width="12" height="10" rx="1.5" fill="#38220f" stroke="#1f1a16" stroke-width="1.5"/>
+    <circle cx="48" cy="73" r="2.5" fill="#1f1a16"/>
     <!-- Rear bolster and axle cap -->
-    <rect x="138" y="68" width="12" height="10" rx="1.5" fill="#38220f" stroke="#1f1a16" stroke-width="1.5"/>
-    <circle cx="144" cy="73" r="2.5" fill="#1f1a16"/>
-    <!-- Hitch tongue angled forward to ox yoke -->
-    <path d="M 30 73 L 2 64 L 0 67 L 28 76 Z" fill="#633e1a" stroke="#1f1a16" stroke-width="1.5"/>
+    <rect x="126" y="68" width="12" height="10" rx="1.5" fill="#38220f" stroke="#1f1a16" stroke-width="1.5"/>
+    <circle cx="132" cy="73" r="2.5" fill="#1f1a16"/>
     <!-- Iron brake lever -->
     <path d="M 124 55 L 140 70 L 138 72 L 122 57 Z" fill="#1f1a16"/>
     <circle cx="123" cy="56" r="2" fill="#2d2621"/>
