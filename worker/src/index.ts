@@ -1,6 +1,7 @@
 import { createInitialState, verifyIncomingState, applyEventAndSign, applyStoreAndSign, getChallengeById, getCurrentChallenge, WEEKLY_CHALLENGES, STORE_PRICES, REST_HEAL_PER_DAY, REST_FOOD_PER_MEMBER_PER_DAY, CAMP_SANITY_RESTORE_PER_DAY, enqueuePendingEffect } from "./state";
 import { assembleEventPrompt } from "./prompt-assembly";
 import { callAnthropic, parseEventResponse, FALLBACK_EVENTS, generateLongNight, buildLongNightFallback, bitterPathConsequences } from "./anthropic";
+import { callLLM, resolveProvider, type LLMProvider } from "./llm";
 import { guardPaidCall, type RateLimitBinding } from "./paid-guard";
 import { advanceDays, applyDailyAttrition, drainPendingEffects, parseMonth } from "./simulation";
 import { signState, deepCanonicalize, bufferToHex } from "./hmac";
@@ -48,6 +49,13 @@ export interface Env {
   // unset the canary logs instead of paging. Set via `wrangler secret put`.
   TELEGRAM_BOT_TOKEN?: string;       // @osi_dispatch_bot
   TELEGRAM_CHAT_ID?: string;
+  // Dual LLM additions:
+  AI?: { run(model: string, inputs: Record<string, unknown>): Promise<any> };
+  LLM_PROVIDER?: LLMProvider;
+  WORKERS_AI_MODEL?: string;
+  CUSTOM_LLM_URL?: string;
+  CUSTOM_LLM_MODEL?: string;
+  CUSTOM_LLM_API_KEY?: string;
 }
 
 // Rate limiter: in-memory Map, 200 calls/min per IP
@@ -98,7 +106,7 @@ function corsHeaders(origin: string): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-LLM-Provider",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -360,57 +368,110 @@ export default {
     }
   },
 
-  // AI-liveness canary (Cron Trigger — see wrangler.toml [triggers]).
+  // AI-liveness canary (Cron Trigger — see wrangler.toml [triggers], hourly).
   // The "dead/out-of-credit key silently serves canned fallbacks at HTTP 200"
   // failure ran for weeks undetected because nothing checked the LLM path.
   // This probes the exact failure: one trivial Anthropic call; if it throws
-  // (dead key, no credit, 4xx, sustained overload), page via Telegram. Cost is
-  // a few tokens × 4/day. Healthy → silent.
+  // (dead key, no credit, 4xx, sustained overload), page via Telegram — at
+  // most once per REALERT_INTERVAL_MS while the failure persists, plus one
+  // all-clear on recovery. Cost is a few tokens × 24/day. Healthy → silent.
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runCanary(env));
   },
 };
 
-async function runCanary(env: Env): Promise<void> {
+// Per-isolate best-effort re-alert cadence (mirrors the fallbackCursor /
+// rateLimitMap pattern above — in-memory, not persisted, resets on isolate
+// recycle). Without this an hourly cron pages every single hour for the
+// entire length of an outage; a multi-day outage means dozens of near-
+// identical pings, which is exactly the shape that gets muted/tuned out on
+// the receiving end. This caps re-pages to once per REALERT_INTERVAL_MS
+// while down, and sends one distinct all-clear on recovery so "fixed" is
+// also visible, not just "broken."
+const REALERT_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h — cron is hourly, so at most 4 pages/day while down
+let canaryLastAlertAt: number | null = null;
+let canaryIsDown = false;
+
+// Test-only: reset canary alert/cadence state between tests. Mirrors
+// __resetFallbackCursor / paid-guard's __resetDayCounts.
+export function __resetCanaryAlertState(): void {
+  canaryLastAlertAt = null;
+  canaryIsDown = false;
+}
+
+export async function runCanary(env: Env): Promise<void> {
   let detail = "";
   try {
-    const raw = await callAnthropic(
+    const res = await callLLM(
       "Reply with the single word: OK.",
       "ping",
-      env.ANTHROPIC_API_KEY,
-      { maxTokens: 8, timeout: 8000 },
+      env,
+      { maxTokens: 8, timeout: 8000, jsonMode: false },
     );
+    const raw = res.text;
     if (typeof raw === "string" && raw.trim().length > 0) {
-      console.log("canary_ok", JSON.stringify({ ts: new Date().toISOString() }));
+      console.log("canary_ok", JSON.stringify({ ts: new Date().toISOString(), provider: res.provider }));
+      if (canaryIsDown) {
+        // Recovering from a prior alert — say so, then go back to silent.
+        canaryIsDown = false;
+        canaryLastAlertAt = null;
+        await sendTelegram(
+          env,
+          `✅ Oregon Trail AI canary recovered — trail.osi-cyber.com is serving live AI events again (${res.provider}).`,
+        );
+      }
       return; // healthy → silent
     }
     detail = "empty response from model";
   } catch (e) {
+    // Any thrown error trips this — timeouts, 429/529, and non-retryable 4xx
+    // (dead key = 401, no credit = 400) all reach callAnthropic's throw path
+    // the same way, so a low-credit 400 alerts exactly like a dead key does.
     detail = String(e).slice(0, 160);
   }
   console.error("canary_failed", JSON.stringify({ detail }));
-  await sendTelegram(
+
+  const now = Date.now();
+  const dueForAlert = canaryLastAlertAt === null || now - canaryLastAlertAt >= REALERT_INTERVAL_MS;
+  canaryIsDown = true;
+  if (!dueForAlert) return; // already paged within the cadence window — stay quiet
+  const sent = await sendTelegram(
     env,
-    `🛑 Oregon Trail AI canary FAILED — trail.osi-cyber.com is serving canned fallback events (players see no AI). callAnthropic error: ${detail}`,
+    `🛑 Oregon Trail AI canary FAILED — trail.osi-cyber.com is serving canned fallback events (players see no AI). Error: ${detail}`,
   );
+  if (sent) {
+    canaryLastAlertAt = now;
+  }
 }
 
-async function sendTelegram(env: Env, text: string): Promise<void> {
+async function sendTelegram(env: Env, text: string): Promise<boolean> {
   const token = env.TELEGRAM_BOT_TOKEN;
   const chat = env.TELEGRAM_CHAT_ID;
   if (!token || !chat) {
     // No channel configured — at least leave a loud log line for tail/Logpush.
     console.error("canary_alert_unsent", JSON.stringify({ text }));
-    return;
+    return false;
   }
   try {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chat, text }),
     });
+    if (!response.ok) {
+      // fetch() only rejects on a network-level failure — a bad/revoked
+      // token, wrong chat_id, or a bot removed from the chat comes back as a
+      // normal HTTP 4xx response body, not a throw. Previously that was
+      // swallowed here with no log line at all, so a broken Telegram channel
+      // looked identical to a healthy one from the outside.
+      const body = await response.text().catch(() => "");
+      console.error("canary_alert_rejected", JSON.stringify({ status: response.status, body: body.slice(0, 160) }));
+      return false;
+    }
+    return true;
   } catch (e) {
     console.error("canary_alert_failed", JSON.stringify({ msg: String(e).slice(0, 120) }));
+    return false;
   }
 }
 
@@ -563,13 +624,12 @@ async function handleAdvance(
   // so fallback-rate is observable — the dead-key outage hid for weeks because
   // fallbacks are served as HTTP 200 and nothing recorded which was which.
   let eventSource: "llm" | "fallback" | null = null;
+  let usedLlmProvider: LLMProvider | undefined = undefined;
 
   if (result.trigger === "event") {
     const tier = result.state.settings.tone_tier;
     const pickFallback = () => nextFallbackEvent(tier);
-    // Per-IP paid-call guard. On block, serve the existing fallback (free) and
-    // skip Anthropic entirely — never 429 here, which would discard the
-    // already-advanced simulation step above.
+    const provider = resolveProvider(request, env);
     const guard = await guardPaidCall(env, request);
     if (!guard.allowed) {
       console.warn("spend_rate_block", JSON.stringify({ route: "advance", reason: guard.reason }));
@@ -578,18 +638,18 @@ async function handleAdvance(
     } else {
       try {
         const prompt = assembleEventPrompt(result.state, historical);
-        const raw = await callAnthropic(
+        const res = await callLLM(
           prompt.system,
           prompt.user,
-          env.ANTHROPIC_API_KEY,
+          env,
+          { provider, jsonMode: true },
         );
-        eventData = parseEventResponse(raw);
+        eventData = parseEventResponse(res.text);
         eventSource = "llm";
+        usedLlmProvider = res.provider;
       } catch (e) {
-        // Anthropic threw (timeout, or a 4xx like dead key / no credit). Log
-        // the cause — secret-free, status + truncated message only — so an
-        // exhausted/invalid key is never again silently invisible.
-        console.warn("llm_fallback", JSON.stringify({ route: "advance", msg: String(e).slice(0, 120) }));
+        // LLM failed (timeout, or a 4xx/5xx). Log the cause so issues are visible.
+        console.warn("llm_fallback", JSON.stringify({ route: "advance", provider, msg: String(e).slice(0, 120) }));
         eventData = pickFallback();
         eventSource = "fallback";
       }
@@ -602,8 +662,7 @@ async function handleAdvance(
     };
     const firstAlive = result.state.party.members.find((m) => m.alive);
     const survivorName = firstAlive ? firstAlive.name : "someone";
-    // Same per-IP guard. On block, build the hand-written Long Night fallback
-    // directly (generateLongNight would otherwise spend on Anthropic).
+    const provider = resolveProvider(request, env);
     const guard = await guardPaidCall(env, request);
     if (!guard.allowed) {
       console.warn("spend_rate_block", JSON.stringify({ route: "advance", reason: guard.reason, kind: "bitter_path" }));
@@ -615,24 +674,36 @@ async function handleAdvance(
       );
       eventSource = "fallback";
     } else {
-      // generateLongNight may itself fall back internally on an API error; from
-      // here we only know an LLM call was attempted. The scheduled canary is
-      // the authoritative dead-key detector — this flag is best-effort.
-      eventData = await generateLongNight(
-        td.dead_member_name,
-        td.dead_member_cause,
-        td.days_since_death,
-        survivorName,
-        env.ANTHROPIC_API_KEY,
-      );
-      eventSource = "llm";
+      try {
+        eventData = await generateLongNight(
+          td.dead_member_name,
+          td.dead_member_cause,
+          td.days_since_death,
+          survivorName,
+          async (sys, usr) => {
+            const res = await callLLM(sys, usr, env, { provider, maxTokens: 500, timeout: 8000, jsonMode: true });
+            usedLlmProvider = res.provider;
+            return res.text;
+          },
+        );
+        eventSource = "llm";
+        if (!usedLlmProvider) usedLlmProvider = provider;
+      } catch (e) {
+        console.warn("bitter_path_llm_fallback", JSON.stringify({ msg: String(e).slice(0, 120) }));
+        eventData = buildLongNightFallback(
+          td.dead_member_name,
+          td.dead_member_cause,
+          td.days_since_death,
+          survivorName,
+        );
+        eventSource = "fallback";
+      }
     }
   }
 
-  // Observability: emit which source served the event so fallback-rate is
-  // visible in `wrangler tail` / Logpush without exposing any secret.
+  // Observability: emit which source and provider served the event
   if (eventSource) {
-    console.log("event_source", JSON.stringify({ trigger: result.trigger, source: eventSource }));
+    console.log("event_source", JSON.stringify({ trigger: result.trigger, source: eventSource, provider: usedLlmProvider }));
   }
 
   // If we have an event, hash it and embed in state along with the trigger
@@ -693,6 +764,7 @@ async function handleAdvance(
     trigger_data: triggerData,
     trigger_meta: triggerMeta,
     event_source: eventSource ?? undefined,
+    llm_provider: usedLlmProvider,
     share,
     signed_state,
   };
@@ -982,16 +1054,27 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
   // terminal states whose /api/advance share response was lost.
   const share = await buildShareInfo(state, env, request);
 
+  const provider = resolveProvider(request, env);
   const guard = await guardPaidCall(env, request);
   if (guard.allowed) {
     try {
-      const raw = await callAnthropic(
+      const res = await callLLM(
         "You are the editor of the Independence Gazette, 1848. Write frontier newspaper articles.",
         prompt,
-        env.ANTHROPIC_API_KEY,
-        { maxTokens: 600 },
+        env,
+        { provider, maxTokens: 600, jsonMode: true },
       );
-      const stripped = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
+      let stripped = res.text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+      stripped = stripped.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
+      if (!stripped.startsWith("{")) {
+        const first = stripped.indexOf("{");
+        if (first >= 0) stripped = stripped.slice(first);
+      }
+      if (!stripped.endsWith("}")) {
+        const last = stripped.lastIndexOf("}");
+        if (last >= 0) stripped = stripped.slice(0, last + 1);
+      }
+      stripped = stripped.replace(/,\s*([}\]])/g, "$1");
       const parsed = JSON.parse(stripped);
       // Normalize to expected shape
       const newspaper = {
@@ -1007,7 +1090,7 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
       };
       return jsonResponse(newspaper, 200, origin);
     } catch (e) {
-      console.warn("llm_fallback", JSON.stringify({ route: "newspaper", msg: String(e).slice(0, 120) }));
+      console.warn("llm_fallback", JSON.stringify({ route: "newspaper", provider, msg: String(e).slice(0, 120) }));
     }
   } else {
     console.warn("spend_rate_block", JSON.stringify({ route: "newspaper", reason: guard.reason }));
@@ -1051,18 +1134,21 @@ async function handleEpitaph(
     return jsonResponse({ error: "death_not_found" }, 400, origin);
   }
 
+  const provider = resolveProvider(request, env);
   const guard = await guardPaidCall(env, request);
   if (guard.allowed) {
     try {
-      const raw = await callAnthropic(
+      const res = await callLLM(
         "You write gravestone inscriptions for Oregon Trail emigrants, 1848. One line only. Period appropriate. Solemn.",
         `Write a one-line gravestone inscription for ${death.name}, who died of ${death.cause} on ${death.date} on the Oregon Trail. Return only the inscription text, no quotes or formatting.`,
-        env.ANTHROPIC_API_KEY,
-        { maxTokens: 60, timeout: 5000 },
+        env,
+        { provider, maxTokens: 60, timeout: 5000, jsonMode: false },
       );
-      return jsonResponse({ epitaph: raw.trim() }, 200, origin);
+      let text = res.text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+      text = text.replace(/^["']|["']$/g, "").trim();
+      return jsonResponse({ epitaph: text }, 200, origin);
     } catch (e) {
-      console.warn("llm_fallback", JSON.stringify({ route: "epitaph", msg: String(e).slice(0, 120) }));
+      console.warn("llm_fallback", JSON.stringify({ route: "epitaph", provider, msg: String(e).slice(0, 120) }));
     }
   } else {
     console.warn("spend_rate_block", JSON.stringify({ route: "epitaph", reason: guard.reason }));

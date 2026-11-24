@@ -12,6 +12,10 @@ routes = [
   { pattern = "trail.osi-cyber.com/og/*", zone_name = "osi-cyber.com" },
 ]
 
+# Cloudflare Workers AI binding (serverless free tier: @cf/meta/llama-3.1-8b-instruct)
+[ai]
+binding = "AI"
+
 [vars]
 ENVIRONMENT = "production"
 # Per-IP daily paid-call (Anthropic) volume sub-cap. Tunable without redeploy
@@ -19,6 +23,12 @@ ENVIRONMENT = "production"
 PAID_PER_IP_DAY_CAP = "60"
 # Branded origin for /r/<id> share links + OG image redirect (see routes above).
 SHARE_BASE_URL = "https://trail.osi-cyber.com"
+# Dual LLM Configuration: "workers-ai" (Cloudflare serverless edge) | "custom" (rig rog) | "anthropic" (Claude)
+LLM_PROVIDER = "workers-ai"
+WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+# Rig rog endpoint via Cloudflare Tunnel for edge workers (.dev.vars overrides for local)
+CUSTOM_LLM_URL = "https://llm.osi-cyber.com/v1"
+CUSTOM_LLM_MODEL = "llama3.2:latest"
 
 # HMAC_SECRET set via `wrangler secret put HMAC_SECRET`
 # ANTHROPIC_API_KEY set via `wrangler secret put ANTHROPIC_API_KEY`

@@ -8,6 +8,7 @@
 // markers stay small and period-accurate (1848 frontier graves were rough).
 
 import * as THREE from 'three';
+import { toonRamp } from './textures.mjs';
 
 // ── Palette (anchored to models.mjs C{} hex values) ──
 const C = {
@@ -21,8 +22,10 @@ const C = {
 };
 
 // Re-implemented locally (not imported from models.mjs per constraints).
-function std(color, opts = {}) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0, ...opts });
+// Toon off the shared ramp so a grave reads in the same material family as the
+// wagon standing beside it.
+function toon(color, opts = {}) {
+  return new THREE.MeshToonMaterial({ color, gradientMap: toonRamp(), ...opts });
 }
 function shadowed(mesh) {
   mesh.castShadow = true;
@@ -48,7 +51,7 @@ function seeded(name) {
 // Low earth mound: flattened sphere on the ground plane.
 function makeMound(r, seed) {
   const s = seeded(seed + '_mound');
-  const mat = std(C.dirtLight, { roughness: 0.98 });
+  const mat = toon(C.dirtLight);
   const mound = shadowed(new THREE.Mesh(
     new THREE.SphereGeometry(r, 10, 7),
     mat,
@@ -59,7 +62,7 @@ function makeMound(r, seed) {
 }
 
 // A few scattered pebbles around the base.
-const _pebbleMat = std(C.pebble, { roughness: 0.88 });
+const _pebbleMat = toon(C.pebble);
 function addScatterStones(group, count, spread, seed) {
   const s = seeded(seed + '_stones');
   for (let i = 0; i < count; i++) {
@@ -86,7 +89,7 @@ function makeHeadstone(name) {
   const d = 0.08 + s() * 0.04;
   const slab = shadowed(new THREE.Mesh(
     new THREE.BoxGeometry(w, h, d),
-    std(C.stone, { roughness: 0.96 }),
+    toon(C.stone),
   ));
   // Settled tilt — each grave leans its own direction.
   slab.rotation.z = (s() - 0.5) * 0.18;   // ±~5°
@@ -106,7 +109,7 @@ function makeCross(name) {
   const mound = makeMound(0.36, name);
   group.add(mound);
 
-  const woodMat = std(C.woodDark, { roughness: 0.97 });
+  const woodMat = toon(C.woodDark);
   const tilt = (s() - 0.5) * 0.14;
 
   // Vertical post.
@@ -136,7 +139,7 @@ function makeCairn(name) {
   const group = new THREE.Group();
   const s = seeded(name);
   group.add(makeMound(0.30, name));
-  const cairnMat = std(C.stoneDark, { roughness: 0.95 });
+  const cairnMat = toon(C.stoneDark);
   // [count, y, spread]
   for (const [count, y, spread] of [[5,0.08,0.22],[4,0.18,0.16],[3,0.28,0.10],[1,0.36,0.04]]) {
     for (let i = 0; i < count; i++) {

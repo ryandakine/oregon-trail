@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="70" height="120" viewBox="0 0 70 120">
+  <defs>
+    <filter id="pine-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.2" flood-color="#1f1a16" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <g id="pine" filter="url(#pine-shadow)">
+    <!-- Tall Tapered Red-Brown Trunk -->
+    <path d="M 32 118 L 33 25 L 37 25 L 38 118 Z" fill="#4a2c0f" stroke="#1f1a16" stroke-width="1.5"/>
+    <path d="M 35 116 L 35 30" stroke="#301b08" stroke-width="1"/>
+    <!-- Root flare -->
+    <path d="M 32 118 L 28 120 M 38 118 L 42 120" stroke="#1f1a16" stroke-width="1.5"/>
+
+    <!-- Tier 5 (Base / Widest Boughs) -->
+    <path d="M 10 92 C 22 84, 30 86, 35 78 C 40 86, 48 84, 60 92 C 50 96, 42 94, 35 98 C 28 94, 20 96, 10 92 Z" 
+          fill="#253822" stroke="#1f1a16" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M 14 90 C 22 86, 28 87, 35 82 C 42 87, 48 86, 56 90" fill="none" stroke="#3d5a37" stroke-width="1.2"/>
+
+    <!-- Tier 4 -->
+    <path d="M 14 76 C 24 68, 30 70, 35 62 C 40 70, 46 68, 56 76 C 47 80, 41 78, 35 82 C 29 78, 23 80, 14 76 Z" 
+          fill="#2a3f27" stroke="#1f1a16" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M 18 74 C 24 70, 28 71, 35 66 C 42 71, 46 70, 52 74" fill="none" stroke="#44663e" stroke-width="1.2"/>
+
+    <!-- Tier 3 -->
+    <path d="M 18 60 C 26 52, 30 54, 35 46 C 40 54, 44 52, 52 60 C 44 64, 40 62, 35 66 C 30 62, 26 64, 18 60 Z" 
+          fill="#314a2d" stroke="#1f1a16" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M 22 58 C 26 55, 30 56, 35 50 C 40 56, 44 55, 48 58" fill="none" stroke="#507849" stroke-width="1.2"/>
+
+    <!-- Tier 2 -->
+    <path d="M 22 44 C 28 38, 31 39, 35 32 C 39 39, 42 38, 48 44 C 42 48, 39 46, 35 50 C 31 46, 28 48, 22 44 Z" 
+          fill="#385434" stroke="#1f1a16" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M 25 42 C 28 39, 31 40, 35 36 C 39 40, 42 39, 45 42" fill="none" stroke="#5a8752" stroke-width="1.2"/>
+
+    <!-- Tier 1 (Spire Top) -->
+    <path d="M 26 28 C 30 22, 32 16, 35 6 C 38 16, 40 22, 44 28 C 40 32, 38 30, 35 34 C 32 30, 30 32, 26 28 Z" 
+          fill="#44663e" stroke="#1f1a16" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M 29 26 C 31 22, 33 18, 35 10 C 37 18, 39 22, 41 26" fill="none" stroke="#689c5f" stroke-width="1"/>
+  </g>
+</svg>

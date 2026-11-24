@@ -11,6 +11,7 @@
 // key light; its intensity flickers deterministically from t.
 
 import * as THREE from 'three';
+import { toonRamp } from './textures.mjs';
 
 // ── PALETTE (from public/lib/draw.mjs + models.mjs) ──────────────────────────
 const C = {
@@ -35,8 +36,11 @@ const C = {
 
 // ── Local material helpers (not imported from models.mjs per constraint) ──────
 
-function std(color, opts = {}) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
+// Toon for the lit dressing (logs, bedroll, tripod, pot) so camp props band
+// with the rest of the cast. The flame/coal materials below stay Standard: they
+// are self-lit emissive above the bloom threshold, not shaded surfaces.
+function toon(color, opts = {}) {
+  return new THREE.MeshToonMaterial({ color, gradientMap: toonRamp(), ...opts });
 }
 
 function shadowed(mesh) {
@@ -75,7 +79,7 @@ export function createCampfire({ glowTexture } = {}) {
   const group = new THREE.Group();
 
   // ── 1. Log pile: 5 short cylinders leaning inward in a teepee ──────────────
-  const logMat = std(C.logBark, { roughness: 0.95 });
+  const logMat = toon(C.logBark);
   const logGeo = new THREE.CylinderGeometry(0.06, 0.075, 0.82, 8);
   const LOG_COUNT = 5;
   for (let i = 0; i < LOG_COUNT; i++) {
@@ -273,25 +277,17 @@ export function createCampDressing({ textures } = {}) {
   function barkMat(fallbackColor) {
     const maps = textures?.barkMaps?.() ?? null;
     if (maps) {
-      return trackMat(new THREE.MeshStandardMaterial({
-        map: maps.map,
-        normalMap: maps.normalMap ?? null,
-        roughness: 0.92,
-      }));
+      return trackMat(toon(0xffffff, { map: maps.map }));
     }
-    return trackMat(std(fallbackColor, { roughness: 0.92 }));
+    return trackMat(toon(fallbackColor));
   }
 
   function plankMat(fallbackColor) {
     const maps = textures?.plankMaps?.() ?? null;
     if (maps) {
-      return trackMat(new THREE.MeshStandardMaterial({
-        map: maps.map,
-        normalMap: maps.normalMap ?? null,
-        roughness: 0.88,
-      }));
+      return trackMat(toon(0xffffff, { map: maps.map }));
     }
-    return trackMat(std(fallbackColor, { roughness: 0.88 }));
+    return trackMat(toon(fallbackColor));
   }
 
   // ── 2-3 sitting logs: low cylinders on their side around the fire ─────────
@@ -314,7 +310,7 @@ export function createCampDressing({ textures } = {}) {
   }
 
   // ── Bedroll: flattened box in muted blanket color ─────────────────────────
-  const bedMat = trackMat(std(C.blanket, { roughness: 0.95 }));
+  const bedMat = trackMat(toon(C.blanket));
   {
     const geo = new THREE.BoxGeometry(0.55, 0.14, 1.4);
     const bed = shadowed(mesh(geo, bedMat));
@@ -363,7 +359,7 @@ export function createCampDressing({ textures } = {}) {
   // Chain / hook line from apex (a thin vertical cylinder stub)
   {
     const chainGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.38, 5);
-    const chainMat = trackMat(std(0x2a2420, { roughness: 0.6, metalness: 0.3 }));
+    const chainMat = trackMat(toon(0x2a2420));
     const chain = mesh(chainGeo, chainMat);
     chain.position.set(0, TRIPOD_APEX_Y - 0.22, 0);
     group.add(chain);
@@ -372,7 +368,7 @@ export function createCampDressing({ textures } = {}) {
   // Small pot hanging on the chain
   {
     const potGeo = new THREE.CylinderGeometry(0.13, 0.10, 0.20, 10);
-    const potMat = trackMat(std(C.pot, { roughness: 0.55, metalness: 0.4 }));
+    const potMat = trackMat(toon(C.pot));
     const pot = shadowed(mesh(potGeo, potMat));
     pot.position.set(0, TRIPOD_APEX_Y - 0.52, 0);
     group.add(pot);

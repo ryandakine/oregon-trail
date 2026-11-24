@@ -178,6 +178,11 @@ export function createTrailAudio() {
   // Scene bed: one gain per scene name; current scene fades to 1, rest to 0.
   const sceneBeds = {};   // name → { gain, nextAt }
   let activeScene = 'travel';
+  let requestedScene = 'travel';
+
+  // Volume & mute state (closure-safe for pre-gesture and headless runners)
+  let userVolume = 0.30;
+  let isMuted = false;
 
   // Weather bed gain
   let weatherGain = null;
@@ -187,6 +192,9 @@ export function createTrailAudio() {
   // Moving bed gain (wagon creak + oxen)
   let movingGain = null;
   let isMoving = false;
+
+  // Zen pentatonic ambient plucks
+  let _pluckNextAt = 0;
 
   // Scheduler interval handle
   let schedulerTimer = null;
@@ -232,7 +240,7 @@ export function createTrailAudio() {
 
     try {
       master = ctx.createGain();
-      master.gain.value = 0.30;
+      master.gain.value = isMuted ? 0.0001 : userVolume;
       master.connect(ctx.destination);
 
       noiseBuf = makeNoiseBuf(ctx);
@@ -253,9 +261,11 @@ export function createTrailAudio() {
         g.connect(reverbSend);
         sceneBeds[name] = { gain: g, nextAt: ctx.currentTime + 0.5 };
       }
-      // Fade up the initial travel scene bed immediately
-      sceneBeds['travel'].gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      sceneBeds['travel'].gain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + 1.2);
+      // Fade up the initial requested scene bed immediately
+      const startBedName = sceneBeds[requestedScene] ? requestedScene : 'travel';
+      activeScene = startBedName;
+      sceneBeds[startBedName].gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      sceneBeds[startBedName].gain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + 1.2);
 
       // Weather gain
       weatherGain = ctx.createGain();
@@ -290,6 +300,7 @@ export function createTrailAudio() {
 
   // Crossfade from current scene bed to the new one over ~1.4s.
   function setScene(name) {
+    requestedScene = name;
     if (!ctx) return;
     if (!sceneBeds[name]) return;
     if (name === activeScene) return;
@@ -344,6 +355,29 @@ export function createTrailAudio() {
     if (!ctx) return;
     isMoving = !!moving;
     gainRampTo(movingGain, isMoving ? 1.0 : 0, 1.0);
+  }
+
+  // ── Volume & mute controls ───────────────────────────────────────────────
+
+  function setVolume(v) {
+    userVolume = Math.max(0, Math.min(1, Number(v) || 0));
+    if (master && ctx) {
+      master.gain.cancelScheduledValues(ctx.currentTime);
+      master.gain.setValueAtTime(isMuted ? 0.0001 : userVolume, ctx.currentTime);
+    }
+  }
+
+  function toggleMute() {
+    isMuted = !isMuted;
+    if (master && ctx) {
+      master.gain.cancelScheduledValues(ctx.currentTime);
+      master.gain.setValueAtTime(isMuted ? 0.0001 : userVolume, ctx.currentTime);
+    }
+    return isMuted;
+  }
+
+  function getMuted() {
+    return isMuted;
   }
 
   // ── Scheduler tick ───────────────────────────────────────────────────────
@@ -415,6 +449,16 @@ export function createTrailAudio() {
         const t = Math.max(_oxNextAt, now);
         _scheduleOxLow(t);
         _oxNextAt = t + 4 + Math.random() * 5;
+      }
+    }
+
+    // ── Zen ambient plucks (peaceful frontier travel vibe) ──
+    if (activeScene === 'travel' && !isMuted) {
+      if (_pluckNextAt === 0) _pluckNextAt = now + 2.0;
+      if (_pluckNextAt < horizon) {
+        const t = Math.max(_pluckNextAt, now);
+        _scheduleZenPluck(t);
+        _pluckNextAt = t + 5.0 + Math.random() * 8.0;
       }
     }
   }
@@ -565,6 +609,29 @@ export function createTrailAudio() {
     osc.stop(t + 1.3);
   }
 
+  // ── Zen frontier plucks ───────────────────────────────────────────────────
+  // Gentle pentatonic kalimba/harp single notes (G/C pentatonic) through the reverb.
+  // Evokes the meditative, spacious travel vibe of Alto's Adventure or A Short Hike.
+  const ZEN_NOTES = [mtof(55), mtof(59), mtof(62), mtof(67), mtof(71), mtof(74)]; // G3, B3, D4, G4, B4, D5
+
+  function _scheduleZenPluck(t) {
+    if (!ctx || !reverbSend) return;
+    const freq = ZEN_NOTES[Math.floor(Math.random() * ZEN_NOTES.length)];
+    const dur = 2.4;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.045, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g.connect(reverbSend);
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    osc.connect(g);
+    osc.start(t);
+    osc.stop(t + dur + 0.1);
+  }
+
   // ── One-shot stings ───────────────────────────────────────────────────────
 
   function sting(name) {
@@ -671,6 +738,7 @@ export function createTrailAudio() {
     reverbSend = null;
     weatherGain = null;
     movingGain = null;
+    _pluckNextAt = 0;
     Object.keys(sceneBeds).forEach((k) => delete sceneBeds[k]);
   }
 
@@ -686,6 +754,9 @@ export function createTrailAudio() {
     sting,
     bell,
     oxLow,
+    setVolume,
+    toggleMute,
+    isMuted: getMuted,
     dispose,
   };
 }

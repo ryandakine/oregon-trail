@@ -1,3 +1,8 @@
+function humanize(str) {
+  if (!str) return str;
+  return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function register(k, engine) {
   k.scene("wipe", (data) => {
     const W = 640;
@@ -35,6 +40,7 @@ export default function register(k, engine) {
     const deaths = engine.deaths || [];
     const members = engine.party?.members || [];
     const allDead = members.filter(m => !m.alive);
+    const causeByName = new Map(deaths.map((d) => [d.name, d.cause]));
 
     const listY = 140;
     const listH = Math.min(allDead.length * 30 + 20, 200);
@@ -48,7 +54,7 @@ export default function register(k, engine) {
 
     allDead.forEach((member, i) => {
       const my = listY + 14 + i * 28;
-      const cause = member.cause || member.cause_of_death || "the trail";
+      const cause = humanize(causeByName.get(member.name) || "the trail");
 
       // Skull marker
       k.add([
@@ -69,6 +75,7 @@ export default function register(k, engine) {
     const date = engine.formatDate(engine.currentDate);
 
     const statsY = listY + listH + 20;
+    const dateY = statsY + 24;
     k.add([
       k.text(`Miles traveled: ${miles}`, { size: 14 }),
       k.pos(W / 2, statsY),
@@ -77,16 +84,19 @@ export default function register(k, engine) {
     ]);
     k.add([
       k.text(`Date: ${date}`, { size: 14 }),
-      k.pos(W / 2, statsY + 24),
+      k.pos(W / 2, dateY),
       k.anchor("center"),
       k.color(140, 100, 100),
     ]);
 
-    // Read Newspaper button — key + tap (IMPROVEMENT_ROADMAP §1.1).
+    // Read Newspaper button — key + tap (IMPROVEMENT_ROADMAP §1.1). Y is
+    // clamped against the death-list-driven stats block above it so a full
+    // party of deaths can't push "Date:" under the button (D-wipe-0).
+    const npBtnY = Math.max(H - 120, dateY + 16);
     const readNewspaper = () => engine.generateNewspaper();
     const npBtn = k.add([
       k.rect(200, 34, { radius: 4 }),
-      k.pos(W / 2 - 100, H - 120),
+      k.pos(W / 2 - 100, npBtnY),
       k.color(80, 20, 20),
       k.opacity(0.85),
       k.area(),
@@ -94,7 +104,7 @@ export default function register(k, engine) {
     npBtn.onClick(readNewspaper);
     k.add([
       k.text("(N) Read Newspaper", { size: 14 }),
-      k.pos(W / 2, H - 103),
+      k.pos(W / 2, npBtnY + 17),
       k.anchor("center"),
       k.color(200, 150, 150),
     ]);
@@ -103,6 +113,7 @@ export default function register(k, engine) {
 
     // Share (Daily Trail)
     let shareBtn = null;
+    let shareBtnY = null;
     if (engine.dailyMode) {
       const shareDaily = () => {
         const text = engine.getDailyShareText();
@@ -111,9 +122,10 @@ export default function register(k, engine) {
         }
         engine.emit("shareDaily", { text });
       };
+      shareBtnY = Math.max(H - 76, npBtnY + 34 + 8);
       shareBtn = k.add([
         k.rect(180, 34, { radius: 4 }),
-        k.pos(W / 2 - 90, H - 76),
+        k.pos(W / 2 - 90, shareBtnY),
         k.color(60, 20, 20),
         k.opacity(0.85),
         k.area(),
@@ -121,7 +133,7 @@ export default function register(k, engine) {
       shareBtn.onClick(shareDaily);
       k.add([
         k.text("(S) Share Result", { size: 14 }),
-        k.pos(W / 2, H - 59),
+        k.pos(W / 2, shareBtnY + 17),
         k.anchor("center"),
         k.color(200, 150, 150),
       ]);
@@ -130,9 +142,11 @@ export default function register(k, engine) {
     }
 
     // Restart prompt
+    const lastBtnBottom = (shareBtnY ?? npBtnY) + 34;
+    const restartY = Math.max(H - 30, lastBtnBottom + 16);
     k.add([
       k.text("Press ENTER or tap below to start a new journey", { size: 14 }),
-      k.pos(W / 2, H - 30),
+      k.pos(W / 2, restartY),
       k.anchor("center"),
       k.color(100, 60, 60),
     ]);

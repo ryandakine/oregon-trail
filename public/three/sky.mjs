@@ -22,6 +22,14 @@
 //   skyNightHorizon     [42,42,74]   0x2a2a4a
 //   skyTwilightHorizon  [58,50,80]   0x3a3250
 //   sicklyHorizon       [197,208,122] 0xc5d07a  (not used but noted)
+//   silhouetteFar       [32,38,62]   0x20263e
+//   silhouetteNear      [22,28,48]   0x161c30
+//
+// TONE TIER (§C2 / Phase D): setTone('high') installs a post-lerp CLAMP, not a
+// second keyframe table. The time-of-day lerp runs exactly as it always did and
+// the result is then crushed against a horror ceiling — so the sun still rises,
+// dusk still turns, the day still moves, it just can never climb out. One table
+// keeps the arc honest; a parallel table would drift from it within a week.
 
 import * as THREE from 'three';
 import { PALETTE } from '../lib/palette.mjs';
@@ -53,6 +61,18 @@ function rgb(r, g, b) {
 function prgb(key) {
   const c = PALETTE[key];
   return rgb(c[0], c[1], c[2]);
+}
+
+// Memoised prgb for the per-frame mood-arc path — setSegmentTint runs on every
+// miles change and prgb allocates.
+const _prgbCache = new Map();
+function pkey(key) {
+  let c = _prgbCache.get(key);
+  if (!c) {
+    c = prgb(key);
+    _prgbCache.set(key, c);
+  }
+  return c;
 }
 
 function lerpColor(out, a, b, t) {
@@ -100,7 +120,7 @@ const KEYS = [
     sunColor:      rgb(180, 140, 100),
     sunIntensity:  0.30,
     hemiSky:       rgb(80, 85, 130),
-    hemiGround:    rgb(45, 50, 50),
+    hemiGround:    rgb(48, 44, 64),   // tinted toward the twilight horizon's purple-blue — a flat (45,50,50) reads as neutral gray here
     hemiIntensity: 0.18,
     fogColor:      rgb(60, 58, 88),
     ambientBoost:  0.05,
@@ -236,6 +256,76 @@ function lerpPalette(t) {
   _pal.ambientBoost  = lo.ambientBoost  + (hi.ambientBoost  - lo.ambientBoost)  * f;
   return _pal;
 }
+
+// ─── Horror-tier clamp ────────────────────────────────────────────────────────
+// Anchors the lerped palette is crushed toward on the high tone tier. Every one
+// is value-compressed already, so the clamp can't be escaped by a bright hour.
+
+const HIGH_ZENITH   = rgb(58, 64, 112);   // skyTwilight — the lid the sky never lifts off
+const HIGH_HORIZON  = rgb(38, 44, 62);
+const HIGH_SICKLY   = rgb(120, 128, 74);  // sicklyHorizon, value-compressed — the ONE accent
+const HIGH_FOG      = rgb(16, 20, 34);
+const HIGH_HEMI_SKY = rgb(52, 60, 84);
+const HIGH_HEMI_GND = rgb(18, 20, 26);
+const HIGH_SUN      = rgb(138, 148, 164); // cold slate: no warm key survives the tier
+
+/** Linear fog colour the high tier settles on. Read-only — copy, never mutate. */
+export const HIGH_TONE_FOG = HIGH_FOG;
+
+// Amplitude of the sickly band mixed back into the horizon AFTER the crush, so
+// desaturation can't eat it. Restraint: this is the only chroma left in frame.
+const HIGH_SICKLY_MIX = 0.13;
+const HIGH_STAR_DIM   = 0.34;
+const HIGH_CLOUD_TINT = 0.42;
+const HIGH_CLOUD_FADE = 0.55;
+
+// Crush one colour: pull it toward the tier anchor, drain chroma, then cap
+// luminance. Order matters — desaturating after the cap would let a bright hour
+// keep its value, and capping before the mix would let the anchor raise it.
+function crush(c, anchor, mix, sat, ceil) {
+  c.lerp(anchor, mix);
+  const l = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+  c.r = l + (c.r - l) * sat;
+  c.g = l + (c.g - l) * sat;
+  c.b = l + (c.b - l) * sat;
+  if (l > ceil) c.multiplyScalar(ceil / l);
+  return c;
+}
+
+// ─── Mood arc: per-segment tint ───────────────────────────────────────────────
+// Same architecture as the tone tier: one time-of-day table, then a post-lerp
+// stage that pulls the result toward the segment. A parallel per-segment
+// keyframe table would have to re-state the whole day eight times and would
+// drift from this one within a week.
+//
+// How hard each biome pulls. prairie is 0 by design — mile 0 renders the exact
+// pixels it rendered before the arc existed, which is the regression baseline
+// the other seven are read against. The ramp climbs toward the segments the
+// player reaches late, so the trail visibly leaves home behind.
+const SEGMENT_STRENGTH = {
+  prairie: 0,
+  river_valley: 0.45,
+  bluffs: 0.75,
+  foothills: 0.70,
+  snow: 0.80,
+  desert: 0.85,
+  forest: 0.90,
+  arrival: 0.55,
+};
+const SEGMENT_STRENGTH_DEFAULT = 0.6;
+
+// Budget from the colour script: zenith + horizon are the 60%, the accent is
+// the 10%. hemi carries the same colours into the lighting so the ground is lit
+// by the segment's own sky rather than by prairie light.
+const SEG_ZENITH   = 0.62;
+const SEG_HORIZON  = 0.68;
+const SEG_ACCENT   = 0.14;
+const SEG_HEMI_SKY = 0.35;
+const SEG_HEMI_GND = 0.55;
+// Atmospheric perspective: the far ridge takes more of the segment's `far` than
+// the nearer hill line does.
+const SEG_RIDGE = 0.55;
+const SEG_HILL  = 0.40;
 
 // ─── Sun/moon direction ───────────────────────────────────────────────────────
 // t in [0,1).  Sun rises NE, arcs south, sets NW.  Moon follows −sunDir.
@@ -381,24 +471,40 @@ function buildStars() {
 }
 
 // ─── Clouds ───────────────────────────────────────────────────────────────────
-// 8-14 deterministic billboarded sprites.  Positions/phases seeded; drift
+// Two deterministic billboarded-sprite decks: a high slow deck and a lower,
+// smaller, ~2x-faster deck (parallax-by-speed, not by depth — both decks live
+// in the camera-following sky group). Positions/phases seeded; drift
 // integrates time t (pure function, no internal wall-clock).
 
+const CLOUD_WRAP_X   = 500;         // half-width of the x wrap range, both decks
+
 const CLOUD_SEED     = 0xC10ADF5;
-const CLOUD_COUNT    = 11;          // within [8, 14]
-const CLOUD_WRAP_X   = 500;         // half-width of the x wrap range
+const CLOUD_COUNT    = 26;
 const CLOUD_Y_MIN    = 120;
 const CLOUD_Y_MAX    = 200;
 const CLOUD_Z_MIN    = -80;
 const CLOUD_Z_MAX    = 120;
 
-function buildClouds(cloudTexture) {
-  const rng = lcgCreate(CLOUD_SEED);
-  const sprites = [];
-  const phases  = [];   // x-drift phase per cloud [0, CLOUD_WRAP_X*2)
-  const drifts  = [];   // drift speed per cloud (world-units / s of t)
+const CLOUD_LOW_SEED  = 0x8B2E44D1;
+const CLOUD_LOW_COUNT = 14;
+const CLOUD_LOW_Y_MIN = 55;
+const CLOUD_LOW_Y_MAX = 95;
+const CLOUD_LOW_Z_MIN = -70;
+const CLOUD_LOW_Z_MAX = 100;
 
-  for (let i = 0; i < CLOUD_COUNT; i++) {
+/**
+ * Build one deck of billboarded cloud sprites from a seeded LCG.
+ * Returns records (not parallel arrays) so update() can iterate one deck
+ * or both without per-frame index juggling.
+ */
+function buildCloudDeck(cloudTexture, {
+  seed, count, wrapX, yMin, yMax, zMin, zMax,
+  scaleMin, scaleMax, driftMin, driftMax, tint, renderOrder,
+}) {
+  const rng = lcgCreate(seed);
+  const clouds = [];
+
+  for (let i = 0; i < count; i++) {
     const mat = new THREE.SpriteMaterial({
       map: cloudTexture,
       transparent: true,
@@ -408,44 +514,135 @@ function buildClouds(cloudTexture) {
     });
     const sprite = new THREE.Sprite(mat);
 
-    const scaleW = 100 + rng() * 160;
+    const scaleW = scaleMin + rng() * (scaleMax - scaleMin);
     const scaleH = scaleW * (0.35 + rng() * 0.20);
     sprite.scale.set(scaleW, scaleH, 1);
 
-    const startX = (rng() * 2 - 1) * CLOUD_WRAP_X;
-    const y      = CLOUD_Y_MIN + rng() * (CLOUD_Y_MAX - CLOUD_Y_MIN);
-    const z      = CLOUD_Z_MIN + rng() * (CLOUD_Z_MAX - CLOUD_Z_MIN);
+    const startX = (rng() * 2 - 1) * wrapX;
+    const y      = yMin + rng() * (yMax - yMin);
+    const z      = zMin + rng() * (zMax - zMin);
     sprite.position.set(startX, y, z);
 
-    // Store initial X as phase anchor so drift is relative-to-start.
-    phases.push(startX);
-    // Drift 0.3–1.2 world-units per normalised t unit (i.e. per full day).
-    drifts.push(0.3 + rng() * 0.9);
-
-    sprite.renderOrder = -8;
-    sprites.push(sprite);
+    sprite.renderOrder = renderOrder;
+    clouds.push({
+      sprite,
+      wrapX,
+      phase: startX,                          // x-drift phase, [-wrapX, wrapX)
+      drift: driftMin + rng() * (driftMax - driftMin), // world-units / t-unit
+      tint,                                    // color multiplier (deck darkening)
+    });
   }
 
-  return { sprites, phases, drifts };
+  return clouds;
 }
+
+// ─── Distant silhouette bands ─────────────────────────────────────────────────
+// Two parallax backdrop rings (far mountain ridgeline, nearer hill line) that
+// fill the horizon behind the terrain band. Each is a closed ring of quads
+// around the full azimuth (radius fixed, height jagged) so it reads correctly
+// no matter which way a scene's camera preset looks — the terrain's own
+// ±90u half-width can't do that, only a feature centred on the viewer can.
+// Flat unlit MeshBasicMaterial with fog:true — no lighting, but the scene fog
+// hazes them out at distance for the same atmospheric-perspective effect the
+// dome's own haze blend uses. Height noise comes from the seeded LCG, then a
+// couple of wrap-around triangular smoothing passes so it reads as a
+// continuous skyline instead of per-vertex jitter.
+
+function smoothRingHeights(values, passes) {
+  const n = values.length;
+  let src = values;
+  for (let p = 0; p < passes; p++) {
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const prev = src[(i - 1 + n) % n];
+      const cur  = src[i];
+      const next = src[(i + 1) % n];
+      out[i] = (prev + cur * 2 + next) / 4;
+    }
+    src = out;
+  }
+  return src;
+}
+
+function buildSilhouetteRing({ seed, segments, radius, baseHeight, variance, bottomY, baseColor, renderOrder }) {
+  const rng = lcgCreate(seed);
+  const raw = new Float32Array(segments);
+  for (let i = 0; i < segments; i++) raw[i] = rng();
+  const heights = smoothRingHeights(raw, 2);
+
+  const positions = new Float32Array(segments * 2 * 3); // top + bottom vert per segment
+  for (let i = 0; i < segments; i++) {
+    const ang = (i / segments) * Math.PI * 2;
+    const sx  = Math.sin(ang) * radius;
+    const sz  = Math.cos(ang) * radius;
+    const topY = baseHeight + heights[i] * variance;
+    const vi = i * 6;
+    positions[vi]     = sx; positions[vi + 1] = topY;  positions[vi + 2] = sz;
+    positions[vi + 3] = sx; positions[vi + 4] = bottomY; positions[vi + 5] = sz;
+  }
+
+  const indices = new Uint16Array(segments * 6);
+  for (let i = 0; i < segments; i++) {
+    const ni = (i + 1) % segments;
+    const a = i * 2, b = i * 2 + 1;     // this segment: top, bottom
+    const c = ni * 2, d = ni * 2 + 1;   // next segment: top, bottom
+    const k = i * 6;
+    indices[k] = a; indices[k + 1] = b; indices[k + 2] = c;
+    indices[k + 3] = b; indices[k + 4] = d; indices[k + 5] = c;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(new THREE.BufferAttribute(indices, 1));
+
+  // BackSide: the camera sits inside the ring looking out, same convention as
+  // the dome — draws the inward-facing surface regardless of winding.
+  const mat = new THREE.MeshBasicMaterial({
+    color: baseColor,
+    fog: true,
+    side: THREE.BackSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = renderOrder;
+
+  return { mesh, geo, mat, radius };
+}
+
+const RIDGE_SEED     = 0x51D6E17;
+const RIDGE_SEGMENTS = 56;
+const RIDGE_RADIUS   = 160;
+const RIDGE_BASE_H   = 58;
+const RIDGE_VARIANCE = 44;
+const RIDGE_PARALLAX = 0.1;  // fraction of world scroll
+
+const HILL_SEED     = 0x2A9C443;
+const HILL_SEGMENTS = 48;
+const HILL_RADIUS   = 110;
+const HILL_BASE_H   = 22;
+const HILL_VARIANCE = 15;
+const HILL_PARALLAX = 0.3;   // fraction of world scroll
+
+const SILHOUETTE_BOTTOM_Y = -40; // well below any terrain sample; hides the seam
 
 // ─── Main factory ─────────────────────────────────────────────────────────────
 
 /**
- * createSky({ cloudTexture })
+ * createSky({ cloudTexture, lowDetail })
  *
  * @param {Object}       opts
  * @param {THREE.Texture} opts.cloudTexture  — Caller-supplied sprite texture.
  *
  * @returns {{
  *   group:     THREE.Group,
- *   update:    (dt: number, t: number, cameraPos: THREE.Vector3) => void,
+ *   update:    (dt: number, t: number, cameraPos: THREE.Vector3, scrollZ?: number) => void,
  *   sunDirAt:  (t: number) => THREE.Vector3,
  *   applyTo:   (targets: { sun, hemi, scene }, t: number) => object,
+ *   setTone:   (tier: 'low'|'medium'|'high') => void,
+ *   setSegmentTint: (a: object|null, b: object, t: number) => void,
  *   dispose:   () => void,
  * }}
  */
-export function createSky({ cloudTexture }) {
+export function createSky({ cloudTexture, lowDetail = false } = {}) {
   const group = new THREE.Group();
   group.name = 'sky';
 
@@ -480,12 +677,43 @@ export function createSky({ cloudTexture }) {
   const stars = buildStars();
   group.add(stars);
 
-  // ── Clouds ──
-  const { sprites: cloudSprites, phases: cloudPhases, drifts: cloudDrifts } =
-    buildClouds(cloudTexture);
+  // ── Clouds: high slow deck + low fast deck ──
+  // 40 large alpha-blended sprites are pure fill-rate — the cost that hurts
+  // exactly the GPUs the fps-gate protects. Low tier keeps the old 11-sprite
+  // budget in one deck and skips the low deck entirely.
+  const cloudsHigh = buildCloudDeck(cloudTexture, {
+    seed: CLOUD_SEED, count: lowDetail ? 11 : CLOUD_COUNT, wrapX: CLOUD_WRAP_X,
+    yMin: CLOUD_Y_MIN, yMax: CLOUD_Y_MAX, zMin: CLOUD_Z_MIN, zMax: CLOUD_Z_MAX,
+    scaleMin: 100, scaleMax: 260, driftMin: 0.3, driftMax: 1.2,
+    tint: 1.0, renderOrder: -8,
+  });
+  const cloudsLow = lowDetail ? [] : buildCloudDeck(cloudTexture, {
+    seed: CLOUD_LOW_SEED, count: CLOUD_LOW_COUNT, wrapX: CLOUD_WRAP_X,
+    yMin: CLOUD_LOW_Y_MIN, yMax: CLOUD_LOW_Y_MAX, zMin: CLOUD_LOW_Z_MIN, zMax: CLOUD_LOW_Z_MAX,
+    scaleMin: 45, scaleMax: 125, driftMin: 0.6, driftMax: 2.4,
+    tint: 0.8, renderOrder: -7,
+  });
+  const clouds = cloudsHigh.concat(cloudsLow);
   const cloudGroup = new THREE.Group();
-  for (const s of cloudSprites) cloudGroup.add(s);
+  for (const c of clouds) cloudGroup.add(c.sprite);
   group.add(cloudGroup);
+
+  // ── Distant silhouette bands: far ridge + nearer hill line ──
+  const ridge = buildSilhouetteRing({
+    seed: RIDGE_SEED, segments: RIDGE_SEGMENTS, radius: RIDGE_RADIUS,
+    baseHeight: RIDGE_BASE_H, variance: RIDGE_VARIANCE, bottomY: SILHOUETTE_BOTTOM_Y,
+    baseColor: prgb('silhouetteFar'), renderOrder: -9.4,
+  });
+  const hill = buildSilhouetteRing({
+    seed: HILL_SEED, segments: HILL_SEGMENTS, radius: HILL_RADIUS,
+    baseHeight: HILL_BASE_H, variance: HILL_VARIANCE, bottomY: SILHOUETTE_BOTTOM_Y,
+    baseColor: prgb('silhouetteNear'), renderOrder: -9.2,
+  });
+  group.add(ridge.mesh);
+  group.add(hill.mesh);
+  const _ridgeColor = prgb('silhouetteFar');
+  const _hillColor  = prgb('silhouetteNear');
+  const _tmpBandColor = new THREE.Color();
 
   // ── Internal state ──
   const _tmpSunDir = new THREE.Vector3();
@@ -508,17 +736,100 @@ export function createSky({ cloudTexture }) {
     return pal;
   }
 
+  // Mood arc 0..1 — how far this stretch of trail is from prairie. Zero means
+  // no segment has been set (or the segment is prairie), and applySegment is a
+  // no-op, so every pre-arc caller renders unchanged.
+  let _segStrength = 0;
+  const _segZenith  = new THREE.Color();
+  const _segHorizon = new THREE.Color();
+  const _segGround  = new THREE.Color();
+  const _segFar     = new THREE.Color();
+  const _segAccent  = new THREE.Color();
+
+  function segLerp(out, keyA, keyB, t) {
+    out.copy(pkey(keyA)).lerp(pkey(keyB), t);
+  }
+
+  /**
+   * Mood arc: cross-fade the sky toward a segment's palette.
+   * `a`/`b` are segments from lib/segments.mjs — anything carrying
+   * { biome, palette: { zenith, horizon, ground, far, accent } } works — and
+   * `t` is that module's already-eased cross-fade weight. Pass null to leave
+   * the arc (identity).
+   */
+  function setSegmentTint(a, b, t) {
+    if (!a || !a.palette) { _segStrength = 0; return; }
+    const segB = b && b.palette ? b : a;
+    const f = t < 0 ? 0 : t > 1 ? 1 : t;
+    const sa = SEGMENT_STRENGTH[a.biome] ?? SEGMENT_STRENGTH_DEFAULT;
+    const sb = SEGMENT_STRENGTH[segB.biome] ?? SEGMENT_STRENGTH_DEFAULT;
+    _segStrength = sa + (sb - sa) * f;
+    segLerp(_segZenith,  a.palette.zenith,  segB.palette.zenith,  f);
+    segLerp(_segHorizon, a.palette.horizon, segB.palette.horizon, f);
+    segLerp(_segGround,  a.palette.ground,  segB.palette.ground,  f);
+    segLerp(_segFar,     a.palette.far,     segB.palette.far,     f);
+    segLerp(_segAccent,  a.palette.accent,  segB.palette.accent,  f);
+  }
+
+  // Runs immediately after the time-of-day lerp and BEFORE overcast and tone,
+  // so a storm still greys this segment and the horror tier still crushes it —
+  // the arc changes where the day starts from, it never escapes either.
+  //
+  // Fog takes the SAME segment component as the horizon, in the same order, so
+  // the fog==horizon invariant survives the arc: mismatched fog is the single
+  // biggest cheap-3D tell and it must not be reintroduced one segment at a time.
+  function applySegment(pal) {
+    const s = _segStrength;
+    if (s <= 0) return pal;
+    pal.zenith.lerp(_segZenith, SEG_ZENITH * s);
+    pal.horizon.lerp(_segHorizon, SEG_HORIZON * s);
+    pal.horizon.lerp(_segAccent, SEG_ACCENT * s);
+    pal.fogColor.lerp(_segHorizon, SEG_HORIZON * s);
+    pal.fogColor.lerp(_segAccent, SEG_ACCENT * s);
+    pal.hemiSky.lerp(_segZenith, SEG_HEMI_SKY * s);
+    pal.hemiGround.lerp(_segGround, SEG_HEMI_GND * s);
+    return pal;
+  }
+
+  // Tone tier. Only 'high' does anything; low/medium are identity, so the
+  // classroom and default tiers render the exact pixels they always did.
+  let _high = false;
+  function setTone(tier) { _high = tier === 'high'; }
+
+  // Runs LAST — after the time-of-day lerp, after the segment tint and after
+  // overcast — so a storm or a segment can darken the horror tier further but
+  // neither can lighten it back out. (The brief sketched tone-then-overcast;
+  // keeping overcast inside the crush is the Phase C invariant and it wins.)
+  function applyTone(pal) {
+    if (!_high) return pal;
+    crush(pal.zenith,     HIGH_ZENITH,   0.70, 0.55, 0.085);
+    crush(pal.horizon,    HIGH_HORIZON,  0.66, 0.50, 0.055);
+    pal.horizon.lerp(HIGH_SICKLY, HIGH_SICKLY_MIX);
+    // Fog keeps its chroma (sat 1) under a much harder value cap: the wall has
+    // to read as cold BLUE-black, and draining it leaves flat charcoal.
+    crush(pal.fogColor,   HIGH_FOG,      0.90, 1.00, 0.030);
+    crush(pal.sunColor,   HIGH_SUN,      0.72, 0.45, 0.550);
+    crush(pal.hemiSky,    HIGH_HEMI_SKY, 0.72, 0.55, 0.100);
+    crush(pal.hemiGround, HIGH_HEMI_GND, 0.72, 0.55, 0.045);
+    pal.sunIntensity  *= 0.50;
+    pal.hemiIntensity *= 0.55;
+    pal.ambientBoost  *= 0.40;
+    return pal;
+  }
+
   // ── update ────────────────────────────────────────────────────────────────
   // Pure function of t for all visual state (dt used only for cloud drift
   // which is also driven by t so remains deterministic across equal-t calls).
+  // scrollZ is optional (trailing, default 0) and drives the two silhouette
+  // rings' parallax rotation — safe no-op for any caller not yet passing it.
 
-  function update(dt, t, cameraPos) {
+  function update(dt, t, cameraPos, scrollZ = 0) {
     // Ride the camera (dome must follow so it's always centred on the viewer).
     if (cameraPos) {
       group.position.copy(cameraPos);
     }
 
-    const pal = applyOvercast(lerpPalette(t));
+    const pal = applyTone(applyOvercast(applySegment(lerpPalette(t))));
     const sunDir = sunDirAt(t);
 
     // ── Dome uniforms ──
@@ -538,8 +849,8 @@ export function createSky({ cloudTexture }) {
     domeUniforms.uMoonStrength.value  = nightFade;
     domeUniforms.uNightFade.value     = nightFade;
 
-    // ── Stars opacity ──
-    stars.material.opacity = nightFade * 0.95;
+    // ── Stars opacity ── (the horror tier gets a sky that barely has any)
+    stars.material.opacity = nightFade * (_high ? HIGH_STAR_DIM : 0.95);
 
     // ── Cloud drift (deterministic: position = phase + driftSpeed * t * fullDayUnits) ──
     // We use t as the time source so the same t always gives the same cloud
@@ -550,18 +861,48 @@ export function createSky({ cloudTexture }) {
     let cloudOpacity = cloudOpacityDay + (cloudOpacityNight - cloudOpacityDay) * nightFade;
     // Overcast thickens the cloud deck.
     cloudOpacity = Math.max(cloudOpacity, 0.45 + 0.5 * _overcast);
+    // The horror tier thins and darkens the deck instead — §C9, the sky empties
+    // out. Applied after the overcast floor so a storm can't put the clouds back.
+    const toneMul = _high ? HIGH_CLOUD_TINT : 1;
+    if (_high) cloudOpacity *= HIGH_CLOUD_FADE;
 
-    for (let i = 0; i < cloudSprites.length; i++) {
-      const sprite = cloudSprites[i];
-      // Drift along +X; wrap in [-CLOUD_WRAP_X, +CLOUD_WRAP_X].
-      const rawX = cloudPhases[i] + cloudDrifts[i] * t * dayUnits;
-      const wrap = CLOUD_WRAP_X * 2;
-      sprite.position.x = ((((rawX + CLOUD_WRAP_X) % wrap) + wrap) % wrap) - CLOUD_WRAP_X;
-      sprite.material.opacity = cloudOpacity;
-      // Grey the clouds toward storm-cloud under overcast.
-      if (_overcast > 0) sprite.material.color.setRGB(1 - 0.35 * _overcast, 1 - 0.33 * _overcast, 1 - 0.3 * _overcast);
-      else sprite.material.color.setRGB(1, 1, 1);
+    for (let i = 0; i < clouds.length; i++) {
+      const c = clouds[i];
+      // Drift along +X; wrap in [-wrapX, +wrapX).
+      const rawX = c.phase + c.drift * t * dayUnits;
+      const wrap = c.wrapX * 2;
+      c.sprite.position.x = ((((rawX + c.wrapX) % wrap) + wrap) % wrap) - c.wrapX;
+      c.sprite.material.opacity = cloudOpacity;
+      // Grey the clouds toward storm-cloud under overcast; low deck stays
+      // slightly darker than the high deck (tint) at all times.
+      if (_overcast > 0) {
+        c.sprite.material.color.setRGB(
+          (1 - 0.35 * _overcast) * c.tint * toneMul,
+          (1 - 0.33 * _overcast) * c.tint * toneMul,
+          (1 - 0.3 * _overcast) * c.tint * toneMul,
+        );
+      } else {
+        c.sprite.material.color.setRGB(c.tint * toneMul, c.tint * toneMul, c.tint * toneMul);
+      }
     }
+
+    // ── Distant silhouette bands: colour toward the horizon (atmospheric
+    // perspective — the far ridge washes out more than the nearer hill line)
+    // and a slow rotation drift keyed off world scroll (0 with no scrollZ).
+    // The segment's `far` role lands here: these two rings ARE the distance
+    // band, so a snow divide reads as pale rock on the skyline and a conifer
+    // slope as blue-green, before the horizon wash goes on top.
+    _tmpBandColor.copy(_ridgeColor);
+    if (_segStrength > 0) _tmpBandColor.lerp(_segFar, SEG_RIDGE * _segStrength);
+    _tmpBandColor.lerp(pal.horizon, 0.18);
+    ridge.mat.color.copy(_tmpBandColor);
+    ridge.mesh.rotation.y = (scrollZ * RIDGE_PARALLAX) / RIDGE_RADIUS;
+
+    _tmpBandColor.copy(_hillColor);
+    if (_segStrength > 0) _tmpBandColor.lerp(_segFar, SEG_HILL * _segStrength);
+    _tmpBandColor.lerp(pal.horizon, 0.10);
+    hill.mat.color.copy(_tmpBandColor);
+    hill.mesh.rotation.y = (scrollZ * HILL_PARALLAX) / HILL_RADIUS;
   }
 
   // ── applyTo ───────────────────────────────────────────────────────────────
@@ -572,7 +913,7 @@ export function createSky({ cloudTexture }) {
   const SUN_DIST  = 200;
 
   function applyTo(targets, t) {
-    const pal    = applyOvercast(lerpPalette(t));
+    const pal    = applyTone(applyOvercast(applySegment(lerpPalette(t))));
     const sunDir = sunDirAt(t);
 
     if (targets.sun) {
@@ -608,10 +949,15 @@ export function createSky({ cloudTexture }) {
     stars.geometry.dispose();
     stars.material.dispose();
 
-    for (const sprite of cloudSprites) {
-      sprite.material.dispose();
+    for (const c of clouds) {
+      c.sprite.material.dispose();
       // Note: cloudTexture is caller-owned; we do not dispose it here.
     }
+
+    ridge.geo.dispose();
+    ridge.mat.dispose();
+    hill.geo.dispose();
+    hill.mat.dispose();
   }
 
   // v: 0..1 cover. color: optional THREE.Color the dome/light grey toward
@@ -627,6 +973,8 @@ export function createSky({ cloudTexture }) {
     sunDirAt,
     applyTo,
     setOvercast,
+    setTone,
+    setSegmentTint,
     dispose,
   };
 }

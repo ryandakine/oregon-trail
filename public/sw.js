@@ -1,10 +1,11 @@
-const CACHE_NAME = 'oregon-trail-kaplay-v6-palette';
+const CACHE_NAME = 'oregon-trail-kaplay-v7-engravings';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/engine.js',
   '/main.js',
   '/render-mode.mjs',
+  '/lib/assets.mjs',
   '/vendor/kaplay.mjs',
   '/html2canvas.min.js',
   '/manifest.json',
@@ -35,6 +36,23 @@ const OPTIONAL_ASSETS = [
   '/lib/hud.mjs',
   '/lib/tone.mjs',
   '/assets/title-hero.png', // WS4 title still; allSettled if missing
+  '/assets/art/convoy/wagon_body.svg',
+  '/assets/art/convoy/wagon_wheel_rear.svg',
+  '/assets/art/convoy/wagon_wheel_front.svg',
+  '/assets/art/convoy/ox_sheet.svg',
+  '/assets/art/convoy/pioneer_leader_sheet.svg',
+  '/assets/art/convoy/pioneer_companion_sheet.svg',
+  '/assets/art/scenery/tree_cottonwood.svg',
+  '/assets/art/scenery/tree_pine.svg',
+  '/assets/art/wildlife/bison.svg',
+  '/assets/art/wildlife/deer.svg',
+  '/assets/art/wildlife/deer_doe.svg',
+  '/assets/art/wildlife/rabbit.svg',
+  '/assets/art/landmarks/chimney_rock.svg',
+  '/assets/art/landmarks/fort_laramie.svg',
+  '/assets/art/landmarks/independence_rock.svg',
+  '/assets/art/landmarks/willamette_arrival.svg',
+  '/assets/art/river/river_ferry.svg',
   // Three.js bundle (/three/bootstrap.mjs + /vendor/three/*) is intentionally
   // NOT pre-cached here. The fetch handler below lazy-caches any same-origin
   // 200 at runtime, so desktop sessions cache Three on first 3D init and phones

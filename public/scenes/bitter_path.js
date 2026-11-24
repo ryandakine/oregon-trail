@@ -1,4 +1,6 @@
+import * as draw from "../lib/draw.mjs";
 import { addTopHud, addBottomHud } from "../lib/hud.mjs";
+import { createHorrorFx } from "../lib/horror-fx.mjs";
 
 // Hidden horror-tier scene (v3 primitive Kaplay). Fires when the server
 // returns trigger === "bitter_path" — late-stage starvation + recent death,
@@ -7,7 +9,7 @@ import { addTopHud, addBottomHud } from "../lib/hud.mjs";
 //   - No sanity-based agency-steal — this is a deliberate moment
 //   - Skip button routes to /api/bitter_path_skip (refused enum)
 //   - Post-choice 1.5s outcome beat before TRAVEL transition
-//   - Crimson border accent, 0.75 backdrop (vs event.js 0.6), dead-member
+//   - Crimson border accent, 0.6 twilight backdrop (vs event.js 0.4), dead-member
 //     subheading, screenshot-defense footer in CW modal
 const CW_ACK_KEY = "ot_bitter_path_cw_acked";
 const TYPE_SPEED_MS = 25;
@@ -61,10 +63,35 @@ export default function register(k, engine) {
     // remove it even if the user clicked a choice before typewriter finished.
     let overlayClickHandler = null;
 
-    // Dim canvas backdrop — 0.75 (vs event.js 0.6) so the scene reads heavier.
-    // Avoid stacking past 0.85 — high-tier tone.mjs already applies vignette +
-    // cool-shift + scanlines; more black crushes overlay readability.
-    k.add([k.rect(640, 480), k.pos(0, 0), k.color(0, 0, 0), k.opacity(0.75)]);
+    // Living backdrop — desaturated twilight tableau dimmed ~60% (vs event.js's
+    // ~40%) so the scene reads heavier, instead of a flat black rect. Sky +
+    // ground + a wagon silhouette, slow star twinkle so the frame never reads
+    // frozen. Cheap on purpose (graphics-pop-research B5): no weather, no
+    // parallax layers.
+    function drawBitterBackdrop() {
+      k.add([k.rect(640, 260), k.pos(0, 0),   k.color(...draw.PALETTE.skyTwilight)]);
+      k.add([k.rect(640, 60),  k.pos(0, 200), k.color(...draw.PALETTE.skyTwilightHorizon), k.opacity(0.85)]);
+      k.add([k.rect(640, 220), k.pos(0, 260), k.color(...draw.PALETTE.silhouetteFar)]);
+      k.add([k.rect(640, 6),   k.pos(0, 256), k.color(...draw.PALETTE.black), k.opacity(0.35)]);
+
+      const sc = draw.PALETTE.silhouetteNear;
+      const wx = 320, wy = 340;
+      k.add([k.rect(112, 34, { radius: 3 }), k.pos(wx - 56, wy - 8), k.color(...sc)]);
+      k.add([draw.ellipseRect(k, 108, 46), k.pos(wx, wy - 34), k.color(...sc), k.anchor("center")]);
+      k.add([k.circle(19), k.pos(wx - 38, wy + 22), k.color(...sc), k.anchor("center")]);
+      k.add([k.circle(19), k.pos(wx + 38, wy + 22), k.color(...sc), k.anchor("center")]);
+
+      if (motionOk) {
+        const stars = [[90, 46, 0], [190, 28, 1.4], [430, 34, 2.7], [560, 54, 4.1]];
+        for (const [sx, sy, phase] of stars) {
+          const star = k.add([k.circle(1.4), k.pos(sx, sy), k.color(...draw.PALETTE.snow), k.anchor("center"), k.opacity(0.4)]);
+          star.onUpdate(() => { star.opacity = 0.35 + Math.sin(k.time() * 0.9 + phase) * 0.3; });
+        }
+      }
+
+      k.add([k.rect(640, 480), k.pos(0, 0), k.color(0, 0, 0), k.opacity(0.6)]);
+    }
+    drawBitterBackdrop();
 
     // Decorative label — whisper, not shout. Lower than event.js "EVENT" label
     // so the HTML overlay body draws the eye first.
@@ -122,7 +149,7 @@ export default function register(k, engine) {
           <p style="font-size: 11px; opacity: 0.6; margin-top: 16px; margin-bottom: 0;">An OSI production. Based on the Donner Party (1846).</p>
         </div>
       `;
-      overlay.classList.add("active");
+      overlay.classList.add("active", "tableau");
 
       const skipBtn = document.getElementById("bp-cw-skip");
       const contBtn = document.getElementById("bp-cw-continue");
@@ -166,6 +193,9 @@ export default function register(k, engine) {
     }
 
     function renderScene() {
+      // The Long Night is THE horror beat — slam the CRT/aberration stinger
+      // as the scene body reveals (no-op below high tier / reduced motion).
+      createHorrorFx(k).stinger(1);
       const title = eventData.title || "The Long Night";
       const description = eventData.description || "";
       const choices = eventData.choices || [];
@@ -197,7 +227,7 @@ export default function register(k, engine) {
           <div id="bp-choices" style="margin-top: 20px;"></div>
         </div>
       `;
-      overlay.classList.add("active");
+      overlay.classList.add("active", "tableau");
 
       const typewriterEl = document.getElementById("bp-typewriter");
       announce("The Long Night. Choose one of three.");
@@ -356,7 +386,7 @@ export default function register(k, engine) {
       for (const h of choiceKeyHandlers) h?.cancel?.();
       choiceKeyHandlers.length = 0;
       cwOpen = false;
-      overlay.classList.remove("active");
+      overlay.classList.remove("active", "tableau");
       content.innerHTML = "";
     }
 

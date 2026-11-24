@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="180" viewBox="0 0 340 180">
+  <defs>
+    <filter id="fort-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#1f1a16" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <g id="fort-laramie" filter="url(#fort-shadow)">
+    <!-- Rear Barracks / Commissary Roof peaking over stockade -->
+    <path d="M 50 115 L 140 115 L 130 92 L 60 92 Z" fill="#4d321d" stroke="#1f1a16" stroke-width="1.2"/>
+    <path d="M 68 92 L 68 76 L 76 76 L 76 92 Z" fill="#8c7a6b" stroke="#1f1a16" stroke-width="1"/> <!-- Stone chimney -->
+
+    <!-- Left Palisade Wall Section (Pointed heavy timber logs) -->
+    <rect x="25" y="112" width="105" height="58" fill="#5c3c22" stroke="#1f1a16" stroke-width="1.4"/>
+    <!-- Individual pointed logs pattern -->
+    <path d="M 25 112 L 29 104 L 33 112 M 33 112 L 37 104 L 41 112 M 41 112 L 45 104 L 49 112 M 49 112 L 53 104 L 57 112 M 57 112 L 61 104 L 65 112 M 65 112 L 69 104 L 73 112 M 73 112 L 77 104 L 81 112 M 81 112 L 85 104 L 89 112 M 89 112 L 93 104 L 97 112 M 97 112 L 101 104 L 105 112 M 105 112 L 109 104 L 113 112 M 113 112 L 117 104 L 121 112 M 121 112 L 125 104 L 129 112"
+          fill="#6d4729" stroke="#1f1a16" stroke-width="1.2"/>
+    <!-- Horizontal reinforcing crossbeams with iron bolts -->
+    <rect x="24" y="125" width="106" height="5" fill="#3d2412" stroke="#1f1a16" stroke-width="0.8"/>
+    <rect x="24" y="150" width="106" height="5" fill="#3d2412" stroke="#1f1a16" stroke-width="0.8"/>
+
+    <!-- Right Palisade Wall Section -->
+    <rect x="205" y="112" width="110" height="58" fill="#5c3c22" stroke="#1f1a16" stroke-width="1.4"/>
+    <path d="M 205 112 L 209 104 L 213 112 M 213 112 L 217 104 L 221 112 M 221 112 L 225 104 L 229 112 M 229 112 L 233 104 L 237 112 M 237 112 L 241 104 L 245 112 M 245 112 L 249 104 L 253 112 M 253 112 L 257 104 L 261 112 M 261 112 L 265 104 L 269 112 M 269 112 L 273 104 L 277 112 M 277 112 L 281 104 L 285 112 M 285 112 L 289 104 L 293 112 M 293 112 L 297 104 L 301 112 M 301 112 L 305 104 L 309 112 M 309 112 L 313 104 L 315 112"
+          fill="#6d4729" stroke="#1f1a16" stroke-width="1.2"/>
+    <rect x="205" y="125" width="110" height="5" fill="#3d2412" stroke="#1f1a16" stroke-width="0.8"/>
+    <rect x="205" y="150" width="110" height="5" fill="#3d2412" stroke="#1f1a16" stroke-width="0.8"/>
+
+    <!-- Central Fort Gatehouse & Massive Timber Double Gates -->
+    <rect x="130" y="98" width="75" height="72" fill="#4d3019" stroke="#1f1a16" stroke-width="1.6"/>
+    <!-- Gate lintel and arch -->
+    <rect x="127" y="94" width="81" height="8" fill="#331e0c" stroke="#1f1a16" stroke-width="1.2"/>
+    <!-- Double doors -->
+    <rect x="138" y="112" width="28" height="58" fill="#2d1909" stroke="#1f1a16" stroke-width="1.2"/>
+    <rect x="169" y="112" width="28" height="58" fill="#2d1909" stroke="#1f1a16" stroke-width="1.2"/>
+    <!-- Iron strap hinges & handles -->
+    <rect x="138" y="122" width="20" height="3" fill="#111111"/>
+    <rect x="138" y="152" width="20" height="3" fill="#111111"/>
+    <rect x="177" y="122" width="20" height="3" fill="#111111"/>
+    <rect x="177" y="152" width="20" height="3" fill="#111111"/>
+    <circle cx="163" cy="142" r="2" fill="#d9aa55"/> <!-- Brass ring pull -->
+    <circle cx="172" cy="142" r="2" fill="#d9aa55"/>
+
+    <!-- Lookout platform above gate -->
+    <rect x="133" y="100" width="69" height="12" fill="#6d4729" stroke="#1f1a16" stroke-width="1"/>
+    <!-- Lookout embrasures -->
+    <rect x="145" y="103" width="6" height="5" fill="#111111"/>
+    <rect x="165" y="103" width="6" height="5" fill="#111111"/>
+    <rect x="185" y="103" width="6" height="5" fill="#111111"/>
+
+    <!-- Southwest Corner Two-Story Watchtower Blockhouse (Flanking Left) -->
+    <!-- Lower Story -->
+    <rect x="10" y="85" width="38" height="85" fill="#4a2e18" stroke="#1f1a16" stroke-width="1.6"/>
+    <!-- Horizontal log courses -->
+    <path d="M 10 95 L 48 95 M 10 105 L 48 105 M 10 115 L 48 115 M 10 125 L 48 125 M 10 135 L 48 135 M 10 145 L 48 145 M 10 155 L 48 155 M 10 165 L 48 165"
+          stroke="#2d1909" stroke-width="1.2"/>
+    <!-- Overhanging Upper Story Guard Deck -->
+    <rect x="6" y="58" width="46" height="28" fill="#5c3c22" stroke="#1f1a16" stroke-width="1.5"/>
+    <path d="M 6 68 L 52 68 M 6 78 L 52 78" stroke="#2d1909" stroke-width="1"/>
+    <!-- Watchtower musket loop slit -->
+    <rect x="25" y="66" width="6" height="10" fill="#111111"/>
+    <!-- Pitched Timber Roof -->
+    <polygon points="4,58 29,40 54,58" fill="#38210f" stroke="#1f1a16" stroke-width="1.4"/>
+
+    <!-- Flagpole with 1848 30-star American Flag -->
+    <line x1="29" y1="40" x2="29" y2="8" stroke="#1f1a16" stroke-width="2"/>
+    <circle cx="29" cy="8" r="2.5" fill="#d9aa55"/> <!-- Brass finial -->
+    <!-- Waving 19th-century flag -->
+    <path d="M 30 10 C 38 7, 46 13, 56 10 L 56 26 C 46 29, 38 23, 30 26 Z"
+          fill="#c0392b" stroke="#1f1a16" stroke-width="1"/>
+    <path d="M 30 10 C 36 8, 40 12, 44 11 L 44 19 C 40 20, 36 17, 30 18 Z"
+          fill="#2980b9"/> <!-- Blue canton field -->
+    <!-- White stripes overlay -->
+    <path d="M 44 13 C 48 14, 52 13, 56 12 L 56 15 C 52 16, 48 16, 44 15 Z" fill="#ffffff"/>
+    <path d="M 44 18 C 48 19, 52 18, 56 17 L 56 20 C 52 21, 48 21, 44 20 Z" fill="#ffffff"/>
+    <path d="M 30 22 C 38 20, 46 25, 56 22 L 56 24 C 46 27, 38 22, 30 24 Z" fill="#ffffff"/>
+  </g>
+</svg>

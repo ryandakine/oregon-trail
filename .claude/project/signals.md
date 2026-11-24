@@ -3,7 +3,7 @@
 ## Framework & runtime
 
 - **Worker:** Cloudflare Worker, TypeScript 5.8, Wrangler 4.x, compatibility_date 2026-04-01
-- **Frontend:** Vanilla JS (no build), Kaplay 3001 from CDN (unpkg primary, jsDelivr fallback), IBM Plex Mono TTF
+- **Frontend:** Vanilla JS (no build), Kaplay 3001 self-hosted at `/vendor/kaplay.mjs` (jsDelivr fallback, no unpkg), IBM Plex Mono TTF
 - **AI:** Anthropic `claude-haiku-4-5-20251001`, 8s timeout, retry on 429/529
 - **Hosting:** Cloudflare Pages (`oregon-trail`) + Cloudflare Worker (`oregon-trail-api`)
 - **Domain:** trail.osi-cyber.com (CNAME → oregon-trail.pages.dev); worker at oregon-trail-api.trails710.workers.dev
@@ -15,8 +15,8 @@
 | Purpose | Command | Source |
 |---------|---------|--------|
 | Run all tests | `npx vitest run` | [`vitest.config.ts`](../../vitest.config.ts) — two projects: worker + frontend |
-| Worker tests only | `npx vitest run --project worker` | [`worker/tests/`](../../worker/tests) (9 suites) |
-| Frontend tests only | `npx vitest run --project frontend` | [`test/frontend/`](../../test/frontend) (Playwright scene smokes) |
+| Worker tests only | `npx vitest run --project worker` | [`worker/tests/`](../../worker/tests) (16 suites) |
+| Frontend tests only | `npx vitest run --project frontend` | [`test/frontend/`](../../test/frontend) (10 suites: vitest + Playwright scene smokes) |
 | Local worker dev | `npx wrangler dev` | serves worker on localhost:8787 |
 | Deploy (worker + pages) | `bun run deploy` | runs `deploy:worker` then `deploy:pages` |
 | Deploy worker only | `bun run deploy:worker` | `wrangler deploy` |
@@ -24,7 +24,7 @@
 | Smoke probe only | `bun run deploy:smoke` | [`scripts/deploy-smoke.mjs`](../../scripts/deploy-smoke.mjs) (~15s Playwright probe) |
 | Watch mode | `bun run test:watch` | `vitest` |
 
-**CI gate:** [`.github/workflows/test.yml`](../../.github/workflows/test.yml) — runs `npx vitest run`. 236 test cases total (worker unit + frontend Playwright). Must be green before committing worker changes.
+**CI gate:** [`.github/workflows/test.yml`](../../.github/workflows/test.yml) — runs `npx vitest run` across 16 worker + 10 frontend suites (run `npx vitest run` for the current case count; ~418 pass as of 2026-08). Must be green before committing worker changes.
 
 **Deploy gate:** [`scripts/deploy-pages.sh`](../../scripts/deploy-pages.sh) runs vitest → wrangler pages preview push → `deploy-smoke.mjs` (renders river/hunting/bitter_path CW modal) → promote to `--branch=master` only on clean smoke. Gate added 2026-04-18 after P0 scene-render bugs shipped without it.
 
@@ -60,7 +60,7 @@
 
 ## Cross-cutting
 
-**Test layout:** [`worker/tests/`](../../worker/tests) has 9 vitest suites (unit, fast). [`test/frontend/`](../../test/frontend) has 5 Playwright scene-smoke suites that serve real [`public/`](../../public) via `harness.ts`; fixtures under [`test/frontend/fixtures/`](../../test/frontend/fixtures) seed engine state. [`vitest.config.ts`](../../vitest.config.ts) configures both as named projects. Frontend tests run in `singleFork` pool (one chromium shared via ref-counting).
+**Test layout:** [`worker/tests/`](../../worker/tests) has 16 vitest suites (unit, fast). [`test/frontend/`](../../test/frontend) has 10 suites (vitest + Playwright scene smokes) that serve real [`public/`](../../public) via `harness.ts`; fixtures under [`test/frontend/fixtures/`](../../test/frontend/fixtures) seed engine state. [`vitest.config.ts`](../../vitest.config.ts) configures both as named projects. Frontend tests run in `singleFork` pool (one chromium shared via ref-counting).
 
 **HMAC invariant:** [`worker/src/types.ts`](../../worker/src/types.ts) is the single source of truth for `GameState`. `deepCanonicalize` in `hmac.ts` sorts all object keys before hashing — field order is irrelevant but adding/removing fields without updating both worker and frontend breaks verification silently.
 

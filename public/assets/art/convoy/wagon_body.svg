@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="90" viewBox="0 0 180 90">
+  <defs>
+    <!-- Hatching pattern for woodcut shadow -->
+    <pattern id="woodcut-hatch" width="4" height="4" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="4" stroke="#1f1a16" stroke-width="0.8" opacity="0.35" />
+    </pattern>
+    <pattern id="canvas-hatch" width="5" height="5" patternTransform="rotate(-30 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="5" stroke="#4a3e35" stroke-width="0.75" opacity="0.25" />
+    </pattern>
+  </defs>
+
+  <!-- Wagon Undercarriage: Reach beam, axles, hounds -->
+  <g id="undercarriage">
+    <!-- Reach pole -->
+    <path d="M 22 72 L 158 72 L 158 76 L 22 76 Z" fill="#4a2c0f" stroke="#1f1a16" stroke-width="1.5"/>
+    <!-- Front bolster and axle cap -->
+    <rect x="42" y="68" width="12" height="10" rx="1.5" fill="#38220f" stroke="#1f1a16" stroke-width="1.5"/>
+    <circle cx="48" cy="73" r="2.5" fill="#1f1a16"/>
+    <!-- Rear bolster and axle cap -->
+    <rect x="126" y="68" width="12" height="10" rx="1.5" fill="#38220f" stroke="#1f1a16" stroke-width="1.5"/>
+    <circle cx="132" cy="73" r="2.5" fill="#1f1a16"/>
+    <!-- Iron brake lever -->
+    <path d="M 124 55 L 140 70 L 138 72 L 122 57 Z" fill="#1f1a16"/>
+    <circle cx="123" cy="56" r="2" fill="#2d2621"/>
+  </g>
+
+  <!-- Conestoga Boat-Shaped Wagon Bed -->
+  <g id="wagon-bed">
+    <!-- Side planks: boat-curved sag in middle, flared upward at front (left) and rear (right) -->
+    <!-- Outer silhouette & fill -->
+    <path d="M 18 42 C 40 45, 140 45, 162 40 L 160 67 C 140 71, 40 71, 20 67 Z" 
+          fill="#8b5a2b" stroke="#1f1a16" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Wood grain plank seams -->
+    <path d="M 19 48 C 40 51, 140 51, 161 46" fill="none" stroke="#633e1a" stroke-width="1.5"/>
+    <path d="M 19 55 C 40 58, 140 58, 161 53" fill="none" stroke="#633e1a" stroke-width="1.5"/>
+    <path d="M 20 61 C 40 64, 140 64, 160 59" fill="none" stroke="#4a2c0f" stroke-width="1.5"/>
+    
+    <!-- Vertical structural wooden standards & iron brackets -->
+    <path d="M 25 43 L 26 66 M 45 45 L 46 68 M 65 45 L 65 69 M 85 45 L 85 69 M 105 45 L 105 69 M 125 45 L 125 68 M 145 43 L 144 66 M 155 41 L 154 65" 
+          stroke="#1f1a16" stroke-width="1.8" stroke-linecap="round"/>
+    
+    <!-- Tool Chest (slanted lid on side of wagon bed) -->
+    <polygon points="56,53 74,53 72,66 58,66" fill="#633e1a" stroke="#1f1a16" stroke-width="1.5"/>
+    <polygon points="54,51 76,51 74,53 56,53" fill="#8b5a2b" stroke="#1f1a16" stroke-width="1.5"/>
+    <rect x="63.5" y="55" width="3" height="4" fill="#1f1a16"/> <!-- Iron hasp -->
+
+    <!-- Water Keg / Barrel mounted on side bracket -->
+    <ellipse cx="98" cy="60" rx="9" ry="12" fill="#8b5a2b" stroke="#1f1a16" stroke-width="1.5"/>
+    <!-- Iron hoops on barrel -->
+    <path d="M 90 53 C 94 54, 102 54, 106 53" fill="none" stroke="#1f1a16" stroke-width="1.5"/>
+    <path d="M 89 60 C 94 61, 102 61, 107 60" fill="none" stroke="#1f1a16" stroke-width="1.5"/>
+    <path d="M 90 67 C 94 68, 102 68, 106 67" fill="none" stroke="#1f1a16" stroke-width="1.5"/>
+    <!-- Barrel bung -->
+    <circle cx="98" cy="60" r="1.5" fill="#1f1a16"/>
+
+    <!-- Rear Feed Trough (tucking box) -->
+    <polygon points="156,50 168,48 167,61 155,63" fill="#633e1a" stroke="#1f1a16" stroke-width="1.5"/>
+    <path d="M 158 50 L 157 62" stroke="#1f1a16" stroke-width="1.2"/>
+
+    <!-- Grease Bucket hanging from rear axle -->
+    <path d="M 148 74 L 148 78 L 145 84 L 151 84 L 148 78" fill="#38220f" stroke="#1f1a16" stroke-width="1.2"/>
+
+    <!-- Shadow hatching on wagon lower flank -->
+    <path d="M 21 61 C 40 64, 140 64, 160 59 L 160 67 C 140 71, 40 71, 20 67 Z" fill="url(#woodcut-hatch)"/>
+  </g>
+
+  <!-- Billowing Canvas Bonnet (Prairie Schooner Bonnet) -->
+  <g id="canvas-bonnet">
+    <!-- Main canvas silhouette: arches out over front (left) and rear (right) -->
+    <path d="M 10 44 
+             C 4 28, 12 12, 34 8 
+             C 65 4, 115 4, 146 7 
+             C 168 11, 178 26, 172 41 
+             C 152 45, 30 45, 10 44 Z" 
+          fill="#f4eee1" stroke="#1f1a16" stroke-width="2" stroke-linejoin="round"/>
+    
+    <!-- Inner canvas tone & shadow -->
+    <path d="M 12 43 C 6 29, 14 14, 34 10 C 65 6, 115 6, 146 9 C 166 13, 175 27, 170 40 C 150 44, 32 44, 12 43 Z"
+          fill="#e8ded0" opacity="0.6"/>
+
+    <!-- Puckered Front Opening (revealing dark interior) -->
+    <path d="M 10 44 C 6 36, 10 20, 18 16 C 14 26, 14 36, 18 43 Z" fill="#382e26" stroke="#1f1a16" stroke-width="1.5"/>
+
+    <!-- Puckered Rear Opening -->
+    <path d="M 172 41 C 176 34, 172 20, 164 15 C 168 25, 168 35, 164 41 Z" fill="#382e26" stroke="#1f1a16" stroke-width="1.5"/>
+
+    <!-- Arched Wooden Bow Ribs (hoops supporting canvas) -->
+    <path d="M 26 10 C 22 20, 21 34, 23 44" fill="none" stroke="#1f1a16" stroke-width="1.8" stroke-dasharray="none"/>
+    <path d="M 46 7  C 44 18, 43 32, 45 44" fill="none" stroke="#1f1a16" stroke-width="1.8"/>
+    <path d="M 68 5  C 67 18, 66 32, 68 45" fill="none" stroke="#1f1a16" stroke-width="1.8"/>
+    <path d="M 90 5  C 90 18, 90 32, 90 45" fill="none" stroke="#1f1a16" stroke-width="1.8"/>
+    <path d="M 112 5 C 113 18, 114 32, 112 45" fill="none" stroke="#1f1a16" stroke-width="1.8"/>
+    <path d="M 134 7 C 136 18, 137 32, 135 44" fill="none" stroke="#1f1a16" stroke-width="1.8"/>
+    <path d="M 154 10 C 158 20, 159 34, 157 42" fill="none" stroke="#1f1a16" stroke-width="1.8"/>
+
+    <!-- Canvas folds and billows between ribs (cross-hatching & shading) -->
+    <!-- Shading under the upper rim -->
+    <path d="M 28 13 C 58 8, 122 8, 152 13 C 145 18, 35 18, 28 13 Z" fill="url(#canvas-hatch)"/>
+    <!-- Shading along the lower edge above wagon rail -->
+    <path d="M 15 36 C 45 38, 135 38, 165 34 L 168 42 C 145 45, 35 45, 12 43 Z" fill="url(#canvas-hatch)"/>
+
+    <!-- Rope tie-downs along wagon side rail -->
+    <path d="M 23 44 L 26 48 M 45 44 L 46 49 M 68 45 L 68 50 M 90 45 L 90 50 M 112 45 L 112 50 M 135 44 L 134 49 M 157 42 L 156 47" 
+          stroke="#4a3e35" stroke-width="1.2"/>
+  </g>
+
+  <!-- Hanging Brass/Iron Lantern at the Rear -->
+  <g id="rear-lantern">
+    <!-- Bracket -->
+    <path d="M 166 43 L 174 43 L 174 48" fill="none" stroke="#1f1a16" stroke-width="1.5"/>
+    <!-- Ring & Cap -->
+    <circle cx="174" cy="49" r="1.5" fill="none" stroke="#1f1a16" stroke-width="1"/>
+    <polygon points="171,51 177,51 175.5,49.5 172.5,49.5" fill="#1f1a16"/>
+    <!-- Glass globe with warm lantern glow -->
+    <rect x="171.5" y="51" width="5" height="7" rx="1" fill="#fbd068" stroke="#1f1a16" stroke-width="1"/>
+    <!-- Glowing flame wick -->
+    <circle cx="174" cy="54.5" r="1.2" fill="#df861d"/>
+    <!-- Base -->
+    <rect x="171" y="58" width="6" height="2" rx="0.5" fill="#1f1a16"/>
+  </g>
+</svg>

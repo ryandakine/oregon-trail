@@ -1,8 +1,27 @@
 import * as draw from "../lib/draw.mjs";
-import { addTopHud, addBottomHud, updateHud, attachResizeRebuild } from "../lib/hud.mjs";
+import { segmentBlend, segmentForMiles } from "../lib/segments.mjs";
+import { addTopHud, addBottomHud, updateHud, attachResizeRebuild, attachStatCorruption, attachZenFade } from "../lib/hud.mjs";
 import { applyToneOverlay } from "../lib/tone.mjs";
+import { createJuice } from "../lib/juice.mjs";
+import { createHorrorFx } from "../lib/horror-fx.mjs";
 
 const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const isMotionOk = () => (window.__VFX_OPTS?.motionOk !== undefined ? Boolean(window.__VFX_OPTS.motionOk) : MOTION_OK);
+
+// Mood-arc dressing: which of the existing draw helpers the biome puts on
+// screen, keyed off the segment's dressing[] hints. Prairie is the historical
+// layout unchanged; open country loses the cottonwood, rock country grows its
+// stones, forest gains fir. Fixed coordinates, so this stays repaint-stable.
+const DRESSING = {
+  prairie:      { trees: [[560, 330]],                        rocks: [[70, 360, 36, 22], [110, 455, 24, 14]],                          tufts: [[60, 390], [90, 430], [540, 380], [580, 440]] },
+  river_valley: { trees: [[560, 330]],                        rocks: [[92, 452, 22, 12]],                                              tufts: [[60, 390], [90, 430], [540, 380], [580, 440]] },
+  bluffs:       { trees: [],                                  rocks: [[64, 352, 58, 34], [116, 455, 30, 17], [566, 344, 44, 26]],      tufts: [[540, 380], [580, 440]] },
+  foothills:    { trees: [],                                  rocks: [[70, 360, 40, 24], [112, 452, 26, 15], [560, 350, 30, 18]],      tufts: [[60, 390], [90, 430], [540, 380], [580, 440]] },
+  snow:         { trees: [],                                  rocks: [[66, 356, 52, 26], [114, 456, 28, 14], [560, 348, 38, 20]],      tufts: [] },
+  desert:       { trees: [],                                  rocks: [[60, 350, 66, 30], [118, 458, 34, 16], [556, 342, 50, 24]],      tufts: [] },
+  forest:       { trees: [[560, 330], [56, 322], [148, 306]], rocks: [[104, 452, 30, 18]],                                             tufts: [[540, 380]] },
+  arrival:      { trees: [[560, 330], [72, 324]],             rocks: [[110, 455, 24, 14]],                                             tufts: [[60, 390], [90, 430], [540, 380], [580, 440]] },
+};
 
 export default function register(k, engine) {
   k.scene("travel", () => {
@@ -10,32 +29,77 @@ export default function register(k, engine) {
     const listeners = [];
     const loops = [];
     let detachResize = null;
+    let detachCorruption = null;
+    let detachZenFade = null;
+    const juice = createJuice(k);
+    // Wires the horror shader's two previously-dead channels (review finding):
+    // dread scales aberration/grain with the party's actual desperation, and
+    // stingers slam CRT distortion on bad-news beats. High tier only.
+    const horrorFx = engine.tone === "high" ? createHorrorFx(k) : null;
+    function computeDread() {
+      const food = engine.supplies?.food ?? 0;
+      const members = (engine.party?.members ?? []).filter((m) => m.alive);
+      const foodFactor = food <= 25 ? (1 - food / 25) * 0.8 : 0;
+      const anyDying = members.some((m) => m.health > 0 && m.health <= 20);
+      const anyIll = members.some((m) => m.disease);
+      const healthFactor = anyDying ? 0.7 : anyIll ? 0.3 : 0;
+      return Math.min(1, Math.max(foodFactor, healthFactor));
+    }
+    if (horrorFx) horrorFx.setDread(computeDread());
     function engineOn(event, fn) { engine.on(event, fn); listeners.push({ event, fn }); }
 
     k.onSceneLeave(() => {
       for (const { event, fn } of listeners) engine.off(event, fn);
       for (const l of loops) l?.cancel?.();
+      k.destroyAll("vfx-ambient");
       detachResize?.();
+      detachCorruption?.();
+      detachZenFade?.();
+      // A dwell queued by this scene must not outlive it — every route back to
+      // travel re-queues on mount.
+      engine.cancelQueuedAdvance();
     });
 
     // ── Scene setup ──
     const tone = engine.tone ?? "medium";
     const dayPhase = getDayPhase(engine.currentDate);
 
-    const sky = draw.drawSky(k, tone, dayPhase);
-    const hills = draw.drawHills(k);
-    draw.drawMountains(k);
-    draw.drawGround(k, { tone });
+    // Mood arc: 1,764 miles read as 8 looks, cross-faded over a 40-mile window
+    // so no advance ever jumps the palette. Colors come from the blend; the
+    // discrete choices (props, weather) come from whichever segment owns this
+    // mile, which flips at the same place the blend passes t=0.5.
+    const miles = engine.milesTraveled ?? 0;
+    const segment = segmentBlend(miles);
+    const here = segmentForMiles(miles);
+
+    const sky = draw.drawSky(k, tone, dayPhase, { segment });
+    const mountains = draw.drawMountains(k, { segment });
+    draw.drawGodRays(k, dayPhase, tone, { animate: true, isPaused: () => paused, motionOk: isMotionOk() });
+    const hills = draw.drawHills(k, { segment });
+    const ground = draw.drawGround(k, { tone, segment });
+    // The trail itself stays churned earth in every biome — like the shared
+    // darks in segments.mjs, it's the through-line that keeps this one game.
     draw.drawTrail(k);
 
     // Environment
-    draw.drawTree(k, 560, 330);
-    draw.drawRock(k, 70, 360);
-    draw.drawRock(k, 110, 455, 24, 14);
-    draw.drawGrassTuft(k, 60, 390);
-    draw.drawGrassTuft(k, 90, 430);
-    draw.drawGrassTuft(k, 540, 380);
-    draw.drawGrassTuft(k, 580, 440);
+    const dressing = DRESSING[here.biome] ?? DRESSING.prairie;
+    for (const [tx, ty] of dressing.trees) draw.drawTree(k, tx, ty, { biome: here.biome });
+    for (const [rx, ry, rw, rh] of dressing.rocks) draw.drawRock(k, rx, ry, rw, rh);
+    for (const [gx, gy] of dressing.tufts) draw.drawGrassTuft(k, gx, gy);
+
+    // Ground-hugging haze bands: valley mist on arrival, wind-packed snow on
+    // the divide. Low-opacity rects over the meadow and the head of the trail.
+    if (here.biome === "arrival" || here.biome === "snow") {
+      const mist = here.biome === "snow"
+        ? draw.PALETTE.snow
+        : draw.segmentColor(segment, "horizon", draw.PALETTE.skyPale);
+      const bands = here.biome === "snow"
+        ? [[268, 9, 0.5], [292, 7, 0.38], [332, 6, 0.26]]
+        : [[262, 10, 0.3], [280, 8, 0.22], [304, 7, 0.15]];
+      for (const [by, bh, bop] of bands) {
+        k.add([k.rect(640, bh), k.pos(0, by), k.color(...mist), k.opacity(bop)]);
+      }
+    }
 
     // HIGH-tier atmospheric horror
     if (tone === "high") {
@@ -58,9 +122,36 @@ export default function register(k, engine) {
       }
     }
 
+    // HIGH-tier temporal wrongness: roughly once per 40-70s, one distant
+    // bird holds motionless mid-air for 1.5-2s then resumes — rare enough
+    // to be felt, not staged.
+    if (tone === "high" && MOTION_OK && birds.length) {
+      let freezeTimer = null;
+      const scheduleFreeze = () => {
+        freezeTimer = k.wait(40 + k.rand(0, 30), () => {
+          const b = birds[Math.floor(k.rand(0, birds.length))];
+          b.frozenUntil = k.time() + 1.5 + k.rand(0, 0.5);
+          scheduleFreeze();
+        });
+      };
+      scheduleFreeze();
+      loops.push({ cancel: () => freezeTimer?.cancel?.() });
+    }
+
     // ── Hero convoy ──
     const WAGON_X = 300, WAGON_Y = 360;
-    draw.drawWagon(k, WAGON_X, WAGON_Y);
+    const wagon = draw.drawWagon(k, WAGON_X, WAGON_Y, { rolling: MOTION_OK });
+
+    // HIGH-tier temporal wrongness: the right wheel's spokes are 6-fold
+    // symmetric, so rotation *rate* is invisible from the spokes alone — a
+    // small rim rivet reveals true phase and lets one wheel run ~0.92x the
+    // other be felt over time without a still frame ever looking wrong.
+    let wheelRivet = null;
+    if (tone === "high" && MOTION_OK) {
+      const rivetPivot = k.add([k.pos(WAGON_X + 42, WAGON_Y + 26), k.rotate(-90)]);
+      rivetPivot.add([k.circle(1.6), k.pos(0, -17), k.color(...draw.PALETTE.outline), k.opacity(0.8), k.anchor("center")]);
+      wheelRivet = { pivot: rivetPivot, phase: -90 };
+    }
 
     // Drop shadow
     k.add([
@@ -81,6 +172,11 @@ export default function register(k, engine) {
       draw.drawOx(k, WAGON_X - 218, WAGON_Y + 13, { animate: MOTION_OK, phase: 1.6 }),
       draw.drawOx(k, WAGON_X - 138, WAGON_Y + 13, { animate: MOTION_OK, phase: 0 }),
     ];
+    // HIGH-tier temporal wrongness: one ox stretched ~1.18x on its long
+    // (horizontal) axis only — draw.mjs exposes no scale opt on drawOx, so
+    // this scales the returned group directly. y-scale stays 1, so the leg
+    // swap (which only moves leg.pos.y) is untouched — no shear.
+    if (tone === "high") oxen[1].use(k.scale(1.18, 1));
 
     const pioneers = [
       draw.drawPioneer(k, WAGON_X + 90, WAGON_Y + 24, { hat: "felt",   body: draw.PALETTE.vest,      legs: draw.PALETTE.trousers, animate: MOTION_OK, phase: 0.6 }),
@@ -90,6 +186,8 @@ export default function register(k, engine) {
     // ── HUDs ──
     const hudState = { top: addTopHud(k, engine), bottom: addBottomHud(k, engine) };
     detachResize = attachResizeRebuild(k, engine, hudState);
+    detachCorruption = attachStatCorruption(k, engine, hudState);
+    detachZenFade = attachZenFade(k, engine, hudState);
 
     // ── Tone overlay ──
     applyToneOverlay(k, tone);
@@ -105,12 +203,39 @@ export default function register(k, engine) {
       for (const h of hills.near) { h.pos.x -= 0.4;  if (h.pos.x < -60)  h.pos.x = 700; }
 
       for (const b of birds) {
+        if (b.frozenUntil && k.time() < b.frozenUntil) continue;
         b.pos.x -= b.birdSpeed;
         b.pos.y += Math.sin(k.time() * 0.7 + b.birdPhase) * 0.08;
         if (b.pos.x < -20) { b.pos.x = 680; }
         b.flap(k.time() * 7 + b.birdPhase);
       }
+
+      if (wheelRivet) {
+        wheelRivet.phase = (wheelRivet.phase + 0.92 * k.dt() * 360) % 360;
+        wheelRivet.pivot.angle = wheelRivet.phase;
+      }
     });
+
+    // Ambient wind sway on the 4 sky clouds, independent of pause state so
+    // the sky never reads frozen even mid-pause. Additive delta on top of
+    // the forward-parallax scroll above so it doesn't fight that loop's
+    // wrap-around reset. Amplitude/period/phase seeded from each cloud's
+    // spawn position (no Math.random) — drift phase itself runs off
+    // k.time(), which is fine here since this scene isn't screenshot-pinned.
+    if (MOTION_OK) {
+      const cloudSway = sky.clouds.map((c) => {
+        const rng = draw.seededRng(draw.seedFrom(c.pos.x, c.pos.y));
+        return { amp: 15 + rng() * 10, period: 40 + rng() * 20, phase: rng() * Math.PI * 2, prev: 0 };
+      });
+      k.onUpdate(() => {
+        sky.clouds.forEach((c, i) => {
+          const s = cloudSway[i];
+          const offset = Math.sin((k.time() / s.period + s.phase) * Math.PI * 2) * s.amp;
+          c.pos.x += offset - s.prev;
+          s.prev = offset;
+        });
+      });
+    }
 
     // Dust puffs kicked up behind the wheels while traveling.
     if (MOTION_OK) {
@@ -121,49 +246,222 @@ export default function register(k, engine) {
     }
 
     // ── Weather FX ──
-    const miles = engine.milesTraveled ?? 0;
-    const weather = miles > 1200 ? (Math.random() > 0.5 ? "snow" : "clear")
-                  : miles > 600  ? (Math.random() > 0.5 ? "dust" : "clear")
-                  :                 (Math.random() > 0.7 ? "rain" : "clear");
+    // Kind and odds come from the segment's weatherBias (the same pair the 3D
+    // layer feeds vfx.setWeather), not a mile threshold. The roll is seeded off
+    // the mile so a given position always draws the same sky.
+    const bias = here.weatherBias;
+    const weatherRoll = draw.seededRng(draw.seedFrom(miles, here.index));
+    const weather = bias.kind !== "none" && weatherRoll() < bias.intensity ? bias.kind : "clear";
 
     if (weather === "rain" && MOTION_OK) {
       loops.push(k.loop(0.05, () => {
         if (paused) return;
-        const drop = k.add([k.rect(1, 8), k.pos(Math.random() * 640, -10), k.color(96, 120, 180), k.opacity(0.6), k.z(40)]);
-        drop.onUpdate(() => { drop.pos.y += 6; drop.pos.x -= 0.5; if (drop.pos.y > 480) drop.destroy(); });
+        const startY = -10;
+        const speed = 5 + k.rand(0, 3);
+        const drop = k.add([k.rect(1, 8), k.pos(Math.random() * 640, startY), k.color(96, 120, 180), k.opacity(0.6), k.z(40)]);
+        drop.onUpdate(() => {
+          drop.pos.y += speed; drop.pos.x -= 0.5;
+          const t = k.clamp((drop.pos.y - startY) / (480 - startY), 0, 1);
+          drop.opacity = 0.6 * (1 - k.easings.easeInQuad(t));
+          if (drop.pos.y > 480) drop.destroy();
+        });
       }));
     } else if (weather === "snow" && MOTION_OK) {
       loops.push(k.loop(0.1, () => {
         if (paused) return;
-        const flake = k.add([k.circle(2), k.pos(Math.random() * 640, -10), k.color(248, 248, 255), k.opacity(0.7), k.z(40)]);
-        flake.onUpdate(() => { flake.pos.y += 1.5; flake.pos.x += Math.sin(k.time() * 3 + flake.pos.y * 0.1) * 0.5; if (flake.pos.y > 480) flake.destroy(); });
+        const startY = -10;
+        const speed = 1 + k.rand(0, 1);
+        const flake = k.add([k.circle(2), k.pos(Math.random() * 640, startY), k.color(248, 248, 255), k.opacity(0.7), k.z(40)]);
+        flake.onUpdate(() => {
+          flake.pos.y += speed; flake.pos.x += Math.sin(k.time() * 3 + flake.pos.y * 0.1) * 0.5;
+          const t = k.clamp((flake.pos.y - startY) / (480 - startY), 0, 1);
+          flake.opacity = 0.7 * (1 - k.easings.easeInQuad(t));
+          if (flake.pos.y > 480) flake.destroy();
+        });
       }));
     } else if (weather === "dust" && MOTION_OK) {
       loops.push(k.loop(0.08, () => {
         if (paused) return;
-        const p = k.add([k.circle(2), k.pos(660, 250 + Math.random() * 200), k.color(...draw.PALETTE.dirtLight), k.opacity(0.4), k.z(40)]);
-        p.onUpdate(() => { p.pos.x -= 3; p.pos.y += Math.sin(k.time() * 2) * 0.3; p.opacity -= 0.003; if (p.pos.x < -20 || p.opacity <= 0) p.destroy(); });
+        const startX = 660;
+        const speed = 2 + k.rand(0, 2);
+        const p = k.add([k.circle(2), k.pos(startX, 250 + Math.random() * 200), k.color(...draw.PALETTE.dirtLight), k.opacity(0.4), k.z(40)]);
+        p.onUpdate(() => {
+          p.pos.x -= speed; p.pos.y += Math.sin(k.time() * 2) * 0.3;
+          const t = k.clamp((startX - p.pos.x) / (startX + 20), 0, 1);
+          p.opacity = 0.4 * (1 - k.easings.easeInQuad(t));
+          if (p.pos.x < -20 || p.opacity <= 0) p.destroy();
+        });
       }));
     }
 
+    // ── Ambient Prairie VFX (Phase 3) ──
+    // When weather is clear and motion is enabled, spawn a lightweight, fixed
+    // pool of floating prairie particles (dandelion fluff on day/dawn, fireflies
+    // at dusk/night, drifting ash on high horror tier).
+    if (weather === "clear" && isMotionOk()) {
+      const isNightOrDusk = dayPhase === "dusk" || dayPhase === "night";
+      const isHighTone = tone === "high";
+      const count = isHighTone ? 8 : (isNightOrDusk ? 7 : 9);
+
+      for (let i = 0; i < count; i++) {
+        const seed = draw.seedFrom(miles * 7 + i * 31, i * 47);
+        const rng = draw.seededRng(seed);
+
+        let color, radius, baseOp, startX, startY;
+
+        if (isHighTone) {
+          // Horror tier: descending charcoal soot / ash flakes
+          color = draw.PALETTE.outline;
+          radius = 1.2;
+          baseOp = 0.45;
+          startX = rng() * 640;
+          startY = 180 + rng() * 260;
+        } else if (isNightOrDusk) {
+          // Dusk / Night: gentle golden twilight fireflies
+          color = draw.PALETTE.goldBright;
+          radius = 1.6;
+          baseOp = 0.65;
+          startX = 40 + rng() * 560;
+          startY = 260 + rng() * 160;
+        } else {
+          // Day / Dawn: floating prairie dandelion seeds / dry straw fluff
+          color = i % 2 === 0 ? draw.PALETTE.straw : draw.PALETTE.flowerCream;
+          radius = 1.3;
+          baseOp = 0.40;
+          startX = rng() * 640;
+          startY = 260 + rng() * 170;
+        }
+
+        const p = k.add([
+          k.circle(radius),
+          k.pos(startX, startY),
+          k.color(...color),
+          k.opacity(baseOp),
+          k.z(42),
+          "vfx-ambient",
+          "vfx-particle",
+        ]);
+
+        const speedX = 0.35 + rng() * 0.35;
+        const speedY = isHighTone ? (0.45 + rng() * 0.35) : (isNightOrDusk ? -(0.18 + rng() * 0.15) : 0);
+        const swayAmp = 0.3 + rng() * 0.3;
+        const swayFreq = 1.5 + rng() * 1.5;
+        const swayPhase = rng() * Math.PI * 2;
+        const pulsePhase = rng() * Math.PI * 2;
+
+        p.onUpdate(() => {
+          if (paused) return;
+          const t = k.time();
+
+          if (isHighTone) {
+            // Ash drifts down, swaying slightly sideways
+            p.pos.y += speedY;
+            p.pos.x += Math.sin(t * swayFreq + swayPhase) * swayAmp;
+            if (p.pos.y > 470) {
+              p.pos.y = 180;
+              p.pos.x = Math.random() * 640;
+            }
+          } else if (isNightOrDusk) {
+            // Fireflies wander upwards, breathing light
+            p.pos.y += speedY;
+            p.pos.x += Math.sin(t * swayFreq + swayPhase) * 0.4;
+            p.opacity = baseOp * (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 2.2 + pulsePhase)));
+            if (p.pos.y < 230) {
+              p.pos.y = 420;
+              p.pos.x = 40 + Math.random() * 560;
+            }
+          } else {
+            // Dandelion seeds drift left with the prairie breeze, bobbing gently
+            p.pos.x -= speedX;
+            p.pos.y += Math.sin(t * swayFreq + swayPhase) * 0.25;
+            if (p.pos.x < -20) {
+              p.pos.x = 660;
+              p.pos.y = 260 + Math.random() * 170;
+            }
+          }
+        });
+      }
+    }
+
     // ── Floating text ──
+    // Deaths and illnesses arrive in batches, and at the old 0.008/frame fade
+    // they overwrote each other at a single position and were gone in ~2s.
+    // Hold each one legible, then stack: newest at the bottom, older pushed up.
+    const FLOAT_HOLD = 2.6;
+    const FLOAT_FADE = 1.0;
+    const FLOAT_BASE_Y = 418;
+    const FLOAT_LINE_H = 17;
+    const FLOAT_MAX = 5;
+    const floats = [];
+
+    function layoutFloats() {
+      floats.forEach((f, i) => { f.slotY = FLOAT_BASE_Y - (floats.length - 1 - i) * FLOAT_LINE_H; });
+    }
+
+    function dropFloat(ft) {
+      const i = floats.indexOf(ft);
+      if (i >= 0) floats.splice(i, 1);
+      ft.destroy();
+      layoutFloats();
+    }
+
     function showFloatingText(msg) {
-      const ft = k.add([k.text(msg, { size: 12, width: 400 }), k.pos(320, 430), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.opacity(1), k.z(60)]);
-      ft.onUpdate(() => { ft.pos.y -= 0.3; ft.opacity -= 0.008; if (ft.opacity <= 0) ft.destroy(); });
+      window.__zenHud?.notifyActivity?.();
+      const ft = k.add([k.text(msg, { size: 12, width: 400 }), k.pos(320, FLOAT_BASE_Y), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.opacity(1), k.z(60)]);
+      ft.age = 0;
+      ft.slotY = FLOAT_BASE_Y;
+      ft.onUpdate(() => {
+        if (paused) return;
+        ft.age += k.dt();
+        const fading = Math.max(0, ft.age - FLOAT_HOLD);
+        ft.opacity = 1 - Math.min(1, fading / FLOAT_FADE);
+        ft.pos.y = ft.slotY - (MOTION_OK ? fading * 12 : 0);
+        if (ft.opacity <= 0) dropFloat(ft);
+      });
+      floats.push(ft);
+      if (floats.length > FLOAT_MAX) dropFloat(floats[0]);
+      layoutFloats();
     }
 
     // ── Engine handlers ──
     engineOn("daysAdvanced", ({ summaries }) => {
+      const curMiles = engine.milesTraveled ?? 0;
+      const curSegment = segmentBlend(curMiles);
+      const curDayPhase = getDayPhase(engine.currentDate);
+      sky?.update?.(curDayPhase, { segment: curSegment });
+      mountains?.update?.({ segment: curSegment });
+      hills?.update?.({ segment: curSegment });
+      ground?.update?.({ segment: curSegment });
+
       updateHud(k, engine, hudState);
+      window.__zenHud?.notifyActivity?.();
+      // One juice call per advance, escalated to the worst outcome in the
+      // batch — firing per event stacks flashes/shake queues (4 illnesses in
+      // one 5-day advance = 4 overlapping horror() flashes).
+      let worst = 0; // 0 none, 1 minor, 2 death
       for (const s of summaries) {
         for (const evt of (s.events ?? [])) {
           // Day events are plain strings (attrition + fired delayed effects);
           // older code only handled {text|description} objects, so strings
           // rendered nothing. Coerce both shapes.
           const msg = typeof evt === "string" ? evt : (evt && (evt.text || evt.description));
-          if (msg) showFloatingText(msg);
+          if (!msg) continue;
+          showFloatingText(msg);
+          // Juice only on the deterministic worker-authored strings
+          // (simulation.ts applyDailyAttrition) — LLM delayed-effect
+          // journal_entry text (e.g. oxen loss) is free-form and not
+          // reliably pattern-matchable, so it's left un-juiced rather than
+          // guessed at.
+          const isDeath = / has died$/.test(msg);
+          const isBadOutcome = isDeath || /fell ill with|starvation taking its toll/i.test(msg);
+          if (isDeath) worst = 2;
+          else if (isBadOutcome) worst = Math.max(worst, 1);
         }
       }
+      if (worst === 2) (tone === "high" ? juice.horror() : juice.major());
+      else if (worst === 1) (tone === "high" ? juice.horror() : juice.minor());
+      if (tone === "high" && worst > 0) horrorFx?.stinger(worst === 2 ? 1 : 0.5);
+      if (tone === "high") horrorFx?.setDread(computeDread());
     });
     engineOn("error", ({ message }) => {
       // Forced renders (visual QA, smoke tests) have no game state; never
@@ -179,21 +477,32 @@ export default function register(k, engine) {
     // (x<100,y<60) and the bottom party panel (y=440).
     const huntBtnW = 92, huntBtnH = 26, huntBtnX = 8, huntBtnY = 404;
     const huntBtn = k.add([
-      k.rect(huntBtnW, huntBtnH, { radius: 4 }),
+      k.rect(huntBtnW, huntBtnH, { radius: 13 }),
       k.pos(huntBtnX, huntBtnY),
-      k.color(46, 139, 87),
-      k.opacity(0.85),
+      k.color(...draw.PALETTE.outline),
+      k.opacity(0.65),
       k.area(),
       k.fixed(),
       k.z(60),
+      "hud-travel-actions",
+    ]);
+    k.add([
+      k.rect(huntBtnW - 8, 1),
+      k.pos(huntBtnX + 4, huntBtnY + 2),
+      k.color(...draw.PALETTE.parchment),
+      k.opacity(0.25),
+      k.fixed(),
+      k.z(61),
+      "hud-travel-actions",
     ]);
     k.add([
       k.text("(H) Hunt", { size: 13 }),
       k.pos(huntBtnX + huntBtnW / 2, huntBtnY + huntBtnH / 2),
       k.anchor("center"),
-      k.color(255, 255, 255),
+      k.color(...draw.PALETTE.goldBright),
       k.fixed(),
-      k.z(61),
+      k.z(62),
+      "hud-travel-actions",
     ]);
     const goHunt = () => { engine.track('hunt_started'); engine.startHunt(); };
     huntBtn.onClick(goHunt);
@@ -202,9 +511,11 @@ export default function register(k, engine) {
     // ── Pause ──
     let pauseOverlay = null;
     function togglePause() {
+      window.__zenHud?.notifyActivity?.();
       paused = !paused;
       for (const p of pioneers) p.walking = !paused;
       for (const o of oxen) o.walking = !paused;
+      wagon.wheels.setSpeed(!paused && MOTION_OK ? 1 : 0);
       if (paused) {
         engine.pauseAdvance();
         pauseOverlay = k.add([k.rect(640, 480), k.pos(0, 0), k.color(0, 0, 0), k.opacity(0.7), k.z(100)]);
@@ -335,7 +646,7 @@ export default function register(k, engine) {
         k.destroyAll("pauseTag");
         pauseOverlay?.destroy();
         pauseOverlay = null;
-        engine.advance();
+        engine.queueAdvance();
       }
     }
     k.onKeyPress("p", togglePause);
@@ -351,9 +662,11 @@ export default function register(k, engine) {
 
     // No signed state means a forced render (QA/smoke) — auto-advancing would
     // hit the API with a null state and paint an error. Render statically.
+    // Otherwise queue rather than fire: this scene is the only place the art
+    // lives, so it gets a paced beat of rolling before the next advance.
     if (engine.gameState) {
       engine.resumeAdvance();
-      engine.advance();
+      engine.queueAdvance();
     }
   });
 }

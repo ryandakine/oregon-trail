@@ -1,11 +1,7 @@
 # Oregon Trail AI Edition — CLAUDE.md
 
 **Project:** Oregon Trail AI Edition (trail.osi-cyber.com)
-**Version:** 0.1.0 (live, deployed 2026-04-12)
-**Owner:** Ryan / On-Site Intelligence
-**Purpose:** Free browser-playable marketing asset for OSI. Portfolio-grade AI demo.
-
----
+**Owner:** Ryan / On-Site Intelligence — free browser-playable marketing asset, portfolio-grade AI demo.
 
 <atomic-signals>
 
@@ -15,200 +11,102 @@
 
 </atomic-signals>
 
-## TL;DR — Read This First
+## Orientation — read before touching code
 
-**Before writing any code in this repo:**
+1. Read this file, then the plan file matching the task: `PLAN.md` (original architecture, 59-decision audit trail), `THREEJS_REBUILD_PLAN.md` (3D layer), `DIFFICULTY_SYSTEM_PLAN.md`, `RATE_LIMIT_SPEND_CAP_PLAN.md`, `BITTER_PATH_PLAN.md`/`BITTER_PATH_C3_PLAN.md` — `ls *.md` for the current set, it grows.
+2. `git status && git log --oneline -5`.
+3. `npx vitest run` — confirm green before and after (418 passed / 1 skipped across 26 files: 16 worker suites, 10 frontend suites mixing vitest and Playwright scene smokes).
+4. State your understanding of the task before editing anything. Ask when uncertain — every time, not just when stuck. Prefer the smallest change that works; open a separate task before refactoring anything not asked for.
 
-1. Read this file in full.
-2. Read `PLAN.md` for architecture decisions and the original 59-decision audit trail.
-3. Run `git status` and `git log --oneline -5`.
-4. Summarize your understanding of the task before editing anything.
+**The things that matter most:**
 
-**The five things that matter most:**
+1. **Server-side simulation, client is mostly display.** All game logic runs in the Cloudflare Worker (`worker/src/simulation.ts:advanceDays()`). The frontend renders state and sends choices back. Never move simulation logic to the client. (Client computes weekly-challenge seeds, daily share state, and local fallback newspaper — display/sharing, not simulation.)
+2. **HMAC-signed game state is the anti-cheat.** Every `GameState` blob is signed via HMAC-SHA256 (`worker/src/hmac.ts`). Client can't modify state, only send choices.
+3. **Three tone tiers are the product differentiator.** Low (classroom-safe), Medium (morally gray, default), High (psychological horror — the marketing hook). Never remove or water it down.
+4. **No database.** Client holds the signed state blob; journal in localStorage; only in-memory rate-limit counters server-side. Design choice for near-zero ops cost and horizontal scale, not a shortcut.
+5. **Two render paths share one GameState.** Kaplay (2D, CDN) always renders; a Three.js 3D world layer (`public/three/`, 14 modules, vendored under `public/vendor/three`) can render behind a transparent Kaplay canvas. `public/render-mode.mjs:shouldInit3D()` decides which, in strict precedence order: `?test` always forces 2D-only first (never break the scene-smoke harness) → explicit `mode==="2d"` forces off → explicit `mode==="3d"` forces on → default/"auto" is `hasGfx || isDesktop`, where `hasGfx` is the manual `?gfx` URL escape hatch and `isDesktop` is a **pointer-type media query** (`pointer:fine` and not `pointer:coarse`) — there is no WebGL capability check anywhere in this decision. A state→3D adapter drives 3D from the same signed GameState the 2D scenes use — no second source of truth. See `THREEJS_REBUILD_PLAN.md`.
+6. **GameState carries a delayed-effects queue.** `state.simulation.pending_effects: PendingEffect[]` (`worker/src/types.ts`, capped at `MAX_PENDING_EFFECTS` in `state.ts`) lets the LLM emit consequences that resolve on a later day. Same rule as everything else in GameState: add/remove a field on one side without updating the other and `deepCanonicalize()` breaks HMAC verification silently.
 
-1. **Server-side simulation, client is mostly display.** All game logic runs in the Cloudflare Worker. The frontend (`public/`) renders state and sends choices back. Never move simulation logic to the client. (The client does compute weekly challenge seeds, daily share state, and local fallback newspaper — these are display/sharing concerns, not simulation.)
-2. **HMAC-signed game state is the anti-cheat.** Every `GameState` blob is signed via HMAC-SHA256 (`worker/src/hmac.ts`). The client cannot modify state — only send choices. Breaking this pattern means players can cheat.
-3. **Three tone tiers are the product differentiator.** Low (classroom-safe), Medium (morally gray, default), High (psychological horror). The horror tier IS the marketing hook. Never remove or water it down.
-4. **No database. Minimal server state (only an in-memory rate limiter).** Client holds the signed state blob. Journal lives in localStorage. This is a design choice, not a shortcut. It means near-zero ops cost and horizontal scale.
-5. **Kaplay renders everything.** 640x480 canvas, pixel aesthetic, 17 scenes. No HTML UI except the event overlay (`#html-overlay`), newspaper overlay, and tombstone overlay.
-
-**Hard nos:**
-- Don't push to main/master. PR to `kaplay-rebuild` (current active branch).
-- Don't commit `.dev.vars` or hardcoded secrets.
-- Don't move simulation logic to the client.
-- Don't add a database.
-- Don't break the HMAC signing chain.
-- Don't add dependencies to `public/` — it's static files served by Cloudflare Pages.
-- Don't soften the High tone tier.
+**Forbidden — Claude Code must not:**
+- Push directly to `master`. PR to `kaplay-rebuild` (active branch; Pages `production_branch` is still `master`).
+- Commit `.dev.vars`, API keys, HMAC secrets, Cloudflare account IDs, or Telegram bot tokens.
+- Move simulation logic (`advanceDays`, disease, starvation, death) to the client.
+- Break the HMAC signing chain (skip `verifyIncomingState`/`signState`) or the event-hash/trigger-kind double-check on `/api/choice`, `/api/bitter_path`, `/api/bitter_path_skip`.
+- Allow `/api/advance` while `pending_event_hash` is set, or `/api/store` after `miles_traveled > 0`.
+- Remove or soften the High tone tier, or advertise the Bitter Path mechanic in public-facing copy.
+- Add npm runtime dependencies to `public/` (zero-dependency by design — Kaplay + vendored three.js only) or a build step for it (no webpack/vite).
+- Add a database or server-side session storage.
 
 ---
 
-## 1. Stack (do not change without discussion)
+## 1. Stack
+
+Base stack — Cloudflare Worker + Pages, Kaplay 2D vanilla-JS frontend, `claude-haiku-4-5-20251001`, domain trail.osi-cyber.com, devDeps — is in the auto-loaded `signals.md`; only what signals lacks is below.
 
 | Layer | Tech | Notes |
 |---|---|---|
-| Frontend | Static HTML + Kaplay 3001 (CDN) + vanilla JS | `public/`, Cloudflare Pages |
-| Backend | Cloudflare Worker (TypeScript) | `worker/src/`, Wrangler CLI |
-| AI | Anthropic Claude Haiku 4.5 | Via `worker/src/anthropic.ts`, 8s timeout |
-| State | HMAC-SHA256 signed JSON blob | Client holds state, server verifies + mutates |
-| Storage | None (localStorage for journal/resume) | No database by design |
-| Domain | trail.osi-cyber.com | CNAME to oregon-trail.pages.dev |
-| Worker URL | oregon-trail-api.trails710.workers.dev | Secrets via `wrangler secret put` |
-| Analytics | Plausible | Script tag in index.html |
-| PWA | sw.js exists + manifest.json | Broken/incomplete — sw.js exists but no service worker registration in current index.html |
+| Frontend (3D, optional) | Three.js 0.165, vendored | `public/three/`, `public/vendor/three/`, toggled by `render-mode.mjs` |
+| State | HMAC-SHA256 signed JSON blob | Client holds state, server verifies + mutates — the anti-cheat (see §3.2) |
+| Storage | None (localStorage for journal/resume) | No database *by design* — near-zero ops, horizontal scale |
+| Share/OG | `/r/*`, `/og/*` routed to the worker ahead of Pages | `SHARE_BASE_URL` in `wrangler.toml`; falls back to unbranded workers.dev origin if routes can't bind |
+| Canary | Hourly cron (`scheduled()` in `index.ts`) pings `callAnthropic()`, alerts `@osi_dispatch_bot` via Telegram on failure | Built after a dead-key AI-outage went unnoticed for weeks — see memory `project_oregon_trail_ai_dark_incident` |
+| Analytics | Plausible, self-hosted at analytics.osi-cyber.com | Script tag in `index.html` |
 
 **Do not introduce:** a database, a build system for `public/`, React/Vue/Svelte, a second LLM provider, server-side session storage.
 
 ---
 
-## 2. Repo Layout
+## 2. Key files
 
-```
-oregon-trail/
-├── worker/
-│   ├── src/
-│   │   ├── index.ts              # API routes + inline handlers for newspaper, epitaph, river, landmark, hunt. Keep routing here.
-│   │   ├── types.ts              # Single source of truth for all types (403 lines)
-│   │   ├── state.ts              # createInitialState, applyEventAndSign, applyStoreAndSign, store prices, challenges
-│   │   ├── simulation.ts         # advanceDays() — THE core game loop (server-side only)
-│   │   ├── anthropic.ts          # callAnthropic(), parseEventResponse(), FALLBACK_EVENTS
-│   │   ├── prompt-assembly.ts    # Builds LLM prompts from game state + historical context
-│   │   ├── prompt-templates.ts   # SYSTEM_PROMPTS for each tone tier
-│   │   ├── context-loader.ts     # Lookup functions for historical-context.json
-│   │   ├── hmac.ts               # signState(), verifyState(), deepCanonicalize()
-│   │   └── historical-context.json  # ~164KB, 3839 lines. 16 segments, 18 landmarks, 7 diseases, 11 nations
-│   └── tests/                    # 194 tests across 9 suites (vitest)
-│       ├── hmac.test.ts
-│       ├── state.test.ts
-│       ├── simulation.test.ts
-│       ├── prompt-assembly.test.ts
-│       ├── context-loader.test.ts
-│       ├── anthropic.test.ts          # Bitter Path fallbacks + forbidden-word guard
-│       └── handleBitterPath.test.ts   # /api/bitter_path + /api/bitter_path_skip handlers
-├── public/                       # Static files — Cloudflare Pages serves this directory
-│   ├── index.html                # Shell: canvas + 3 overlay divs + OG meta tags + #a11y-status live region + <noscript> fallback
-│   ├── engine.js                 # GameEngine class: state machine, API client, event emitter (exposes engine.tone from simulation.tone_tier)
-│   ├── main.js                   # Kaplay init (640x480), scene registration, stateChange bridge, window.__ERRORS capture, unpkg→jsDelivr CDN fallback, canvas aria-label
-│   ├── lib/                      # Shared ES modules imported by scenes (v3 primitive renderer)
-│   │   ├── draw.mjs              # PALETTE + primitive helpers: drawSky/Cloud/Hills/Mountains/Ground/Trail/Wagon/Ox/Pioneer/Tree/Rock/GrassTuft/Crow/DeadTree/HealthIcon, addHighlights (seeded). No runtime scale params — ported verbatim from mockups/primitive-mockup.html.
-│   │   ├── hud.mjs               # addTopHud + addBottomHud + updateHud + attachResizeRebuild. UI_SCALE 1.4× <500px. Landmark ticks with K/C/L/S/F/B monograms (gold when passed). hpState thresholds (70/40/20). Tag-based destroyAll for health icon redraw.
-│   │   └── tone.mjs              # applyToneOverlay: Low warm / Medium neutral / High cool+vignette+pulse+scanlines. Z=45-48 below HUD z=50+.
-│   ├── scenes/                   # 17 Kaplay scenes (one file each)
-│   │   ├── title.js              # Title screen, resume option, weekly challenge display
-│   │   ├── profession.js         # Farmer/Carpenter/Banker selection
-│   │   ├── names.js              # Party naming (uses #html-overlay for text input)
-│   │   ├── tone.js               # Low/Medium/High tone selection
-│   │   ├── store.js              # General store with guided purchasing
-│   │   ├── travel.js             # Main travel scene: parallax, wagon, HUD, weather FX
-│   │   ├── event.js              # LLM-generated event with choices (uses #html-overlay)
-│   │   ├── bitter_path.js        # Hidden horror-tier scene (Long Night) with content-warning gate + 3 choices + skip. Fires on trigger=bitter_path
-│   │   ├── landmark.js           # Fort/landmark arrival: rest, trade, continue
-│   │   ├── river.js              # River crossing: ford, caulk, ferry
-│   │   ├── hunting.js            # Hunting mini-game
-│   │   ├── death.js              # Death notification + epitaph generation
-│   │   ├── arrival.js            # Oregon City arrival
-│   │   ├── wipe.js               # Total party wipe
-│   │   ├── newspaper.js          # AI-generated 1848 newspaper (share artifact)
-│   │   ├── share.js              # Share screen with watermark
-│   │   └── loading.js            # Initial loading scene
-│   ├── newspaper.js              # Newspaper DOM renderer (separate from scene)
-│   ├── tombstone.js              # Tombstone DOM renderer
-│   ├── sw.js                     # Service worker for PWA caching
-│   ├── style.css                 # Legacy stylesheet — NOT loaded by current index.html
-│   └── fonts/, icons/            # IBM Plex Mono, PWA icons
-├── scripts/
-│   ├── calibrate.js              # Prompt calibration runner
-│   ├── generate-cache.js         # Pre-generate fallback events
-│   ├── fallback-events.json      # Cached fallback events
-│   └── smoke-travel.sh           # 40+ GameObj + 0-JS-error gate for travel scene (uses ~/.claude/skills/gstack/browse/dist/browse). Run: npx serve public -p 8765 & bash scripts/smoke-travel.sh
-├── assets/                       # Source art assets (not served directly)
-├── wrangler.toml                 # Worker config: main = worker/src/index.ts
-├── package.json                  # Only devDeps: wrangler, vitest, @cloudflare/workers-types, typescript
-└── *.md                          # Plans: PLAN.md, KAPLAY_REBUILD_PLAN.md, KAPLAY_FIXES_V3_PLAN.md, etc.
-```
+- API routes: `worker/src/index.ts` (route switch + handlers). New endpoint = new `case` here.
+- Types: `worker/src/types.ts` (501 lines) — single source of truth for `GameState`.
+- Game logic: `worker/src/state.ts` (mutation helpers, `pending_effects` queue, store prices), `worker/src/simulation.ts` (`advanceDays()`, server-side only).
+- AI: `worker/src/anthropic.ts` (`callAnthropic()`, `parseEventResponse()`, `FALLBACK_EVENTS`), `prompt-assembly.ts`/`prompt-templates.ts` (prompt builder + per-tier system prompts, incl. `buildBitterPathSituationalHint()`), `context-loader.ts` (lookups into `historical-context.json`).
+- Anti-cheat: `worker/src/hmac.ts` (`signState()`, `verifyState()`, `deepCanonicalize()`).
+- Money/rate-limits: `worker/src/paid-guard.ts`. Scoring: `worker/src/scoring.ts`. Share links: `worker/src/share-stub.ts`.
+- `worker/tests/` — 16 vitest suites (one per module above, plus `handleCamp`, `handlers`, `paid-guard-integration`, `palette`, `delayed-effects`).
+- Frontend entry: `public/index.html` (shell + import map), `public/engine.js` (`GameEngine` — hardcodes prod worker URL, override to `http://localhost:8787` for local dev), `public/main.js` (Kaplay init, scene registration, CDN fallback, 3D init gate).
+- 2D primitives: `public/lib/draw.mjs` (canonical renderer since the 2026-06-11 graphics pass — don't port from `mockups/primitive-mockup.html`, which lags), plus `hud.mjs`, `tone.mjs`, `palette.mjs`.
+- 3D layer: `public/three/` (14 modules: terrain/sky/water/fauna/grass/camp/landmarks/textures/markers/vfx/audio/models/bootstrap/fps-gate), `public/vendor/three/` (vendored, no npm install), `public/render-mode.mjs` (2D/3D toggle, see Orientation §5).
+- Scenes: `public/scenes/` — 17 files, one per scene, each exports `register(k, engine)`.
+- `test/frontend/` — 10 suites (vitest + Playwright): scene smokes, three-adapter, render-mode, fps-gate, share/camp flows.
+- Deploy: `scripts/deploy-pages.sh`, `scripts/deploy-smoke.mjs`. `wrangler.toml` — `main = worker/src/index.ts`, ratelimits, cron canary, share routes.
 
 **Rules of the road:**
-- New API endpoints go in `worker/src/index.ts` as a new `case` in the route switch + a handler function.
-- New game logic goes in `worker/src/simulation.ts` or `worker/src/state.ts`, never in the frontend.
-- New types go in `worker/src/types.ts` — it's the single source of truth.
-- New Kaplay scenes go in `public/scenes/<name>.js`, export a `register(k, engine)` function, and get imported in `main.js`.
-- New primitive draw helpers go in `public/lib/draw.mjs` — it is the CANONICAL renderer as of the 2026-06-11 graphics detail pass (gradient skies, dual ranges, animated oxen/pioneers, ambient systems). `mockups/primitive-mockup.html` is the historical v3 sandbox and lags behind; do not port from it. Iterate directly in draw.mjs and verify with `node scripts/visual-qa.mjs` screenshots. Keep exported signatures backward-compatible (trailing opts objects only) — 5+ scenes call these helpers. No runtime scale params.
-- Frontend API calls go through `engine.api()` in `engine.js`, never raw `fetch` in scene files.
-- Historical data changes go in `worker/src/historical-context.json`.
+- New game logic → `simulation.ts`/`state.ts`, never the frontend. New types → `types.ts`.
+- New primitive draw helpers → `draw.mjs`; keep exported signatures backward-compatible (trailing opts objects only) — 5+ scenes call these. Verify with `node scripts/visual-qa.mjs`.
+- New 3D world elements → `public/three/`, wired through the state→3D adapter, not scene files directly.
+- Frontend API calls go through `engine.api()`, never raw `fetch` in scene files.
+- Historical data changes → `worker/src/historical-context.json`.
 
 ---
 
 ## 3. Architecture Invariants (break these and things quietly corrupt)
 
-### 3.1 Server-side simulation only
-`simulation.ts:advanceDays()` is the game loop. The client calls POST `/api/advance`, the server simulates 1-5 days, and returns: days advanced, summaries, trigger type, trigger data, and a new signed state. The client renders what it gets back. Never replicate this logic client-side.
+**3.1 Server-side simulation only.** Client POSTs `/api/advance`, server simulates 1-5 days, returns summaries/trigger/new signed state. Client renders what it gets. Never replicate this logic client-side.
 
-### 3.2 HMAC signing chain
-Every API call that mutates state:
-1. Client sends `{ signed_state: { state, signature } }`
-2. Server calls `verifyIncomingState()` — rejects if signature is invalid
-3. Server mutates a `structuredClone()` of the state
-4. Server calls `signState()` on the new state
-5. Server returns `{ signed_state: { state, signature } }`
+**3.2 HMAC signing chain.** Every mutating call: client sends `{signed_state}` → server `verifyIncomingState()` (rejects on bad signature) → mutates a `structuredClone()` → `signState()` → returns new `{signed_state}`. `deepCanonicalize()` sorts keys before hashing, so field order doesn't matter — but adding/removing a GameState field on one side without the other breaks verification silently (this now includes `pending_effects`, see Orientation §6).
 
-`deepCanonicalize()` in `hmac.ts` sorts all object keys before hashing. This means field order doesn't matter, but adding/removing fields to GameState without updating both sides will break verification silently.
+**3.3 Event hash + trigger-kind binding.** On `/api/advance` triggering an event: server generates it, SHA-256 hashes it, stores the hash in `pending_event_hash` and the trigger kind (`event`/`bitter_path`) in `pending_event_trigger`. On resolve (`/api/choice`, `/api/bitter_path`, `/api/bitter_path_skip`): server re-hashes the submitted event and rejects `event_hash_mismatch` on mismatch, verifies `pending_event_trigger` matches the endpoint and rejects `wrong_trigger_kind` otherwise, then clears both fields. Prevents clients fabricating favorable events or routing a normal event through `/api/bitter_path`. New consumer handlers must enforce both checks.
 
-### 3.3 Event hash + trigger-kind binding
-When `/api/advance` triggers an event, the server:
-1. Generates the event via LLM (or fallback)
-2. SHA-256 hashes the event object
-3. Stores the hash in `state.simulation.pending_event_hash`
-4. Stores the trigger kind (`"event"` or `"bitter_path"`) in `state.simulation.pending_event_trigger`
-5. Signs and returns the state + event
+**3.4 Advance blocked while event pending.** `/api/advance` returns `resolve_pending_event` if `pending_event_hash !== null`; client must call `/api/choice` first.
 
-When `/api/choice`, `/api/bitter_path`, or `/api/bitter_path_skip` resolves the event:
-1. Client sends the event object back (+ choice index for non-skip endpoints)
-2. Server re-hashes the submitted event and compares with `pending_event_hash` — rejects `event_hash_mismatch` on fail
-3. Server verifies `pending_event_trigger` matches the endpoint's expected kind — rejects `wrong_trigger_kind` on fail
-4. Clears both fields, applies consequences
+**3.5 Store only before departure.** `/api/store` rejects once `position.miles_traveled > 0`.
 
-This prevents both (a) clients fabricating favorable events and (b) clients routing a normal event body through `/api/bitter_path` to claim bitter-path consequences for free. Adding a new consumer handler requires enforcing the same pair of checks.
+**3.6 River crossings — intent, not fully enforced.** `simulation.ts` blocks advancement on an unresolved crossing and returns trigger `river`. **Known gap:** `/api/river` accepts any crossing method without verifying the party is actually at a river mile marker. Tech debt, not a feature.
 
-### 3.4 Advance blocked while event pending
-If `state.simulation.pending_event_hash !== null`, `/api/advance` returns error `"resolve_pending_event"`. The client must call `/api/choice` first.
+**3.7 LLM consequence clamping.** `parseEventResponse()` clamps all consequence values to ±10000; `clampConsequences()` forces `days >= 0`, `miles >= 0`. Never trust raw LLM output for numeric state changes.
 
-### 3.5 Store only before departure
-`/api/store` rejects if `state.position.miles_traveled > 0`. Once you leave Independence, you trade at landmarks.
-
-### 3.6 River crossings cannot be skipped (intent — not fully enforced)
-`simulation.ts` checks for unresolved crossings at or before the party's current mile marker. If found, it returns trigger `"river"` and blocks further advancement until resolved via `/api/river`. **Known gap:** the `/api/river` handler accepts any crossing method without verifying the party is actually at a river mile marker. This is tech debt, not a feature.
-
-### 3.7 LLM consequence clamping
-`parseEventResponse()` in `anthropic.ts` validates and clamps all consequence values to +/-10000. `clampConsequences()` in `state.ts` forces `days >= 0` and `miles >= 0`. Never trust raw LLM output for numeric game state changes.
-
-### 3.8 Bitter Path mechanic (hidden, horror-tier only)
-The Long Night scene is a hidden survival-cannibalism mechanic. It fires only when ALL gate conditions hold: `tone_tier === "high"`, a recent death (within 3 game-days), and either starvation_days ≥ 5 OR food=0 + starvation_days ≥ 2 + avg alive-member health < 40. One-shot per run via `state.simulation.bitter_path_taken` (`"none" | "dignified" | "hopeful" | "taken" | "refused"`). Never advertise the mechanic in public-facing copy — discoverability is via in-game hints only (horror-tier tone pitch, Fort Bridger / Chimney Rock `tone_flavor.high` in `historical-context.json`, and the situational Donner clause in `prompt-assembly.ts` when food < 50 + death/starvation).
-
-**Kill switch:** `BITTER_PATH_ENABLED` env var on the worker. Default true. `wrangler secret put BITTER_PATH_ENABLED` with value `"false"` globally disables trigger emission without a redeploy. Pending resolutions still process so mid-flight players don't strand.
-
-**Telemetry:** `bitter_path_triggered`, `bitter_path_cw_shown`, `bitter_path_cw_continue`, `bitter_path_cw_skip`, `bitter_path_choice_{dignified|hopeful|taken}`, `bitter_path_outcome_{arrival|wipe}` fire via Plausible. Silent when analytics blocked.
+**3.8 Bitter Path (hidden, horror-tier only).** Fires only when ALL hold: `tone_tier === "high"`, a death within 3 game-days, and (starvation_days ≥ 5 OR (food=0 AND starvation_days ≥ 2 AND avg alive-member health < 40)). One-shot per run via `bitter_path_taken` (`none|dignified|hopeful|taken|refused`). Discoverability is in-game hints only, never advertised: the horror-tier tone pitch, `tone_flavor.high` blocks at Fort Bridger/Chimney Rock in `historical-context.json`, and `buildBitterPathSituationalHint()` in `prompt-assembly.ts` (fires when a horror-tier run nears the gate — Donner-adjacent narration, never names the act). Any of these three touch points can leak or break discoverability; edit carefully. **Kill switch:** `BITTER_PATH_ENABLED` worker env var (`wrangler secret put`, default true); pending resolutions still process so mid-flight players don't strand. **Telemetry:** `bitter_path_triggered`, `bitter_path_cw_shown`, `bitter_path_cw_continue`, `bitter_path_cw_skip`, `bitter_path_choice_{dignified|hopeful|taken}`, `bitter_path_outcome_{arrival|wipe}` via Plausible; silent when analytics blocked.
 
 ---
 
-## 4. Current Technical Debt
+## 4. Live Technical Debt
 
-Remaining risks. Know these. Don't make them worse.
+1. **Rate limiter — two tiers.** The coarse all-route limiter is per-isolate flood-damping (counts within one Worker isolate's memory — not a global cap, resets on isolate recycle). Paid (Anthropic) routes additionally go through `worker/src/paid-guard.ts`: Cloudflare's `PAID_LIMITER` Rate Limiting binding (15/min/IP, per-colo) + an in-memory per-IP daily sub-cap (`PAID_PER_IP_DAY_CAP`, default 60). On block, serves the existing fallback (never 429 mid-advance). The real global $ ceiling is the Anthropic account spend budget in-console — the worker guard is the per-IP complement, not the global cap.
+2. **No TypeScript in frontend, by design.** Would require a build system, which is forbidden. All type safety lives in the worker.
 
-1. ~~Health dots~~ — **FIXED** (ff81b62). Numeric thresholds >70/40/20.
-2. ~~Dead ASCII code~~ — **FIXED** (ff81b62). game.js, ui.js, style.css deleted.
-3. ~~No retry on Anthropic~~ — **FIXED**. Retry with shrinking timeouts (8s→4s→2s), 429/529 only, fresh AbortController per attempt, honors Retry-After.
-4. ~~Newspaper trusts journal~~ — **RESOLVED**. Already reads from HMAC-verified `state.journal`, not client-submitted data. Journal capped to 5 entries.
-5. **Rate limiter — two tiers.** The coarse all-route limiter is best-effort per-isolate flood-damping, not a global cap: it counts requests within a single Worker isolate's memory, so the effective ceiling scales with the number of live isolates and resets on isolate recycle. Treat it as burst-damping per isolate, not an enforced per-IP-per-minute limit. Paid (Anthropic) routes (`/advance`, `/newspaper`, `/epitaph`) are additionally guarded by `worker/src/paid-guard.ts`: Cloudflare's native Rate Limiting binding `PAID_LIMITER` (15/min/IP, per-colo) + an in-memory per-IP daily volume sub-cap (`PAID_PER_IP_DAY_CAP`, default 60/IP/day). On block they serve the existing fallback (never 429 mid-advance). The real global $ ceiling is an **Anthropic account spend budget** set in the console — the worker guard is the per-IP complement, not the global cap. Deployed 2026-05-30 (worker version b09a5677) with the working ANTHROPIC_API_KEY (live-validated HTTP 200 before put). AI-live CONFIRMED: a curl/IPv4 playthrough returned a novel non-fallback event ("The Kansas River Crossing"). Unit-tested (paid-guard suites, 233 pass). NOT yet confirmed live: the per-IP burst flip (the dev box's IPv6 path to workers.dev 403-flaps, so multi-call burst probes returned 0 events here) — re-run the burst from a clean network to confirm the 15/min cap end-to-end.
-6. **No TypeScript in frontend.** By design. Adding TS would require a build system, which is explicitly forbidden. All type safety lives in the worker.
-7. ~~Plausible~~ — **FIXED** (ff81b62). Points to analytics.osi-cyber.com.
-8. ~~Challenge dedup~~ — **FIXED** (ff81b62). title.js reads from engine's window.CHALLENGE_INFO.
-9. ~~Store prices duplicated~~ — **FIXED**. Server is source of truth (state.ts with full UI fields). Client lazy-fetches via GET /api/prices before store, falls back to hardcoded.
-10. ~~Resume scene~~ — **FIXED** (ff81b62). Navigates to EVENT/RIVER/LANDMARK if pending.
-11. ~~Daily share days_elapsed~~ — **FIXED** (ff81b62). Calculates from date diff.
-12. ~~Phase gates~~ — **FIXED** (ff81b62). /api/newspaper gated to arrival/wipe, /api/hunt gated to travel.
-13. ~~PWA registration~~ — **FIXED** (ff81b62). SW registered in index.html.
-
-**Rule:** When adding new features, check items 5 and 6 above. These are accepted tradeoffs, not bugs.
+When adding features, check whether the change makes either of these worse — they're accepted tradeoffs, not bugs.
 
 ---
 
@@ -220,28 +118,25 @@ Remaining risks. Know these. Don't make them worse.
 | POST | `/api/store` | Buy supplies at Independence | HMAC |
 | POST | `/api/advance` | Simulate 1-5 days of travel | HMAC |
 | POST | `/api/choice` | Resolve an LLM event choice | HMAC + event hash |
+| POST | `/api/camp` | Make Camp (disabled while an event is pending) | HMAC |
 | POST | `/api/newspaper` | Generate end-of-game newspaper | HMAC |
 | POST | `/api/epitaph` | Generate gravestone inscription | HMAC |
 | POST | `/api/river` | Resolve river crossing | HMAC |
 | POST | `/api/landmark` | Rest or trade at landmark | HMAC |
 | POST | `/api/hunt` | Hunting mini-game | HMAC |
-| POST | `/api/bitter_path` | Resolve the Long Night (horror-tier hidden scene): choices 0 (dignified), 1 (hopeful), 2 (taken) | HMAC + event hash + trigger kind |
-| POST | `/api/bitter_path_skip` | Opt out via content-warning gate; sets `bitter_path_taken="refused"` with zero mechanical effects | HMAC + event hash + trigger kind |
-| GET | `/api/challenge` | Get current weekly challenge | None |
+| POST | `/api/bitter_path` | Resolve the Long Night (0=dignified, 1=hopeful, 2=taken) | HMAC + event hash + trigger kind |
+| POST | `/api/bitter_path_skip` | Opt out via content-warning gate; sets `refused`, zero mechanical effect | HMAC + event hash + trigger kind |
+| GET | `/api/prices` | Store prices (server source of truth; client falls back to hardcoded on failure) | None |
+| GET | `/api/challenge` | Current weekly challenge | None |
 
-"HMAC" means the request must include `signed_state` and the server verifies it before processing.
+"HMAC" = request must include `signed_state`, verified before processing. `/r/*` and `/og/*` are separate worker-routed (not `/api`) share/OG-image paths — see §1 Share/OG.
 
 ---
 
-## 6. The Scene System
+## 6. Scene System
 
-Kaplay scenes map 1:1 to `GameEngine` states. The bridge is in `main.js`:
+Kaplay scenes map 1:1 to `GameEngine` states, bridged in `main.js`: `engine.on("stateChange") → k.go(sceneName, data)`.
 
-```
-engine.on("stateChange") → k.go(sceneName, data)
-```
-
-State machine flow:
 ```
 TITLE → PROFESSION → NAMES → TONE → STORE → TRAVEL ⟳
                                                 ↓
@@ -252,147 +147,40 @@ TITLE → PROFESSION → NAMES → TONE → STORE → TRAVEL ⟳
                                     ARRIVAL or WIPE → NEWSPAPER → SHARE
 ```
 
-Each scene file exports `register(k, engine)` which calls `k.scene(name, callback)`. Inside the callback:
-- Build Kaplay objects (rects, text, circles) for the visual layer
-- Subscribe to engine events via `engine.on()`
-- Clean up listeners in `k.onSceneLeave()` to prevent memory leaks
-- Call engine methods (`engine.advance()`, `engine.makeChoice()`, etc.) on user input
-
-The `#html-overlay` div is used for text-heavy UI (event descriptions, name input, trade lists) that would be painful to render character-by-character on canvas.
+Each scene file exports `register(k, engine)` → `k.scene(name, callback)`. Inside: build Kaplay objects, subscribe via `engine.on()`, clean up in `k.onSceneLeave()`, call `engine.advance()`/`engine.makeChoice()`/etc. on input. `#html-overlay` div handles text-heavy UI (event descriptions, name input, trade lists).
 
 ---
 
 ## 7. Prompt Engineering
 
-Prompts live in `worker/src/prompt-templates.ts` (system prompts per tier) and `worker/src/prompt-assembly.ts` (user prompt builder).
+System prompts per tier in `prompt-templates.ts`; user prompt assembled in `prompt-assembly.ts` from budgeted blocks: location (300 tok), party (200 tok), recent events — last 5 journal entries (300 tok), conditional — active diseases/nations (200 tok). Total input target ~1,500 tokens. Output caps: 800 (events), 600 (newspaper), 60 (epitaph).
 
-The user prompt is assembled from blocks, each with a token budget:
-- **Location block** (300 tokens): segment, terrain, hazards, weather, nearby landmark
-- **Party block** (200 tokens): members with hp/sanity/morale, supplies, pace/rations
-- **Recent events block** (300 tokens): last 5 journal entries
-- **Conditional block** (200 tokens): active diseases, Indigenous nations in region
-
-Total input target: ~1,500 tokens. Output: max 800 tokens (events), 600 tokens (newspaper), 60 tokens (epitaph).
-
-**Critical rules for prompt changes:**
-- The JSON output format instruction is appended to every system prompt via `JSON_FORMAT_BLOCK`. Do not remove it.
-- `parseEventResponse()` validates the JSON strictly. If you change the schema, update both the format block AND the parser.
-- Fallback events in `FALLBACK_EVENTS` (5 per tier) fire when LLM calls fail. They must match the `EventResponse` type exactly.
-- Consequence values are in game units: food in pounds, ammo in rounds, money in cents.
+**Critical rules:** the `JSON_FORMAT_BLOCK` output-format instruction is appended to every system prompt — don't remove it. `parseEventResponse()` validates strictly; change the schema, update both the format block and the parser together. `FALLBACK_EVENTS` (5/tier) must match the `EventResponse` type exactly — they fire when LLM calls fail. Consequence units: food in pounds, ammo in rounds, money in cents.
 
 ---
 
 ## 8. Code Style
 
-### Worker (TypeScript)
-- Strict mode (`"strict": true` in tsconfig).
-- All functions have explicit types. Minimize `any` usage (some `as any` casts remain as tech debt).
-- State mutations use `structuredClone()` — never mutate the verified state in-place.
-- Errors returned as JSON `{ error: "error_code" }` with appropriate HTTP status.
-- Historical context preferably accessed via `context-loader.ts` functions, though raw JSON traversal also exists in `prompt-assembly.ts` and `index.ts`.
+**Worker (TS):** strict mode; explicit types everywhere (some `as any` remains as tech debt); mutate via `structuredClone()`, never in-place on verified state; errors as `{error: "error_code"}` JSON with matching HTTP status; historical-context access preferably via `context-loader.ts` (raw JSON traversal also exists in `prompt-assembly.ts`/`index.ts`).
 
-### Frontend (vanilla JS)
-- No build step. ES modules loaded via `<script type="module">`.
-- Kaplay imported from CDN: `https://unpkg.com/kaplay@3001/dist/kaplay.mjs`.
-- `GameEngine` is a class on `window.engine`. Scenes access it via the `engine` parameter.
-- Canvas is 640x480, `crisp: true`, `stretch: true`, `letterbox: true`.
-- Colors are RGB arrays: `k.color(212, 160, 23)` for gold, `k.color(200, 190, 170)` for parchment.
-- Text uses Kaplay's built-in font (no custom font loading for canvas text).
-- Engine events follow the pattern: `engine.on("eventName", handler)` / `engine.off("eventName", handler)`.
+**Frontend (vanilla JS):** no build step, ES modules via `<script type="module">`; Kaplay self-hosted at `/vendor/kaplay.mjs` (jsDelivr `@3001` fallback if it fails to load — no unpkg; self-hosting is for offline-PWA precache); `GameEngine` is a class on `window.engine`; canvas 640x480, `crisp/stretch/letterbox: true`; colors as RGB arrays; loads a custom TTF (`k.loadFont("plex", "/fonts/ibm-plex-mono-700.ttf")`, set as default `font: "plex"`), falling back to Kaplay's built-in bitmap font only if that load throws; events via `engine.on/off("eventName", handler)`.
 
 ---
 
-## 9. Operational Rules
+## 9. Operational
 
-- **Secrets:** `HMAC_SECRET` and `ANTHROPIC_API_KEY` set via `wrangler secret put`. Never in code, never in `.dev.vars` committed. `.dev.vars` is in `.gitignore`.
-- **Deploy:** `bun run deploy` from the repo root — worker first, then pages via the gated script. See § Deploy Configuration below for the full pipeline.
-- **Tests:** `bun run test` (alias for `npx vitest run`) — must see all 236 tests pass before committing worker changes.
-- **Local dev:** `npx wrangler dev` starts worker locally. Frontend needs a local HTTP server for `public/` (e.g., `npx serve public`). **Note:** `engine.js` hardcodes the production worker URL — you must manually override it to `http://localhost:8787` for local development.
-- **CORS:** Worker reads `ALLOWED_ORIGIN` env var but it is not set in `wrangler.toml` — defaults to `*` (all origins). Set it explicitly if origin restriction is needed.
-- **Active branch:** `kaplay-rebuild` — this is the working branch. `master` has the old ASCII terminal UI.
-
-## Deploy Configuration (configured by /setup-deploy)
-- Platform: Cloudflare Workers (`oregon-trail-api`) + Cloudflare Pages (project `oregon-trail`, production_branch `master`)
-- Production URL: https://trail.osi-cyber.com
-- Worker URL: https://oregon-trail-api.trails710.workers.dev
-- Deploy workflow: manual — no CI, no git-provider auto-deploy
-- Deploy command: `bun run deploy`
-- Project type: Web app (Kaplay canvas game + Cloudflare Worker API)
-- Post-deploy health check: `curl -sf https://trail.osi-cyber.com` returns 200
-
-### Deploy pipeline (bun run deploy)
-1. Worker unit tests (`npx vitest run`) — must pass
-2. `wrangler deploy` — deploys the worker to oregon-trail-api.trails710.workers.dev
-3. `scripts/deploy-pages.sh` — runs the gated pages flow:
-   - pushes to a CF Pages preview branch first
-   - runs `scripts/deploy-smoke.mjs` against the preview (force-renders river with `ford_difficulty: 5`, hunting, bitter_path CW modal, landmark — refuses to promote if any scene throws)
-   - promotes to `--branch=master` (→ trail.osi-cyber.com) only on a clean smoke
-
-### Custom deploy hooks
-- Pre-merge: `bun run test` (worker tests) — blocks the deploy if red
-- Deploy trigger: `bun run deploy` (user runs it manually from repo root)
-- Deploy status: wrangler prints the deploy URL + version id on each step
-- Health check: `bun run deploy:smoke` (Playwright probe, ~15s) or `curl -sf https://trail.osi-cyber.com`
-
-### Partial deploys
-- Worker only: `bun run deploy:worker`
-- Pages only (with smoke gate): `bun run deploy:pages`
-- Smoke only (no deploy): `bun run deploy:smoke` — useful for post-deploy verification
-
-### Why the gate exists
-On 2026-04-18 two P0 scene-render bugs (river `ford_difficulty.toUpperCase()` + `[N]` styled-text labels in river/hunting) shipped to prod because the previous deploy flow was `npx wrangler pages deploy` with zero pre-checks. Any real river crossing or hunt trip blue-screened kaplay. `scripts/deploy-smoke.mjs` renders exactly those payloads against the preview URL before promotion.
+- **Secrets:** `HMAC_SECRET`, `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` via `wrangler secret put` — never in code, never a committed `.dev.vars` (gitignored).
+- **Deploy:** `bun run deploy` — worker tests → `wrangler deploy` → `scripts/deploy-pages.sh` (push to a CF Pages preview branch → `scripts/deploy-smoke.mjs` force-renders river/hunting/bitter_path-CW/landmark against the preview, refuses promotion on any scene throw → promote `--branch=master`, i.e. trail.osi-cyber.com, only on clean smoke). Added 2026-04-18 after two P0 scene-render bugs (`ford_difficulty.toUpperCase()`, styled-text `[N]` labels) shipped via a zero-pre-check `wrangler pages deploy`.
+  - Worker only: `bun run deploy:worker`. Pages only: `bun run deploy:pages`. Smoke only (no deploy): `bun run deploy:smoke`.
+  - Health check: `curl -sf https://trail.osi-cyber.com` returns 200.
+  - No CI, no git-provider auto-deploy — manual, run from repo root.
+- **Tests:** `npx vitest run` (or `bun run test`) — must be green (418 passed / 1 skipped) before committing.
+- **Local dev:** `npx wrangler dev` (worker on :8787) + `npx serve public`. Override `engine.js`'s hardcoded prod URL to `http://localhost:8787` manually.
+- **CORS:** `ALLOWED_ORIGIN` env var is read but unset in `wrangler.toml` → defaults to `*`. Set explicitly if origin restriction is needed.
+- **Active branch:** `kaplay-rebuild`. `master` still holds the old ASCII terminal UI and is the Pages `production_branch`.
 
 ---
-
-## 10. Forbidden Actions (consolidated)
-
-Claude Code must not:
-- Commit `.dev.vars`, API keys, HMAC secrets, or Cloudflare account IDs
-- Move simulation logic (`advanceDays`, disease, starvation, death) to the client
-- Break the HMAC signing chain (skip `verifyIncomingState` or `signState`)
-- Skip event hash verification in `/api/choice`
-- Allow `/api/advance` when `pending_event_hash` is set
-- Allow `/api/store` after departure (miles_traveled > 0)
-- Remove or weaken the High tone tier
-- Add npm runtime dependencies (frontend is zero-dependency vanilla JS + Kaplay CDN)
-- Trust LLM output without validation (all consequences must be parsed + clamped)
-- Push directly to master
-- Add a database or server-side session storage
-- Add a build step for `public/` (no webpack, no vite for frontend)
-
----
-
-## 11. Session Ritual
-
-**Start of session:**
-1. Read CLAUDE.md in full
-2. Read the relevant plan file if the task matches one: `PLAN.md`, `KAPLAY_REBUILD_PLAN.md`, `KAPLAY_FIXES_V3_PLAN.md`, `FEATURES_PLAN.md`
-3. Run `git status` and `git log --oneline -5`
-4. Run `npx vitest run` to confirm tests pass
-5. Check section 4 (Technical Debt) — is the task making any of 1-13 worse?
-6. Summarize your understanding of the task before writing code
-
-**End of session:**
-1. Run `npx vitest run` and confirm all 236 tests pass
-2. Summarize what changed
-3. List files modified
-4. List any new technical debt introduced
-5. Confirm `git status` is in expected state
-
----
-
-## 12. When In Doubt
-
-Priority:
-1. Ask the user. Every time.
-2. Read the relevant file in full before editing.
-3. Check `PLAN.md` for the original design decision.
-4. Prefer the smallest change that works.
-5. If about to refactor something that wasn't asked for — stop. Open a separate task.
-
----
-
-**Bottom line:** free marketing asset, near-zero ops cost, AI-generated events are the product, horror tier is the hook, server owns all game logic, client is mostly a display layer. Respect the HMAC chain, validate LLM output, keep the frontend zero-dependency, and run the 236 tests before committing.
 
 ## Project Context
 Query `osi-context.get_bundle("oregon-trail")` at session start for project decisions, gotchas, and cross-project rules.
+

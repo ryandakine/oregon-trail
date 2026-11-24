@@ -258,6 +258,10 @@ export function createVfx() {
   const alpha  = new Float32Array(CAPACITY);
   const sprite = new Float32Array(CAPACITY);
   const rot    = new Float32Array(CAPACITY);
+  // Per-particle opacity ceiling (CPU-only, not a GPU attribute — folded into
+  // `alpha` each tick). Defaults to full opacity; A11 uses it to dim dust-storm
+  // smoke puffs without touching the shared shader or other emitters.
+  const opCap  = new Float32Array(CAPACITY).fill(1);
 
   let head = 0;  // ring-buffer write head
 
@@ -309,8 +313,9 @@ export function createVfx() {
    * @param {number}             gravity  downward accel (positive = down; applied as -gravity to vy each tick)
    * @param {number}             spr      atlas cell index
    * @param {number}             rota     initial rotation in radians
+   * @param {number}             [opCapVal=1] max opacity this particle can reach (0-1)
    */
-  function _spawn(x, y, z, vx, vy, vz, color, sz, lifetime, gravity, spr, rota) {
+  function _spawn(x, y, z, vx, vy, vz, color, sz, lifetime, gravity, spr, rota, opCapVal = 1) {
     const i = head;
     head = (head + 1) % CAPACITY;
 
@@ -333,6 +338,7 @@ export function createVfx() {
     alpha[i]  = 0;        // starts transparent, fade-in logic in update()
     sprite[i] = spr;
     rot[i]    = rota;
+    opCap[i]  = opCapVal;
   }
 
   // ---- Weather state -------------------------------------------------------
@@ -352,7 +358,7 @@ export function createVfx() {
       const fadeIn  = 1 - f;                     // 0→1 over first 25% of total
       const fadeInA = fadeIn < 0.25 ? fadeIn * 4 : 1.0;
       const fadeOut = f < 0.25 ? f * 4 : 1.0;
-      alpha[i] = fadeInA * fadeOut;
+      alpha[i] = fadeInA * fadeOut * opCap[i];
 
       // gravity is stored as downward-positive; subtract from vy
       vel[i * 3 + 1] -= grav[i] * dt;
@@ -433,17 +439,20 @@ export function createVfx() {
       const z  = -26 + rng() * 40;
       const vx = -(7 + rng() * 5);       // blow fast toward -x
       const vz = (rng() - 0.5) * 1.5;
-      // Warm ochre (PALETTE.dust [205,180,140]).
-      const br = 0.75 + rng() * 0.25;
-      _c.setRGB(br * 0.86, br * 0.74, br * 0.56);
-      // 65% fine grit (small fast debris specks near the ground) + 35% soft
-      // haze puffs — the mix reads as blowing dust, not floating orbs.
-      if (rng() < 0.65) {
+      // Dry, desaturated earth tone (darker/duller than PALETTE.dust) — bright
+      // warm colors read as a luminous glow under CustomBlending, so grit
+      // stays low-brightness with channels close together instead of vivid.
+      const br = 0.5 + rng() * 0.2;
+      _c.setRGB(br * 0.60, br * 0.54, br * 0.47);
+      // 85% fine grit (small fast debris specks near the ground) + 15% soft
+      // haze puffs, kept small and capped well below full opacity — the mix
+      // reads as blowing sand, not floating glow orbs.
+      if (rng() < 0.85) {
         const y = 0.1 + rng() * 2.6;
         _spawn(x, y, z, vx, 0.1 + rng() * 0.4, vz, _c, 0.2 + rng() * 0.3, 1.0 + rng() * 1.0, 0.3, SPR.debris, rng() * Math.PI * 2);
       } else {
         const y = 0.3 + rng() * 4.0;
-        _spawn(x, y, z, vx * 0.7, 0.2 + rng() * 0.6, vz, _c, 0.6 + rng() * 0.7, 1.4 + rng() * 1.4, 0.3, SPR.smoke, rng() * Math.PI * 2);
+        _spawn(x, y, z, vx * 0.7, 0.2 + rng() * 0.6, vz, _c, 0.3 + rng() * 0.35, 1.4 + rng() * 1.4, 0.3, SPR.smoke, rng() * Math.PI * 2, 0.45);
       }
     }
   }
@@ -460,14 +469,16 @@ export function createVfx() {
     const count = 2 + Math.floor(rng() * 3);
     for (let i = 0; i < count; i++) {
       const vx = (rng() - 0.5) * 1.4;
-      const vy =  1.2 + rng() * 1.6;
+      // Low kick, strong gravity, short life: wheel dust must stay below the
+      // wagon bed — against a deep-blue sky a rising puff column reads as smoke.
+      const vy =  0.35 + rng() * 0.55;
       const vz = (rng() - 0.5) * 1.0;
       const br = 0.65 + rng() * 0.25;
       const [dr, dg, db] = toSRGB01('dust');
       _c.setRGB(br * dr, br * dg, br * db);
       _spawn(x + (rng() - 0.5) * 0.4, y + 0.05, z + (rng() - 0.5) * 0.4,
-        vx, vy, vz, _c, 0.22 + rng() * 0.18, 1.2 + rng() * 0.8, 0.35, SPR.smoke,
-        rng() * Math.PI * 2);
+        vx, vy, vz, _c, 0.22 + rng() * 0.18, 0.7 + rng() * 0.5, 0.9, SPR.smoke,
+        rng() * Math.PI * 2, 0.6);
     }
   }
 

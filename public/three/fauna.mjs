@@ -7,11 +7,14 @@
 // setPose("graze"|"alert"|"flee") changes stance without resetting gait.
 
 import * as THREE from 'three';
+import { toonRamp, deerHideMaps, bisonHideMaps } from './textures.mjs';
 
 // ── Tiny local helpers (avoid importing models.mjs) ──────────────────────────
 
-function std(color, opts = {}) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.88, metalness: 0, ...opts });
+// Same shared ramp the wagon/oxen/pioneers band on, so the whole cast reads as
+// one material family instead of toon heroes against PBR wildlife.
+function toon(color, opts = {}) {
+  return new THREE.MeshToonMaterial({ color, gradientMap: toonRamp(), ...opts });
 }
 
 function shadowed(mesh) {
@@ -46,11 +49,15 @@ export function createDeer({ tint = 0 } = {}) {
   const group = new THREE.Group();
 
   const bodyColor = new THREE.Color(D.body).offsetHSL(0, 0, tint * 0.05);
-  const bodyMat   = std(bodyColor, { roughness: 0.9 });
-  const darkMat   = std(D.dark,   { roughness: 0.92 });
-  const creamMat  = std(D.cream,  { roughness: 0.9 });
-  const whiteMat  = std(D.white,  { roughness: 0.85 });
-  const antlerMat = std(D.antler, { roughness: 0.7 });
+  // Near-neutral hide map: hue stays with the palette colors, the map adds the
+  // fine tan coat the flat single-hex material was missing.
+  const hide      = deerHideMaps();
+  const hideOpts  = { map: hide.map };
+  const bodyMat   = toon(bodyColor, hideOpts);
+  const darkMat   = toon(D.dark,   hideOpts);
+  const creamMat  = toon(D.cream,  hideOpts);
+  const whiteMat  = toon(D.white);
+  const antlerMat = toon(D.antler);
 
   // Body: slim capsule, horizontal
   const body = shadowed(new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.72, 5, 10), bodyMat));
@@ -87,7 +94,7 @@ export function createDeer({ tint = 0 } = {}) {
   muzzle.position.set(0.18, -0.03, 0);
   headG.add(muzzle);
   // Nose dot
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 4), std(D.nose));
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 4), toon(D.nose));
   nose.position.set(0.26, -0.03, 0);
   headG.add(nose);
   // Ears: two flat boxes angled out
@@ -132,7 +139,7 @@ export function createDeer({ tint = 0 } = {}) {
     const shin = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.030, 0.34, 7), darkMat));
     shin.position.y = -0.17;
     lower.add(shin);
-    const hoof = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.09), std(0x1a1008)));
+    const hoof = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.09), toon(0x1a1008)));
     hoof.position.y = -0.36;
     lower.add(hoof);
     lower.position.y = -0.35;
@@ -196,9 +203,12 @@ export function createDeer({ tint = 0 } = {}) {
 export function createBison({ tint = 0 } = {}) {
   const group = new THREE.Group();
 
-  const frontMat = std(new THREE.Color(B.front).offsetHSL(0, 0, tint * 0.04), { roughness: 0.95 });
-  const rearMat  = std(new THREE.Color(B.rear ).offsetHSL(0, 0, tint * 0.04), { roughness: 0.95 });
-  const hornMat  = std(B.horn, { roughness: 0.6 });
+  // Long-shag hide map — heavier strokes and deeper blotching than the deer's.
+  const hide     = bisonHideMaps();
+  const hideOpts = { map: hide.map };
+  const frontMat = toon(new THREE.Color(B.front).offsetHSL(0, 0, tint * 0.04), hideOpts);
+  const rearMat  = toon(new THREE.Color(B.rear ).offsetHSL(0, 0, tint * 0.04), hideOpts);
+  const hornMat  = toon(B.horn);
 
   // Hindquarters: smaller ellipsoid rear
   const rear = shadowed(new THREE.Mesh(new THREE.CapsuleGeometry(0.38, 0.52, 5, 10), rearMat));
@@ -235,7 +245,7 @@ export function createBison({ tint = 0 } = {}) {
   const muzzle = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.22, 0.28), rearMat));
   muzzle.position.set(0.28, -0.06, 0);
   headG.add(muzzle);
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 4), std(B.nose));
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 4), toon(B.nose));
   nose.position.set(0.42, -0.04, 0);
   headG.add(nose);
   // Horns: short curved — two angled cones
@@ -277,7 +287,7 @@ export function createBison({ tint = 0 } = {}) {
     const shin = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.36, 8), frontMat));
     shin.position.y = -0.18;
     lower.add(shin);
-    const hoof = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.16), std(B.hoof)));
+    const hoof = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.16), toon(B.hoof)));
     hoof.position.y = -0.38;
     lower.add(hoof);
     lower.position.y = -0.38;
