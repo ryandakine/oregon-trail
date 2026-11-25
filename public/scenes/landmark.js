@@ -9,6 +9,7 @@ export default function register(k, engine) {
     // Arrival at a named landmark is a "big moment" beat — the one place the
     // camera zoom-punch is reserved for (research § B3 restraint rules).
     createJuice(k).zoomPunch();
+    window.audio?.bell();
     const W = 640;
     const H = 480;
     const landmark = data || {};

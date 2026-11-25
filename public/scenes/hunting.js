@@ -374,6 +374,7 @@ export default function register(k, engine) {
         hunting = true;
         instructObj.text = "Hunting...";
 
+        window.audio?.sting("gunshot");
         juice.minor({ intensity: 3 + k.rand(0, 1) });
         if (MOTION_OK) {
           spawnShotBurst(bx + btnW / 2, btnY);
@@ -423,6 +424,7 @@ export default function register(k, engine) {
       const foodGained = results?.food_gained || 0;
       const shotsUsed = results?.shots || 0;
       const narrative = results?.narrative || "";
+      if (foodGained > 0) window.audio?.sting("good");
 
       let resultText = narrative || `You used ${shotsUsed} rounds and got ${foodGained} lbs of food.`;
       resultsObj.text = resultText;

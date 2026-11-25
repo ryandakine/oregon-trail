@@ -138,12 +138,87 @@ function saveDailyCompletion(result) {
   } catch (_) {}
 }
 
+function getDailyStats() {
+  let streak = 0;
+  let totalDaily = 0;
+  try {
+    const today = getDailyTrailNumber();
+    for (let day = today; day >= 1; day--) {
+      const raw = localStorage.getItem('ot_daily_' + day);
+      if (!raw) break;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.completed) break;
+      streak++;
+    }
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !/^ot_daily_\d+$/.test(key)) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (parsed?.completed) totalDaily++;
+    }
+  } catch (_) {}
+  return { streak, totalDaily };
+}
+
+// ── Run Medals (deterministic, localStorage-only) ─────────
+
+const RUN_MEDALS = [
+  { id: 'survivor', label: 'Oregon Survivor' },
+  { id: 'zero_losses', label: 'Zero Losses' },
+  { id: 'farmers_grit', label: "Farmer's Grit" },
+  { id: 'into_the_abyss', label: 'Into the Abyss' },
+  { id: 'daily_streak', label: 'Trail Regular' },
+];
+
+function computeRunMedals(state, opts = {}) {
+  const members = state?.party?.members || [];
+  const totalMembers = members.length || 5;
+  const aliveCount = members.filter(m => m.alive).length;
+  const miles = state?.position?.miles_traveled || 0;
+  const arrived = opts.arrived !== undefined
+    ? Boolean(opts.arrived)
+    : opts.survived !== undefined
+      ? Boolean(opts.survived && aliveCount > 0)
+      : Boolean(state?.position?.arrived || (miles >= 1764 && aliveCount > 0));
+  const survivedArrival = arrived && aliveCount > 0;
+  const profession = opts.profession ?? state?.party?.profession ?? state?.settings?.profession ?? null;
+  const tone = opts.tone ?? state?.settings?.tone_tier ?? state?.simulation?.tone_tier ?? null;
+  const dailyStats = getDailyStats();
+  const dailyStreak = Math.max(opts.dailyStreak ?? 0, dailyStats.streak);
+  const dailyRuns = Math.max(opts.dailyRuns ?? 0, dailyStats.totalDaily);
+
+  const earned = [];
+  if (survivedArrival) earned.push(RUN_MEDALS[0]);
+  if (survivedArrival && totalMembers >= 5 && aliveCount === totalMembers) earned.push(RUN_MEDALS[1]);
+  if (survivedArrival && profession === 'farmer') earned.push(RUN_MEDALS[2]);
+  if (survivedArrival && tone === 'high') earned.push(RUN_MEDALS[3]);
+  if (dailyStreak >= 3 || dailyRuns >= 3) earned.push(RUN_MEDALS[4]);
+  return earned;
+}
+
 // ── Meta-progression (localStorage, zero backend) ─────────
 // Persists across runs so the title screen can show a "Best: … · N runs"
 // line and what's still unbeaten. No backend, no signed state — pure local
 // bragging-rights tracking. (IMPROVEMENT_ROADMAP §1.4)
 
 const META_KEY = 'ot_meta';
+const TRAVEL_SPEED_KEY = 'ot_travel_speed';
+
+function normalizeTravelSpeed(speed) {
+  return Number(speed) >= 2 ? 2 : 1;
+}
+
+function loadTravelSpeed() {
+  try {
+    const raw = localStorage.getItem(TRAVEL_SPEED_KEY);
+    if (raw == null) return 1;
+    return normalizeTravelSpeed(raw);
+  } catch (_) {
+    return 1;
+  }
+}
 
 function defaultMeta() {
   return {
@@ -153,6 +228,7 @@ function defaultMeta() {
     tonesCleared: {},        // { low: true, medium: true, high: true }
     professionsCleared: {},  // { farmer: true, ... }
     bitterPathDiscovered: false,
+    medals: [],
   };
 }
 
@@ -166,6 +242,7 @@ function loadMeta() {
     return { ...defaultMeta(), ...parsed,
       tonesCleared: { ...(parsed.tonesCleared || {}) },
       professionsCleared: { ...(parsed.professionsCleared || {}) },
+      medals: Array.isArray(parsed.medals) ? [...new Set(parsed.medals)] : [],
     };
   } catch (_) {
     return defaultMeta();
@@ -225,10 +302,24 @@ class GameEngine {
     this._resultBeat = null;
     this.activeChallenge = null;
     this.dailyMode = false;
+    this.dailyPractice = false;
     this.dailyTrailNumber = 0;
     this.dailyRng = null;
+    this.travelSpeed = loadTravelSpeed();
     this.llmProvider = null;
     this.lastLlmProvider = null;
+  }
+
+  // ── Travel Speed ────────────────────────────
+
+  setTravelSpeed(speed) {
+    const next = normalizeTravelSpeed(speed);
+    this.travelSpeed = next;
+    try {
+      localStorage.setItem(TRAVEL_SPEED_KEY, String(next));
+    } catch (_) {}
+    this.emit('travelSpeedChanged', { speed: next });
+    return next;
   }
 
   // ── Challenge ───────────────────────────────
@@ -244,14 +335,19 @@ class GameEngine {
 
   // ── Daily Trail ───────────────────────────
 
-  startDailyTrail() {
+  startDailyTrail(opts = {}) {
     this.dailyMode = true;
+    this.dailyPractice = Boolean(opts?.practice || getDailyCompletion()?.completed);
     this.dailyTrailNumber = getDailyTrailNumber();
     this.dailyRng = mulberry32(getDailySeed());
   }
 
   completeDailyTrail() {
     if (!this.dailyMode) return;
+    const existing = getDailyCompletion();
+    if (existing?.completed) {
+      return existing;
+    }
     const gs = this.gameState;
     const alive = gs?.party?.members?.filter(m => m.alive)?.length || 0;
     const total = gs?.party?.members?.length || 5;
@@ -329,6 +425,18 @@ class GameEngine {
     return loadMeta();
   }
 
+  static computeRunMedals(state, opts) {
+    return computeRunMedals(state, opts);
+  }
+
+  computeRunMedals(opts = {}) {
+    return computeRunMedals(this.gameState, {
+      profession: this.profession,
+      tone: this.tone,
+      ...opts,
+    });
+  }
+
   // One-line title-screen summary, e.g.
   //   "Best: 847 mi · 12 runs · Horror not yet survived"
   // before any run: "No runs yet — the trail awaits".
@@ -340,6 +448,10 @@ class GameEngine {
       parts.push('Horror not yet survived');
     } else if (m.bestSurvivors > 0) {
       parts.push(`Most survivors: ${m.bestSurvivors}`);
+    }
+    const medalCount = Array.isArray(m.medals) ? m.medals.length : 0;
+    if (medalCount > 0) {
+      parts.push(`${medalCount} medal${medalCount === 1 ? '' : 's'}`);
     }
     return parts.join(' · ');
   }
@@ -362,6 +474,10 @@ class GameEngine {
       if (tier) meta.tonesCleared[tier] = true;
       if (this.profession) meta.professionsCleared[this.profession] = true;
     }
+    const runMedals = this.computeRunMedals({ survived });
+    const medalSet = new Set(Array.isArray(meta.medals) ? meta.medals : []);
+    for (const medal of runMedals) medalSet.add(medal.id);
+    meta.medals = [...medalSet];
     saveMeta(meta);
     return meta;
   }
@@ -700,18 +816,18 @@ class GameEngine {
           break;
         case 'arrival':
           this._trackBitterPathOutcome('arrival');
+          if (this.dailyMode) this.completeDailyTrail();
           this.recordRunOutcome(true);
           this.track('run_completed', { outcome: 'arrival', miles: this.milesTraveled, tone: this.tone });
           this._clearSavedRun();
-          if (this.dailyMode) this.completeDailyTrail();
           this.transition('ARRIVAL');
           break;
         case 'wipe':
           this._trackBitterPathOutcome('wipe');
+          if (this.dailyMode) this.completeDailyTrail();
           this.recordRunOutcome(false);
           this.track('run_completed', { outcome: 'wipe', miles: this.milesTraveled, tone: this.tone });
           this._clearSavedRun();
-          if (this.dailyMode) this.completeDailyTrail();
           this.transition('WIPE');
           break;
         default:
@@ -739,10 +855,12 @@ class GameEngine {
   queueAdvance(delay = TRAVEL_DWELL_MS) {
     this.cancelQueuedAdvance();
     if (this._advancePaused) return;
+    const speed = normalizeTravelSpeed(this.travelSpeed);
+    const scaledDelay = Math.max(0, Math.round(delay / speed));
     this._advanceTimer = setTimeout(() => {
       this._advanceTimer = null;
       this.advance();
-    }, delay);
+    }, scaledDelay);
   }
 
   cancelQueuedAdvance() {
@@ -1196,6 +1314,8 @@ class GameEngine {
     this.cancelQueuedAdvance();
     this.clearResultBeat();
     this.activeChallenge = null;
+    this.dailyMode = false;
+    this.dailyPractice = false;
     try {
       localStorage.removeItem('ot_journal');
     } catch (_) {}
@@ -1205,6 +1325,6 @@ class GameEngine {
 }
 
 window.GameEngine = GameEngine;
+window.computeRunMedals = computeRunMedals;
 window.engine = new GameEngine();
 window.CHALLENGE_INFO = CHALLENGE_INFO;
-window.GameEngine = GameEngine;

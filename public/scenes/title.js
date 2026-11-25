@@ -182,14 +182,13 @@ export default function register(k, engine) {
     const dailyDone = GameEngine.getDailyCompletion();
     let dailyBtn = null;
     if (dailyDone) {
+      dailyBtn = parchmentPanel(k, 280, 44, 320, 180, { outlineRgb: CREAM_DIM });
       k.add([
-        k.text(`Daily Trail #${dailyNum} — ${dailyDone.survived ? "Completed!" : "Failed"}`, {
-          size: 12, width: 400, align: "center",
-        }),
-        k.pos(320, 178),
+        k.text(`[ D ] Daily #${dailyNum} — Practice`, { size: 13 }),
+        k.pos(320, 180),
         k.anchor("center"),
         k.color(...CREAM_DIM),
-        k.z(12),
+        k.z(13),
       ]);
     } else {
       dailyBtn = parchmentPanel(k, 240, 44, 320, 180);
@@ -288,7 +287,7 @@ export default function register(k, engine) {
       engine.transition("PROFESSION");
     }
     function startDaily() {
-      engine.startDailyTrail();
+      engine.startDailyTrail({ practice: Boolean(dailyDone?.completed) });
       engine.transition("PROFESSION");
     }
     function resumeRun() {

@@ -52,32 +52,32 @@ export default function register(k, engine) {
         : '';
 
       const rowStyle = `
-        display:flex;align-items:center;justify-content:space-between;
+        display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0.4rem;
         padding:0.5rem 0.6rem;margin-bottom:0.4rem;
         background:rgba(30,20,10,0.5);border:1px solid #5a3510;border-radius:4px;
       `.replace(/\n/g, '');
 
       const btnStyle = `
         background:#8b4513;color:#deb887;border:1px solid #a0522d;
-        width:28px;height:28px;font-size:1rem;cursor:pointer;
+        min-width:38px;min-height:38px;padding:0;font-size:1rem;cursor:pointer;
         border-radius:3px;font-family:Georgia,serif;
       `.replace(/\n/g, '');
 
       const disabledBtnStyle = `
         background:#3a3a3a;color:#666;border:1px solid #555;
-        width:28px;height:28px;font-size:1rem;cursor:not-allowed;
+        min-width:38px;min-height:38px;padding:0;font-size:1rem;cursor:not-allowed;
         border-radius:3px;font-family:Georgia,serif;
       `.replace(/\n/g, '');
 
       const step10Style = `
         background:#8b4513;color:#deb887;border:1px solid #a0522d;
-        padding:0 6px;height:28px;font-size:0.7rem;cursor:pointer;
+        min-width:38px;min-height:38px;padding:0 6px;font-size:0.75rem;cursor:pointer;
         border-radius:3px;font-family:Georgia,serif;white-space:nowrap;
       `.replace(/\n/g, '');
 
       const disabledStep10Style = `
         background:#3a3a3a;color:#666;border:1px solid #555;
-        padding:0 6px;height:28px;font-size:0.7rem;cursor:not-allowed;
+        min-width:38px;min-height:38px;padding:0 6px;font-size:0.75rem;cursor:not-allowed;
         border-radius:3px;font-family:Georgia,serif;white-space:nowrap;
       `.replace(/\n/g, '');
 
@@ -87,7 +87,7 @@ export default function register(k, engine) {
           Independence, Missouri &mdash; Spring 1848
         </p>
         ${challengeBanner}
-        <div style="display:flex;justify-content:space-between;margin-bottom:1rem;padding:0.5rem 0.8rem;background:rgba(40,30,15,0.6);border-radius:4px;">
+        <div style="display:flex;flex-wrap:wrap;gap:0.4rem;justify-content:space-between;margin-bottom:1rem;padding:0.5rem 0.8rem;background:rgba(40,30,15,0.6);border-radius:4px;">
           <span>Budget: <strong style="color:#d4a030;">${formatMoney(budget)}</strong></span>
           <span>Spent: <strong>${formatMoney(spent)}</strong></span>
           <span>Remaining: <strong style="color:${remaining >= 0 ? '#6aad6a' : '#cc3333'};">${formatMoney(remaining)}</strong></span>

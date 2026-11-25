@@ -2,6 +2,15 @@ import * as draw from "../lib/draw.mjs";
 import { addTopHud, addBottomHud } from "../lib/hud.mjs";
 
 const MOTION_OK = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const STING_DELTA_KEYS = ["food", "oxen", "spare_parts", "medicine", "clothing", "ammo", "morale"];
+
+function isDangerDelta(deltas) {
+  if (!deltas) return false;
+  if (deltas.died?.length > 0 || (deltas.health ?? 0) < 0) return true;
+  let net = 0;
+  for (const key of STING_DELTA_KEYS) net += deltas[key] ?? 0;
+  return net < 0;
+}
 
 const SKY_PHASES = {
   dawn:  { top: draw.PALETTE.skyDawn,  horizon: draw.PALETTE.skyPale },
@@ -93,6 +102,22 @@ export default function register(k, engine) {
     const typewriterEl = document.getElementById("event-typewriter");
     let charIdx = 0;
     const typeSpeed = 25;
+    let typeTimer = null;
+    let typingDone = false;
+    let choicesEnabledAt = 0;
+    const skipKeyHandlers = [];
+
+    function clearTypeTimer() {
+      if (typeTimer !== null) {
+        clearTimeout(typeTimer);
+        typeTimer = null;
+      }
+    }
+
+    function cancelSkipKeyHandlers() {
+      for (const h of skipKeyHandlers) h?.cancel?.();
+      skipKeyHandlers.length = 0;
+    }
 
     function typeNext() {
       if (!MOTION_OK) {
@@ -104,20 +129,28 @@ export default function register(k, engine) {
       if (charIdx < description.length) {
         typewriterEl.textContent += description[charIdx];
         charIdx++;
-        setTimeout(typeNext, typeSpeed);
+        typeTimer = setTimeout(typeNext, typeSpeed);
       } else {
+        typeTimer = null;
         showChoices();
       }
     }
 
-    // Click to skip typewriter
+    // Click or Space/Enter to skip typewriter
     function skipTypewriter() {
+      if (typingDone) return;
+      typingDone = true;
+      clearTypeTimer();
+      cancelSkipKeyHandlers();
+      overlay.removeEventListener("click", skipTypewriter);
       charIdx = description.length;
       typewriterEl.textContent = description;
+      choicesEnabledAt = Date.now() + 180;
       showChoices();
-      overlay.removeEventListener("click", skipTypewriter);
     }
     overlay.addEventListener("click", skipTypewriter);
+    skipKeyHandlers.push(k.onKeyPress("space", skipTypewriter));
+    skipKeyHandlers.push(k.onKeyPress("enter", skipTypewriter));
 
     typeNext();
 
@@ -126,6 +159,7 @@ export default function register(k, engine) {
     // the result beat. The old cleanup()-then-transition path meant the outcome
     // was never visible anywhere.
     function choose(idx) {
+      if (MOTION_OK && Date.now() < choicesEnabledAt) return;
       if (resolving) return;
       resolving = true;
       clearAutoTimer();
@@ -147,6 +181,9 @@ export default function register(k, engine) {
     }
 
     function showChoices() {
+      typingDone = true;
+      clearTypeTimer();
+      cancelSkipKeyHandlers();
       overlay.removeEventListener("click", skipTypewriter);
       const choicesEl = document.getElementById("event-choices");
       if (!choicesEl || choicesEl.dataset.shown) return;
@@ -238,10 +275,17 @@ export default function register(k, engine) {
       k.onKeyPress("enter", () => engine.continueFromResult());
     }
 
-    const onResolved = (payload) => showResultBeat(payload || {});
+    const onResolved = (payload) => {
+      const data = payload || {};
+      window.audio?.sting(isDangerDelta(data.deltas) ? "danger" : "good");
+      showResultBeat(data);
+    };
     engine.on("choiceResolved", onResolved);
 
     function cleanup() {
+      clearTypeTimer();
+      cancelSkipKeyHandlers();
+      overlay.removeEventListener("click", skipTypewriter);
       clearAutoTimer();
       overlay.classList.remove("active", "tableau");
       content.innerHTML = "";

@@ -91,30 +91,61 @@ export async function callAnthropic(
   throw lastError || new Error("callAnthropic: unexpected retry exhaustion");
 }
 
-// Validate + clamp a consequence delta IN PLACE: keys must be allowed, values
-// finite, magnitudes capped at ±10000. Shared by immediate choice consequences
-// and delayed-effect fuses so both honor one rule set. Throws on malformed input
-// (rejecting the event → a fallback fires).
+const CONSEQUENCE_ALIASES: Record<string, string> = {
+  parts: "spare_parts",
+  meds: "medicine",
+  clothes: "clothing",
+  hp: "health",
+};
+
+function coerceFiniteNumber(val: unknown): number | null {
+  if (typeof val === "number") {
+    return Number.isFinite(val) ? val : null;
+  }
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (trimmed.length === 0) return null;
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+// Validate + clamp a consequence delta IN PLACE: map common supply aliases,
+// coerce finite numeric strings, skip null/undefined, strip unknown keys,
+// and clamp magnitudes to ±10000. Shared by immediate choice consequences
+// and delayed-effect fuses so both honor one rule set.
 function validateConsequenceDelta(c: Record<string, unknown>): void {
-  for (const [key, val] of Object.entries(c)) {
-    if (!ALLOWED_CONSEQUENCE_KEYS.has(key)) {
-      throw new Error(`invalid consequence key: ${key}`);
+  for (const [rawKey, val] of Object.entries(c)) {
+    const key = CONSEQUENCE_ALIASES[rawKey] ?? rawKey;
+    if (key !== rawKey) {
+      delete c[rawKey];
     }
-    if (typeof val !== "number" || !Number.isFinite(val)) {
+    if (!ALLOWED_CONSEQUENCE_KEYS.has(key)) {
+      delete c[key];
+      continue;
+    }
+    if (val === null || val === undefined) {
+      if (key === rawKey) delete c[key];
+      continue;
+    }
+    const num = coerceFiniteNumber(val);
+    if (num === null) {
       throw new Error(`consequence ${key} must be a finite number, got ${typeof val}`);
     }
-    if (Math.abs(val) > 10000) {
-      (c as Record<string, number>)[key] = Math.sign(val) * 10000;
+    const clamped = Math.abs(num) > 10000 ? Math.sign(num) * 10000 : num;
+    if (key === rawKey || !(key in c)) {
+      (c as Record<string, number>)[key] = clamped;
     }
   }
 }
 
 // Mint-time guard for LLM/fallback delayed effects: bound count + timing, run the
-// shared consequence validation, strip miles/days (drainPendingEffects ignores
+// shared consequence validation (isolating per-entry errors so one bad fuse does
+// not reject the whole event), strip miles/days (drainPendingEffects ignores
 // them — stripping stops a "paid-for" fuse from silently no-opping), and normalize
-// target. Returns a clean PendingEffectSpec[] or undefined if none survive. Throws
-// only via validateConsequenceDelta on a malformed delta, matching the immediate
-// path. See docs/design/consequences-pillar.md §2.4.
+// target. Returns a clean PendingEffectSpec[] or undefined if none survive.
+// See docs/design/consequences-pillar.md §2.4.
 export function sanitizeDelayedEffects(raw: unknown): PendingEffectSpec[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const out: PendingEffectSpec[] = [];
@@ -122,14 +153,18 @@ export function sanitizeDelayedEffects(raw: unknown): PendingEffectSpec[] | unde
     if (out.length >= MAX_DELAYED_PER_CHOICE) break; // cap on VALID output, not raw slots
     if (typeof item !== "object" || item === null) continue;
     const spec = item as Record<string, unknown>;
-    if (typeof spec.consequences !== "object" || spec.consequences === null) continue;
+    if (typeof spec.consequences !== "object" || spec.consequences === null || Array.isArray(spec.consequences)) continue;
     const consequences = spec.consequences as Record<string, unknown>;
-    validateConsequenceDelta(consequences);
+    try {
+      validateConsequenceDelta(consequences);
+    } catch {
+      continue; // isolate bad fuse instead of rejecting the whole event
+    }
     delete consequences.miles; // drain ignores miles/days — strip, don't reject
     delete consequences.days;
-    if (Object.keys(consequences).length === 0) continue; // miles/days-only → empty no-op, drop
-    const rawDays = spec.days_remaining;
-    let days = typeof rawDays === "number" && Number.isFinite(rawDays) ? Math.round(rawDays) : 3;
+    if (Object.keys(consequences).length === 0) continue; // miles/days-only or unknown-only → empty no-op, drop
+    const rawDays = coerceFiniteNumber(spec.days_remaining);
+    let days = rawDays !== null ? Math.round(rawDays) : 3;
     days = Math.max(DELAY_MIN_DAYS, Math.min(DELAY_MAX_DAYS, days));
     const target: "actor" | "all" = spec.target === "actor" ? "actor" : "all";
     const clean: PendingEffectSpec = {
@@ -146,11 +181,17 @@ export function sanitizeDelayedEffects(raw: unknown): PendingEffectSpec[] | unde
 }
 
 export function parseEventResponse(raw: string): EventResponse {
-  // Strip <think>...</think> blocks from reasoning/thinking models
-  let stripped = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  // Strip <think>...</think>, <thought>...</thought>, and any unclosed trailing block
+  let stripped = raw
+    .replace(/<(?:think|thought)>[\s\S]*?<\/(?:think|thought)>/gi, "")
+    .replace(/<(?:think|thought)>[\s\S]*$/gi, "")
+    .trim();
 
-  // Strip markdown fences if present
-  stripped = stripped.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
+  // Extract fenced ```json ... ``` block directly before brace-slicing
+  const fenceMatch = stripped.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch) {
+    stripped = fenceMatch[1].trim();
+  }
 
   // If model added text before/after JSON, extract the JSON object
   if (!stripped.startsWith("{")) {
@@ -170,15 +211,30 @@ export function parseEventResponse(raw: string): EventResponse {
   // Validate top-level shape
   if (typeof parsed.title !== "string") throw new Error("missing/invalid title");
   if (typeof parsed.description !== "string") throw new Error("missing/invalid description");
-  if (typeof parsed.journal_entry !== "string") throw new Error("missing/invalid journal_entry");
+  if (typeof parsed.journal_entry !== "string" || !parsed.journal_entry.trim()) {
+    if (typeof parsed.journal === "string" && parsed.journal.trim()) {
+      parsed.journal_entry = parsed.journal.trim();
+    } else {
+      const desc = parsed.description.trim();
+      const firstSentenceMatch = desc.match(/^.+?[.!?](?:\s|$)/);
+      parsed.journal_entry = (firstSentenceMatch ? firstSentenceMatch[0].trim() : desc) || parsed.title.trim();
+    }
+  }
 
-  // Validate choices: array of 1-4
-  if (!Array.isArray(parsed.choices) || parsed.choices.length < 1 || parsed.choices.length > 4) {
+  // Validate choices: array of 1-4 (slice if >4)
+  if (!Array.isArray(parsed.choices) || parsed.choices.length < 1) {
     throw new Error("choices must be array of 1-4 items");
   }
+  if (parsed.choices.length > 4) {
+    parsed.choices = parsed.choices.slice(0, 4);
+  }
   for (const choice of parsed.choices) {
+    if (typeof choice !== "object" || choice === null) throw new Error("choice must be object");
     if (typeof choice.label !== "string") throw new Error("choice missing label");
-    if (typeof choice.consequences !== "object" || choice.consequences === null) {
+    if (choice.consequences === undefined || choice.consequences === null) {
+      choice.consequences = {};
+    }
+    if (typeof choice.consequences !== "object" || Array.isArray(choice.consequences)) {
       throw new Error("choice missing consequences object");
     }
     validateConsequenceDelta(choice.consequences as Record<string, unknown>);
@@ -193,17 +249,33 @@ export function parseEventResponse(raw: string): EventResponse {
   }
 
   // Validate personality_effects: Record<string, { sanity?: number; morale?: number }>
-  if (typeof parsed.personality_effects !== "object" || parsed.personality_effects === null) {
-    throw new Error("missing/invalid personality_effects");
+  if (
+    parsed.personality_effects === undefined ||
+    parsed.personality_effects === null ||
+    typeof parsed.personality_effects !== "object" ||
+    Array.isArray(parsed.personality_effects)
+  ) {
+    parsed.personality_effects = {};
   }
-  for (const [, effects] of Object.entries(parsed.personality_effects)) {
+  const cleanPersonality: Record<string, { sanity?: number; morale?: number }> = {};
+  for (const [memberName, effects] of Object.entries(parsed.personality_effects)) {
+    if (typeof effects !== "object" || effects === null || Array.isArray(effects)) {
+      continue;
+    }
     const eff = effects as Record<string, unknown>;
+    const cleanMember: { sanity?: number; morale?: number } = {};
     for (const [k, v] of Object.entries(eff)) {
-      if (k !== "sanity" && k !== "morale") throw new Error(`invalid personality key: ${k}`);
-      if (typeof v !== "number" || !Number.isFinite(v)) throw new Error(`personality ${k} must be number`);
-      if (Math.abs(v as number) > 100) (eff as Record<string, number>)[k] = Math.sign(v as number) * 100;
+      if (k !== "sanity" && k !== "morale") continue;
+      if (v === null || v === undefined) continue;
+      const num = coerceFiniteNumber(v);
+      if (num === null) continue;
+      cleanMember[k] = Math.abs(num) > 100 ? Math.sign(num) * 100 : num;
+    }
+    if (Object.keys(cleanMember).length > 0) {
+      cleanPersonality[memberName] = cleanMember;
     }
   }
+  parsed.personality_effects = cleanPersonality;
 
   return parsed as EventResponse;
 }

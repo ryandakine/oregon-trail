@@ -63,10 +63,13 @@ describe("sanitizeDelayedEffects", () => {
     expect(sanitizeDelayedEffects([{ consequences: { health: -5 } }])![0].days_remaining).toBe(3);
   });
 
-  it("throws on an invalid consequence key (same rule as immediate effects)", () => {
-    expect(() => sanitizeDelayedEffects([{ days_remaining: 2, consequences: { bogus: -5 } }])).toThrow(
-      /invalid consequence key/,
-    );
+  it("strips unknown consequence keys (returns undefined when only bogus, preserves valid keys when mixed)", () => {
+    expect(sanitizeDelayedEffects([{ days_remaining: 2, consequences: { bogus: -5 } }])).toBeUndefined();
+    const out = sanitizeDelayedEffects([
+      { days_remaining: 2, consequences: { bogus: -5, health: -10 } },
+    ])!;
+    expect(out).toHaveLength(1);
+    expect(out[0].consequences).toEqual({ health: -10 });
   });
 
   it("strips miles/days from a fuse's consequences (drain ignores them)", () => {

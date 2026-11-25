@@ -1,4 +1,4 @@
-const CACHE_NAME = 'oregon-trail-kaplay-v7-engravings';
+const CACHE_NAME = 'oregon-trail-kaplay-v8-hyperfall-polish';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

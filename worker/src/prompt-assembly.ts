@@ -234,6 +234,7 @@ export function assembleEventPrompt(state: GameState, ctx: HistoricalContext): A
 
   userParts.push(
     '',
+    'Vary events across weather, wagon wear, fellow emigrants, camp incidents, wildlife, and sickness; avoid repeating landmark or river crossings.',
     'Generate one event. Return JSON: {"title","description","choices":[{"label","consequences"}],"personality_effects","journal_entry"}'
   );
 

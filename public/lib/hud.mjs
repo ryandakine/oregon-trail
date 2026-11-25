@@ -142,6 +142,49 @@ export function addBottomHud(k, engine) {
   return { icons, tag };
 }
 
+export function addActionPill(k, {
+  x,
+  y,
+  w,
+  h = 26,
+  label,
+  onClick,
+  tag = "hud-travel-actions",
+  textColor = PALETTE.goldBright,
+  z = 60,
+}) {
+  const bg = k.add([
+    k.rect(w, h, { radius: Math.floor(h / 2) }),
+    k.pos(x, y),
+    k.color(...PALETTE.outline),
+    k.opacity(0.65),
+    k.area(),
+    k.fixed(),
+    k.z(z),
+    tag,
+  ]);
+  k.add([
+    k.rect(w - 8, 1),
+    k.pos(x + 4, y + 2),
+    k.color(...PALETTE.parchment),
+    k.opacity(0.25),
+    k.fixed(),
+    k.z(z + 1),
+    tag,
+  ]);
+  const labelText = k.add([
+    k.text(label, { size: 13 }),
+    k.pos(x + w / 2, y + h / 2),
+    k.anchor("center"),
+    k.color(...textColor),
+    k.fixed(),
+    k.z(z + 2),
+    tag,
+  ]);
+  if (typeof onClick === "function") bg.onClick(onClick);
+  return { bg, labelText };
+}
+
 export function updateHud(k, engine, hudState) {
   notifyZenActivity();
   const top = hudState.top, bottom = hudState.bottom;

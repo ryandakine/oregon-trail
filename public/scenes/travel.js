@@ -1,6 +1,6 @@
 import * as draw from "../lib/draw.mjs";
 import { segmentBlend, segmentForMiles } from "../lib/segments.mjs";
-import { addTopHud, addBottomHud, updateHud, attachResizeRebuild, attachStatCorruption, attachZenFade } from "../lib/hud.mjs";
+import { addTopHud, addBottomHud, addActionPill, updateHud, attachResizeRebuild, attachStatCorruption, attachZenFade } from "../lib/hud.mjs";
 import { applyToneOverlay } from "../lib/tone.mjs";
 import { createJuice } from "../lib/juice.mjs";
 import { createHorrorFx } from "../lib/horror-fx.mjs";
@@ -31,6 +31,16 @@ export default function register(k, engine) {
     let detachResize = null;
     let detachCorruption = null;
     let detachZenFade = null;
+    let detachMuteKeySync = null;
+    let journalOpen = false;
+    function closeJournal() {
+      if (!journalOpen) return;
+      journalOpen = false;
+      const overlay = document.getElementById("html-overlay");
+      const content = document.getElementById("overlay-content");
+      if (overlay) overlay.classList.remove("active");
+      if (content) content.innerHTML = "";
+    }
     const juice = createJuice(k);
     // Wires the horror shader's two previously-dead channels (review finding):
     // dread scales aberration/grain with the party's actual desperation, and
@@ -55,6 +65,9 @@ export default function register(k, engine) {
       detachResize?.();
       detachCorruption?.();
       detachZenFade?.();
+      detachMuteKeySync?.();
+      window.audio?.setWeather("none", 0);
+      closeJournal();
       // A dwell queued by this scene must not outlive it — every route back to
       // travel re-queues on mount.
       engine.cancelQueuedAdvance();
@@ -252,6 +265,7 @@ export default function register(k, engine) {
     const bias = here.weatherBias;
     const weatherRoll = draw.seededRng(draw.seedFrom(miles, here.index));
     const weather = bias.kind !== "none" && weatherRoll() < bias.intensity ? bias.kind : "clear";
+    window.audio?.setWeather(weather === "clear" ? "none" : weather, weather === "clear" ? 0 : (bias?.intensity ?? 0));
 
     if (weather === "rain" && MOTION_OK) {
       loops.push(k.loop(0.05, () => {
@@ -433,6 +447,12 @@ export default function register(k, engine) {
       hills?.update?.({ segment: curSegment });
       ground?.update?.({ segment: curSegment });
 
+      const curHere = segmentForMiles(curMiles);
+      const curBias = curHere.weatherBias;
+      const curWeatherRoll = draw.seededRng(draw.seedFrom(curMiles, curHere.index));
+      const curWeather = curBias.kind !== "none" && curWeatherRoll() < curBias.intensity ? curBias.kind : "clear";
+      window.audio?.setWeather(curWeather === "clear" ? "none" : curWeather, curWeather === "clear" ? 0 : (curBias?.intensity ?? 0));
+
       updateHud(k, engine, hudState);
       window.__zenHud?.notifyActivity?.();
       // One juice call per advance, escalated to the worst outcome in the
@@ -470,56 +490,103 @@ export default function register(k, engine) {
       showFloatingText("Error: " + message);
     });
 
-    // ── Hunt action (IMPROVEMENT_ROADMAP §1.3) ──
-    // startHunt() previously had zero callers — the HUNTING scene was
-    // unreachable, so players couldn't recover food. Surface an [H]/tap entry
-    // in the travel HUD. Placed bottom-left, clear of the pause hotspot
-    // (x<100,y<60) and the bottom party panel (y=440).
-    const huntBtnW = 92, huntBtnH = 26, huntBtnX = 8, huntBtnY = 404;
-    const huntBtn = k.add([
-      k.rect(huntBtnW, huntBtnH, { radius: 13 }),
-      k.pos(huntBtnX, huntBtnY),
-      k.color(...draw.PALETTE.outline),
-      k.opacity(0.65),
-      k.area(),
-      k.fixed(),
-      k.z(60),
-      "hud-travel-actions",
-    ]);
-    k.add([
-      k.rect(huntBtnW - 8, 1),
-      k.pos(huntBtnX + 4, huntBtnY + 2),
-      k.color(...draw.PALETTE.parchment),
-      k.opacity(0.25),
-      k.fixed(),
-      k.z(61),
-      "hud-travel-actions",
-    ]);
-    k.add([
-      k.text("(H) Hunt", { size: 13 }),
-      k.pos(huntBtnX + huntBtnW / 2, huntBtnY + huntBtnH / 2),
-      k.anchor("center"),
-      k.color(...draw.PALETTE.goldBright),
-      k.fixed(),
-      k.z(62),
-      "hud-travel-actions",
-    ]);
+    // ── Travel HUD action pills (touch + keyboard affordances) ──
+    // Bottom-left: (H) Hunt. Bottom-right: (P) Pause, with (M) Sound/Muted
+    // stacked cleanly above it — all clear of the floating text column
+    // (x=120..520) and bottom party panel (y=440..480).
     const goHunt = () => { engine.track('hunt_started'); engine.startHunt(); };
-    huntBtn.onClick(goHunt);
+    addActionPill(k, {
+      x: 8, y: 404, w: 92, h: 26,
+      label: "(H) Hunt",
+      onClick: goHunt,
+      z: 60,
+    });
     k.onKeyPress("h", goHunt);
+
+    const soundLabelFor = () => (window.audio?.isMuted?.() ? "(M) Muted" : "(M) Sound");
+    const soundPill = addActionPill(k, {
+      x: 536, y: 372, w: 96, h: 26,
+      label: soundLabelFor(),
+      onClick: () => {
+        window.__zenHud?.notifyActivity?.();
+        window.audio?.toggleMute();
+        soundPill.labelText.text = soundLabelFor();
+      },
+      z: 60,
+    });
+    const onMuteKeySync = (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+      if (e.key === "m" || e.key === "M") {
+        queueMicrotask(() => { soundPill.labelText.text = soundLabelFor(); });
+      }
+    };
+    window.addEventListener("keydown", onMuteKeySync);
+    detachMuteKeySync = () => window.removeEventListener("keydown", onMuteKeySync);
+
+    function openJournal() {
+      const overlay = document.getElementById("html-overlay");
+      const content = document.getElementById("overlay-content");
+      if (!overlay || !content) return;
+      content.innerHTML = "";
+
+      const h2 = document.createElement("h2");
+      h2.className = "overlay-title";
+      h2.textContent = "Trail Journal";
+      content.appendChild(h2);
+
+      const raw = Array.isArray(engine.fullJournal) ? engine.fullJournal : [];
+      const entries = raw.slice(-8).map((evt) => {
+        if (typeof evt === "string") return evt;
+        if (evt && typeof evt === "object") {
+          const text = evt.text || evt.description || evt.summary || "";
+          return evt.date ? `${evt.date}: ${text}` : text;
+        }
+        return "";
+      }).filter(Boolean);
+
+      if (entries.length === 0) {
+        const empty = document.createElement("p");
+        empty.textContent = "No journal entries yet.";
+        empty.style.textAlign = "center";
+        empty.style.opacity = "0.75";
+        content.appendChild(empty);
+      } else {
+        const list = document.createElement("div");
+        list.style.cssText = "max-height:50vh;overflow-y:auto;margin-bottom:16px;";
+        for (const line of entries) {
+          const p = document.createElement("p");
+          p.textContent = line;
+          p.style.cssText = "border-bottom:1px solid rgba(212,160,23,0.18);padding-bottom:8px;margin-bottom:8px;font-size:14px;";
+          list.appendChild(p);
+        }
+        content.appendChild(list);
+      }
+
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className = "overlay-choice overlay-choice-primary";
+      closeBtn.style.cssText = "display:block;width:100%;margin-top:12px;";
+      closeBtn.textContent = "Close";
+      closeBtn.addEventListener("click", closeJournal);
+      content.appendChild(closeBtn);
+
+      journalOpen = true;
+      overlay.classList.add("active");
+    }
 
     // ── Pause ──
     let pauseOverlay = null;
     function togglePause() {
       window.__zenHud?.notifyActivity?.();
       paused = !paused;
+      window.audio?.setMoving(!paused);
       for (const p of pioneers) p.walking = !paused;
       for (const o of oxen) o.walking = !paused;
       wagon.wheels.setSpeed(!paused && MOTION_OK ? 1 : 0);
       if (paused) {
         engine.pauseAdvance();
         pauseOverlay = k.add([k.rect(640, 480), k.pos(0, 0), k.color(0, 0, 0), k.opacity(0.7), k.z(100)]);
-        k.add([k.text("PAUSED", { size: 36 }), k.pos(320, 180), k.anchor("center"), k.color(...draw.PALETTE.gold), k.z(101), "pauseTag"]);
+        k.add([k.text("PAUSED", { size: 32 }), k.pos(320, 52), k.anchor("center"), k.color(...draw.PALETTE.gold), k.z(101), "pauseTag"]);
         const buildStatsLines = () => {
           const party = engine.party;
           const sup2 = engine.supplies;
@@ -532,11 +599,9 @@ export default function register(k, engine) {
             "",
             "Party:",
             ...(party?.members ?? []).map(m => `  ${m.name}: ${m.alive ? m.health + "/100" : "DEAD"}`),
-            "",
-            "Press P to resume",
           ];
         };
-        const statsText = k.add([k.text(buildStatsLines().join("\n"), { size: 13, width: 400 }), k.pos(320, 200), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
+        const statsText = k.add([k.text(buildStatsLines().join("\n"), { size: 12, width: 400 }), k.pos(320, 168), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
 
         // ── Pace + rations controls (IMPROVEMENT_ROADMAP §1.3) ──
         // changePace()/changeRations() previously had zero callers, so the
@@ -566,11 +631,58 @@ export default function register(k, engine) {
         makeCycle("Pace:", () => curPace, () => {
           curPace = PACES[(PACES.indexOf(curPace) + 1) % PACES.length];
           engine.changePace(curPace);
-        }, 320);
+        }, 278);
         makeCycle("Rations:", () => curRations, () => {
           curRations = RATIONS[(RATIONS.indexOf(curRations) + 1) % RATIONS.length];
           engine.changeRations(curRations);
-        }, 352);
+        }, 308);
+
+        // ── Journal viewer + Travel speed toggle ──
+        const utilY = 334, utilH = 26, utilW = 112;
+        const journalBtn = k.add([
+          k.rect(utilW, utilH, { radius: 4 }),
+          k.pos(202, utilY),
+          k.color(110, 82, 34),
+          k.opacity(0.9),
+          k.area(),
+          k.z(102),
+          "pauseTag",
+        ]);
+        k.add([
+          k.text("Journal", { size: 13 }),
+          k.pos(202 + utilW / 2, utilY + utilH / 2),
+          k.anchor("center"),
+          k.color(255, 255, 255),
+          k.z(103),
+          "pauseTag",
+        ]);
+        journalBtn.onClick(() => { openJournal(); });
+
+        let curSpeed = engine.travelSpeed ?? 1;
+        const speedBtn = k.add([
+          k.rect(utilW, utilH, { radius: 4 }),
+          k.pos(326, utilY),
+          k.color(46, 139, 87),
+          k.opacity(0.9),
+          k.area(),
+          k.z(102),
+          "pauseTag",
+        ]);
+        const speedLabel = k.add([
+          k.text(`Speed: ${curSpeed}x`, { size: 13 }),
+          k.pos(326 + utilW / 2, utilY + utilH / 2),
+          k.anchor("center"),
+          k.color(255, 255, 255),
+          k.z(103),
+          "pauseTag",
+        ]);
+        speedBtn.onClick(() => {
+          const nextSpeed = curSpeed === 2 ? 1 : 2;
+          curSpeed = nextSpeed;
+          engine.setTravelSpeed?.(nextSpeed);
+          if (typeof engine.travelSpeed === "number") curSpeed = engine.travelSpeed;
+          speedLabel.text = `Speed: ${curSpeed}x`;
+        });
 
         // ── Make Camp (PHASE2_BIG_BETS_PLAN Bet 3) ──
         // One rest day via POST /api/camp: real per-day attrition + rest
@@ -579,7 +691,7 @@ export default function register(k, engine) {
         // a dead button). Errors surface via the pause-overlay notice, not
         // silence; success shows a brief day summary.
         const eventPending = !!engine.gameState?.simulation?.pending_event_hash;
-        const campW = 200, campH = 26, campY = 372;
+        const campW = 200, campH = 26, campY = 370;
         const campBtn = k.add([
           k.rect(campW, campH, { radius: 4 }),
           k.pos(320 - campW / 2, campY),
@@ -640,8 +752,9 @@ export default function register(k, engine) {
         campBtn.onClick(() => { attemptCamp(); });
 
         k.add([k.text("(changes apply as you travel on)", { size: 10 }), k.pos(320, 410), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.opacity(0.7), k.z(101), "pauseTag"]);
-        k.add([k.text("Press P or tap top-left to resume", { size: 12 }), k.pos(320, 430), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
+        k.add([k.text("Press P or tap top-left to resume", { size: 12 }), k.pos(320, 428), k.anchor("center"), k.color(...draw.PALETTE.parchment), k.z(101), "pauseTag"]);
       } else {
+        closeJournal();
         engine.resumeAdvance();
         k.destroyAll("pauseTag");
         pauseOverlay?.destroy();
@@ -649,6 +762,12 @@ export default function register(k, engine) {
         engine.queueAdvance();
       }
     }
+    addActionPill(k, {
+      x: 536, y: 404, w: 96, h: 26,
+      label: "(P) Pause",
+      onClick: togglePause,
+      z: 60,
+    });
     k.onKeyPress("p", togglePause);
     k.onClick(() => { if (k.mousePos().x < 100 && k.mousePos().y < 60) togglePause(); });
 

@@ -296,7 +296,7 @@ export default function register(k, engine) {
     ]);
 
     // Choice buttons
-    const btnY = 430;
+    const btnY = 418;
     const btnH = 36;
     const btnW = 180;
     const btnGap = 10;
@@ -311,17 +311,25 @@ export default function register(k, engine) {
     };
     const fordC = fordColors[difficulty] || fordColors.moderate;
 
+    // Gray out ferry if not enough money or not available
+    const money = engine.supplies?.money || 0;
+    const ferryUnavailable = river.ferry_available === false;
+    const ferryUnaffordable = money < ferryCost;
+    const ferrySub = ferryUnavailable
+      ? "No ferry"
+      : ferryUnaffordable
+        ? `Need ${engine.formatMoney(ferryCost)}`
+        : "Safe · Paid";
+
     // Button labels use (N) parens, not [N]. Kaplay's styled-text parser
     // treats `[1]` as an unclosed style tag and throws.
     const buttons = [
-      { label: "(1) Ford River", color: fordC, key: "1", choice: "ford" },
-      { label: "(2) Caulk & Float", color: PALETTE.canvasMid, key: "2", choice: "caulk" },
-      { label: `(3) Ferry ${engine.formatMoney(ferryCost)}`, color: PALETTE.hpGreen, key: "3", choice: "ferry" },
+      { label: "(1) Ford River", sub: "Free · High risk", color: fordC, key: "1", choice: "ford" },
+      { label: "(2) Caulk & Float", sub: "Free · Moderate risk", color: PALETTE.canvasMid, key: "2", choice: "caulk" },
+      { label: `(3) Ferry ${engine.formatMoney(ferryCost)}`, sub: ferrySub, color: PALETTE.hpGreen, key: "3", choice: "ferry" },
     ];
 
-    // Gray out ferry if not enough money or not available
-    const money = engine.supplies?.money || 0;
-    if (money < ferryCost || river.ferry_available === false) {
+    if (ferryUnaffordable || ferryUnavailable) {
       buttons[2].color = PALETTE.hpDead;
     }
 
@@ -333,7 +341,7 @@ export default function register(k, engine) {
       // Choose crossing method: shared by key and tap
       const choose = () => {
         if (selected) return;
-        if (btn.choice === "ferry" && (money < ferryCost || river.ferry_available === false)) return;
+        if (btn.choice === "ferry" && (ferryUnaffordable || ferryUnavailable)) return;
         selected = true;
         juice.minor();
         if (MOTION_OK) spawnSplash(wagonX, wagonY);
@@ -355,6 +363,14 @@ export default function register(k, engine) {
         k.pos(bx + btnW / 2, btnY + btnH / 2),
         k.anchor("center"),
         k.color(...PALETTE.cloud),
+        "riverChoice",
+      ]);
+
+      k.add([
+        k.text(btn.sub, { size: 11 }),
+        k.pos(bx + btnW / 2, btnY + btnH + 10),
+        k.anchor("center"),
+        k.color(...PALETTE.parchment),
         "riverChoice",
       ]);
 
@@ -405,6 +421,14 @@ export default function register(k, engine) {
       k.destroyAll("riverChoice");
       k.destroyAll("riverPrompt");
       errorObj.text = "";
+
+      const hadLoss = Boolean(
+        deltas?.died?.length ||
+        Object.entries(deltas || {}).some(
+          ([key, val]) => key !== "money" && key !== "died" && typeof val === "number" && val < 0,
+        ),
+      );
+      window.audio?.sting(hadLoss ? "danger" : "good");
 
       const panelTop = panelY;
       k.add([k.rect(W - 60, 200, { radius: 6 }), k.pos(30, panelTop), k.color(...PALETTE.silhouetteFar), k.opacity(0.92), k.z(50)]);

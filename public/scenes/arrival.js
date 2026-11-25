@@ -1,9 +1,12 @@
 import { drawSky, drawMountains, drawHills, drawGround, PALETTE, segmentColor, drawGlow, getDayPhase } from "../lib/draw.mjs";
 import { segmentForMiles } from "../lib/segments.mjs";
 import { isAssetReady } from "../lib/assets.mjs";
+import { createJuice } from "../lib/juice.mjs";
 
 export default function register(k, engine) {
   k.scene("arrival", (data) => {
+    window.audio?.sting("arrival");
+    createJuice(k).zoomPunch();
     const W = 640;
     const H = 480;
 

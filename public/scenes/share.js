@@ -94,6 +94,15 @@ export default function register(k, engine) {
       } catch (_) { return 0; }
     })();
 
+    const medals = typeof engine.computeRunMedals === 'function'
+      ? engine.computeRunMedals({ arrived: Boolean(arrived && alive > 0) })
+      : [];
+    const medalsHtml = medals.length > 0
+      ? `<div id="share-medals" style="display:flex;flex-wrap:wrap;justify-content:center;gap:0.4rem;margin-top:0.9rem;padding-top:0.8rem;border-top:1px solid rgba(139,69,19,0.45);">
+          ${medals.map((m) => `<span class="share-medal" data-medal="${esc(m.id)}" style="display:inline-block;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid #d4a017;background:rgba(212,160,23,0.14);color:#f5e6c8;font-size:0.78rem;letter-spacing:0.02em;">&#9733; ${esc(m.label)}</span>`).join('')}
+        </div>`
+      : '';
+
     content.innerHTML = `
       <h1 class="overlay-title">Your Journey Has Ended</h1>
 
@@ -108,6 +117,7 @@ export default function register(k, engine) {
           <div>Survivors:</div><div style="text-align:right;"><strong>${alive} of ${totalMembers}</strong></div>
           <div>Date:</div><div style="text-align:right;"><strong>${formattedDate}</strong></div>
         </div>
+        ${medalsHtml}
       </div>
 
       <div class="overlay-choices" style="display:flex;flex-direction:column;gap:0.6rem;">

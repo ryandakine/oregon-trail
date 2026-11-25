@@ -64,7 +64,7 @@ export default function register(k, engine) {
         <h1 class="overlay-title">Name Your Party</h1>
         ${progress}
         <p class="overlay-text" style="margin-bottom:1.2rem;">${labels[step]}</p>
-        <div style="text-align:center;">
+        <div style="display:flex;justify-content:center;align-items:center;gap:0.5rem;flex-wrap:wrap;">
           <input
             type="text"
             id="name-input"
@@ -73,12 +73,18 @@ export default function register(k, engine) {
             style="${inputStyle}"
             autofocus
           />
+          <button id="name-confirm" type="button" class="overlay-choice overlay-choice-primary" style="padding:0.65rem 1.1rem;font-size:0.95rem;">
+            ${step < 4 ? 'Next' : 'Confirm'}
+          </button>
         </div>
         <p class="overlay-text" style="margin-top:1rem;font-size:0.85em;opacity:0.6;">
-          Press Enter to confirm. (${step + 1} of 5)
+          Press Enter or tap ${step < 4 ? 'Next' : 'Confirm'}. (${step + 1} of 5)
         </p>
-        <div style="text-align:center;margin-top:0.5rem;">
-          <button id="name-random" class="overlay-choice" style="padding:0.5rem 1rem;font-size:0.9rem;">
+        <div style="display:flex;justify-content:center;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-top:0.5rem;">
+          <button id="name-back" type="button" class="overlay-choice" style="padding:0.5rem 1rem;font-size:0.9rem;">
+            &larr; Back
+          </button>
+          <button id="name-random" type="button" class="overlay-choice" style="padding:0.5rem 1rem;font-size:0.9rem;">
             Surprise me — random party
           </button>
         </div>
@@ -87,8 +93,17 @@ export default function register(k, engine) {
       const input = document.getElementById('name-input');
       input.focus();
 
+      // Back to Profession picker
+      document.getElementById('name-back').addEventListener('click', (e) => {
+        e.stopPropagation();
+        overlay.classList.remove('active');
+        document.removeEventListener('keydown', onGlobalKey);
+        engine.transition('PROFESSION');
+      });
+
       // One-tap random party fills all five names and starts (ROADMAP §2).
-      document.getElementById('name-random').addEventListener('click', () => {
+      document.getElementById('name-random').addEventListener('click', (e) => {
+        e.stopPropagation();
         const party = randomParty();
         overlay.classList.remove('active');
         document.removeEventListener('keydown', onGlobalKey);
@@ -109,6 +124,11 @@ export default function register(k, engine) {
         }
       }
 
+      document.getElementById('name-confirm').addEventListener('click', (e) => {
+        e.stopPropagation();
+        submit();
+      });
+
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -124,12 +144,15 @@ export default function register(k, engine) {
         input.focus();
       }
     }
-    document.addEventListener('keydown', onGlobalKey);
-    k.onSceneLeave(() => document.removeEventListener('keydown', onGlobalKey));
-
-    content.addEventListener('click', () => {
+    function onContentClick() {
       const input = content.querySelector('input');
       if (input) input.focus();
+    }
+    content.addEventListener('click', onContentClick);
+    document.addEventListener('keydown', onGlobalKey);
+    k.onSceneLeave(() => {
+      document.removeEventListener('keydown', onGlobalKey);
+      content.removeEventListener('click', onContentClick);
     });
 
     renderStep();

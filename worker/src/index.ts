@@ -636,6 +636,8 @@ async function handleAdvance(
       eventData = pickFallback();
       eventSource = "fallback";
     } else {
+      const llmStart = Date.now();
+      let stage = "call";
       try {
         const prompt = assembleEventPrompt(result.state, historical);
         const res = await callLLM(
@@ -644,12 +646,20 @@ async function handleAdvance(
           env,
           { provider, jsonMode: true },
         );
+        stage = "parse";
         eventData = parseEventResponse(res.text);
         eventSource = "llm";
         usedLlmProvider = res.provider;
       } catch (e) {
-        // LLM failed (timeout, or a 4xx/5xx). Log the cause so issues are visible.
-        console.warn("llm_fallback", JSON.stringify({ route: "advance", provider, msg: String(e).slice(0, 120) }));
+        // LLM failed (timeout, or a 4xx/5xx) or response parse failed. Log the cause so issues are visible.
+        console.warn("llm_fallback", JSON.stringify({
+          route: "advance",
+          provider,
+          model: env.WORKERS_AI_MODEL || "default",
+          stage,
+          elapsed_ms: Date.now() - llmStart,
+          msg: String(e).slice(0, 180),
+        }));
         eventData = pickFallback();
         eventSource = "fallback";
       }
@@ -1057,6 +1067,8 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
   const provider = resolveProvider(request, env);
   const guard = await guardPaidCall(env, request);
   if (guard.allowed) {
+    const llmStart = Date.now();
+    let stage = "call";
     try {
       const res = await callLLM(
         "You are the editor of the Independence Gazette, 1848. Write frontier newspaper articles.",
@@ -1064,6 +1076,7 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
         env,
         { provider, maxTokens: 600, jsonMode: true },
       );
+      stage = "parse";
       let stripped = res.text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
       stripped = stripped.replace(/```(?:json)?\s*([\s\S]*?)```/g, "$1").trim();
       if (!stripped.startsWith("{")) {
@@ -1090,7 +1103,14 @@ Write in period-appropriate style. Include a dramatic headline personalized to t
       };
       return jsonResponse(newspaper, 200, origin);
     } catch (e) {
-      console.warn("llm_fallback", JSON.stringify({ route: "newspaper", provider, msg: String(e).slice(0, 120) }));
+      console.warn("llm_fallback", JSON.stringify({
+        route: "newspaper",
+        provider,
+        model: env.WORKERS_AI_MODEL || "default",
+        stage,
+        elapsed_ms: Date.now() - llmStart,
+        msg: String(e).slice(0, 180),
+      }));
     }
   } else {
     console.warn("spend_rate_block", JSON.stringify({ route: "newspaper", reason: guard.reason }));
@@ -1137,6 +1157,8 @@ async function handleEpitaph(
   const provider = resolveProvider(request, env);
   const guard = await guardPaidCall(env, request);
   if (guard.allowed) {
+    const llmStart = Date.now();
+    let stage = "call";
     try {
       const res = await callLLM(
         "You write gravestone inscriptions for Oregon Trail emigrants, 1848. One line only. Period appropriate. Solemn.",
@@ -1144,11 +1166,19 @@ async function handleEpitaph(
         env,
         { provider, maxTokens: 60, timeout: 5000, jsonMode: false },
       );
+      stage = "parse";
       let text = res.text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
       text = text.replace(/^["']|["']$/g, "").trim();
       return jsonResponse({ epitaph: text }, 200, origin);
     } catch (e) {
-      console.warn("llm_fallback", JSON.stringify({ route: "epitaph", provider, msg: String(e).slice(0, 120) }));
+      console.warn("llm_fallback", JSON.stringify({
+        route: "epitaph",
+        provider,
+        model: env.WORKERS_AI_MODEL || "default",
+        stage,
+        elapsed_ms: Date.now() - llmStart,
+        msg: String(e).slice(0, 180),
+      }));
     }
   } else {
     console.warn("spend_rate_block", JSON.stringify({ route: "epitaph", reason: guard.reason }));

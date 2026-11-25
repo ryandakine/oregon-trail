@@ -116,50 +116,76 @@ export async function callWorkersAI(
   }
 
   const model = env.WORKERS_AI_MODEL || DEFAULT_WORKERS_AI_MODEL;
-  const maxTokens = opts?.maxTokens ?? 800;
+  const maxTokens = opts?.maxTokens ?? 1024;
   const timeoutMs = opts?.timeout ?? TIMEOUT_WORKERS_AI_MS;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const runPromise = env.AI.run(model, {
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      max_tokens: maxTokens,
-      temperature: opts?.temperature ?? 0.2,
-    });
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      controller.signal.addEventListener("abort", () => {
-        reject(new Error(`Workers AI call timed out after ${timeoutMs}ms`));
+  const runWithTimeout = async (payload: Record<string, unknown>): Promise<unknown> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const runPromise = env.AI!.run(model, payload);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        controller.signal.addEventListener("abort", () => {
+          const err = new Error(`Workers AI call timed out after ${timeoutMs}ms`);
+          err.name = "AbortError";
+          reject(err);
+        });
       });
-    });
-
-    const res = await Promise.race([runPromise, timeoutPromise]);
-
-    let text = "";
-    if (typeof res === "string") {
-      text = res;
-    } else if (typeof (res as any)?.response === "string") {
-      text = (res as any).response;
-    } else if (typeof (res as any)?.result?.response === "string") {
-      text = (res as any).result.response;
-    } else if ((res as any)?.response && typeof (res as any).response === "object") {
-      text = JSON.stringify((res as any).response);
-    } else {
-      throw new Error(`Workers AI returned unexpected shape: ${JSON.stringify(res).slice(0, 100)}`);
+      return await Promise.race([runPromise, timeoutPromise]);
+    } finally {
+      clearTimeout(timer);
     }
+  };
 
-    if (!text.trim()) {
-      throw new Error("Workers AI returned empty response");
+  const basePayload: Record<string, unknown> = {
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    max_tokens: maxTokens,
+    temperature: opts?.temperature ?? 0.2,
+  };
+
+  let res: unknown;
+  if (opts?.jsonMode) {
+    try {
+      res = await runWithTimeout({
+        ...basePayload,
+        response_format: { type: "json_object" },
+      });
+    } catch (err) {
+      const isTimeoutOrAbort =
+        (err instanceof Error && (err.name === "AbortError" || /timed out/i.test(err.message))) ||
+        /timed out|AbortError/i.test(String(err));
+      if (isTimeoutOrAbort) {
+        throw err;
+      }
+      // Retry once without response_format in case the model rejects json_object mode
+      res = await runWithTimeout(basePayload);
     }
-    return text;
-  } finally {
-    clearTimeout(timer);
+  } else {
+    res = await runWithTimeout(basePayload);
   }
+
+  let text = "";
+  if (typeof res === "string") {
+    text = res;
+  } else if (typeof (res as any)?.choices?.[0]?.message?.content === "string") {
+    text = (res as any).choices[0].message.content;
+  } else if (typeof (res as any)?.response === "string") {
+    text = (res as any).response;
+  } else if (typeof (res as any)?.result?.response === "string") {
+    text = (res as any).result.response;
+  } else if ((res as any)?.response && typeof (res as any).response === "object") {
+    text = JSON.stringify((res as any).response);
+  } else {
+    throw new Error(`Workers AI returned unexpected shape: ${JSON.stringify(res).slice(0, 100)}`);
+  }
+
+  if (!text.trim()) {
+    throw new Error("Workers AI returned empty response");
+  }
+  return text;
 }
 
 /**
@@ -265,8 +291,17 @@ export async function callLLM(
   }
 
   if (provider === "workers-ai") {
-    const text = await callWorkersAI(system, user, env, opts);
-    return { text, provider: "workers-ai" };
+    const firstTimeout = opts?.timeout ?? 6000;
+    try {
+      const text = await callWorkersAI(system, user, env, { ...opts, timeout: firstTimeout });
+      return { text, provider: "workers-ai" };
+    } catch (firstErr) {
+      console.warn("workers_ai_retry", JSON.stringify({
+        msg: String(firstErr).slice(0, 120),
+      }));
+      const text = await callWorkersAI(system, user, env, { ...opts, timeout: 4000 });
+      return { text, provider: "workers-ai" };
+    }
   }
 
   // Anthropic fallback / legacy

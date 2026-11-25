@@ -111,6 +111,18 @@
       box-shadow: 0 0 0 1px rgba(245, 230, 200, 0.08) inset, 0 24px 60px rgba(0, 0, 0, 0.65);
       animation: panel-in 150ms ease-out;
     }
+    @media (max-width: 520px) {
+      #html-overlay.active {
+        align-items: flex-start;
+      }
+      #html-overlay .overlay-content {
+        width: 100%;
+        max-width: calc(100vw - 20px);
+        margin: 12px auto;
+        padding: 18px 14px;
+        box-sizing: border-box;
+      }
+    }
     #html-overlay .bp-cw-modal,
     #html-overlay .bp-scene {
       border: 1px solid rgba(139, 40, 40, 0.45);
