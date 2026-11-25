@@ -16,7 +16,7 @@ export interface LLMResult {
   provider: LLMProvider;
 }
 
-const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 const DEFAULT_CUSTOM_MODEL = "llama3.2:latest";
 const TIMEOUT_CUSTOM_MS = 6000;
 const TIMEOUT_WORKERS_AI_MS = 10000;
@@ -291,15 +291,17 @@ export async function callLLM(
   }
 
   if (provider === "workers-ai") {
-    const firstTimeout = opts?.timeout ?? 6000;
+    const firstTimeout = opts?.timeout ?? 8500;
     try {
       const text = await callWorkersAI(system, user, env, { ...opts, timeout: firstTimeout });
       return { text, provider: "workers-ai" };
     } catch (firstErr) {
+      const isTimeout = /abort|timed out|timeout/i.test(String(firstErr));
+      if (isTimeout) throw firstErr;
       console.warn("workers_ai_retry", JSON.stringify({
         msg: String(firstErr).slice(0, 120),
       }));
-      const text = await callWorkersAI(system, user, env, { ...opts, timeout: 4000 });
+      const text = await callWorkersAI(system, user, env, { ...opts, timeout: 4500 });
       return { text, provider: "workers-ai" };
     }
   }

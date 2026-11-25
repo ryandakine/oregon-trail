@@ -12,7 +12,7 @@ routes = [
   { pattern = "trail.osi-cyber.com/og/*", zone_name = "osi-cyber.com" },
 ]
 
-# Cloudflare Workers AI binding (serverless free tier: @cf/meta/llama-3.3-70b-instruct-fp8-fast)
+# Cloudflare Workers AI binding (serverless free tier: @cf/meta/llama-4-scout-17b-16e-instruct)
 [ai]
 binding = "AI"
 
@@ -25,7 +25,7 @@ PAID_PER_IP_DAY_CAP = "60"
 SHARE_BASE_URL = "https://trail.osi-cyber.com"
 # Dual LLM Configuration: "workers-ai" (Cloudflare serverless edge) | "custom" (rig rog) | "anthropic" (Claude)
 LLM_PROVIDER = "workers-ai"
-WORKERS_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+WORKERS_AI_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
 # Rig rog endpoint via Cloudflare Tunnel for edge workers (.dev.vars overrides for local)
 CUSTOM_LLM_URL = "https://llm.osi-cyber.com/v1"
 CUSTOM_LLM_MODEL = "llama3.2:latest"

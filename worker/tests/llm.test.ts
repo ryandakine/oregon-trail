@@ -91,7 +91,7 @@ describe("callWorkersAI — Cloudflare Workers AI edge integration", () => {
     const out = await callWorkersAI("sys", "user", env);
     expect(out).toBe('{"title":"Storm"}');
     expect(env.AI?.run).toHaveBeenCalledWith(
-      "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "@cf/meta/llama-4-scout-17b-16e-instruct",
       expect.objectContaining({
         messages: [
           { role: "system", content: "sys" },
@@ -142,7 +142,7 @@ describe("callWorkersAI — Cloudflare Workers AI edge integration", () => {
     await callWorkersAI("sys", "user", env, { jsonMode: true });
     expect(run).toHaveBeenNthCalledWith(
       1,
-      "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "@cf/meta/llama-4-scout-17b-16e-instruct",
       expect.objectContaining({
         max_tokens: 1024,
         response_format: { type: "json_object" },
