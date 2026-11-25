@@ -19,7 +19,7 @@ export interface LLMResult {
 const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const DEFAULT_CUSTOM_MODEL = "llama3.2:latest";
 const TIMEOUT_CUSTOM_MS = 6000;
-const TIMEOUT_WORKERS_AI_MS = 6000;
+const TIMEOUT_WORKERS_AI_MS = 10000;
 
 /**
  * Resolve which LLM provider should serve the request.
