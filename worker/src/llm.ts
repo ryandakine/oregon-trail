@@ -16,7 +16,7 @@ export interface LLMResult {
   provider: LLMProvider;
 }
 
-const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const DEFAULT_CUSTOM_MODEL = "llama3.2:latest";
 const TIMEOUT_CUSTOM_MS = 6000;
 const TIMEOUT_WORKERS_AI_MS = 6000;
