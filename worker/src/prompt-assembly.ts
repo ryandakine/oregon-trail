@@ -195,6 +195,30 @@ export function buildAntiRepetitionBlock(state: GameState): string {
   return `Do NOT repeat any of these recent event titles or close variants: ${recent.join('; ')}.`;
 }
 
+const ENCOUNTER_THEMES = [
+  'sudden prairie weather shift (squall, hail, oppressive heat, or thick fog)',
+  'wagon hardware wear (loose tire iron, cracked spoke, frayed harness, or leaking barrel)',
+  'fellow emigrants on the trail (stranded family, sharp-dealing trader, or eastbound scout)',
+  'camp incident (stray ox at dusk, damp powder, spoiled flour, or campfire spark)',
+  'prairie wildlife (rattlesnake in the grass, circling wolves, or a distant buffalo herd)',
+  'trail fatigue or minor ailment (blistered feet, foul creek water, or heat exhaustion)',
+  'road hazard (mud-choked ruts, washed-out embankment, or steep alkali grade)',
+  'foraging or scavenging opportunity (wild berries, abandoned crate, or dry buffalo chips)',
+] as const;
+
+export function pickEncounterTheme(state: GameState): string {
+  const runId = state.meta?.run_id ?? '';
+  let h = 2166136261;
+  for (let i = 0; i < runId.length; i++) {
+    h = Math.imul(h ^ runId.charCodeAt(i), 16777619);
+  }
+  const miles = state.position.miles_traveled ?? 0;
+  const evCount = state.meta?.event_count ?? 0;
+  const seen = state.simulation.recent_event_titles?.length ?? 0;
+  const mixed = Math.imul(h ^ (miles * 31) ^ (evCount * 17) ^ (seen * 131), 2654435761) >>> 0;
+  return ENCOUNTER_THEMES[mixed % ENCOUNTER_THEMES.length];
+}
+
 // ── Main assembler ──────────────────────────────────────────
 
 export function assembleEventPrompt(state: GameState, ctx: HistoricalContext): AssembledPrompt {
@@ -232,9 +256,10 @@ export function assembleEventPrompt(state: GameState, ctx: HistoricalContext): A
     userParts.push('', bitterHint);
   }
 
+  const theme = pickEncounterTheme(state);
   userParts.push(
     '',
-    'Vary events across weather, wagon wear, fellow emigrants, camp incidents, wildlife, and sickness; avoid repeating landmark or river crossings.',
+    `Encounter focus: ${theme}. Do NOT make this a river crossing (rivers are handled separately).`,
     'Generate one event. Return JSON: {"title","description","choices":[{"label","consequences"}],"personality_effects","journal_entry"}'
   );
 
